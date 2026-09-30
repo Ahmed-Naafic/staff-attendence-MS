@@ -1,0 +1,16 @@
+// EduTrack Staff Attendance Management System — Prisma schema
+//
+// Phase 0: infrastructure only. No models are defined yet.
+// Models are added in later phases, following the approved hierarchy
+// (School → Branch → Staff) and role scopes documented in docs/architecture.md.
+//
+// Connection strings come from environment variables (see backend/prisma.config.js
+// and backend/src/config/prisma.js). Never hardcode credentials here.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "staff-attendance-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "EduTrack Staff Attendance Management System",
+  "workspaces": [
+    "apps/web",
+    "backend"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace apps/web",
+    "build:web": "npm run build --workspace apps/web",
+    "dev:api": "npm run dev --workspace backend",
+    "start:api": "npm run start --workspace backend",
+    "prisma:validate": "npm run prisma:validate --workspace backend",
+    "prisma:format": "npm run prisma:format --workspace backend",
+    "prisma:generate": "npm run prisma:generate --workspace backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace backend"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}
