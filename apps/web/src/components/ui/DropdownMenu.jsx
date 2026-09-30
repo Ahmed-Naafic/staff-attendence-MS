@@ -20,7 +20,9 @@ export function DropdownMenu({ label = 'More actions', items, align = 'end', ren
   const menuRef = useRef(null);
   const menuId = useId();
 
-  const menuItems = () => [...(menuRef.current?.querySelectorAll('[role^="menuitem"]:not([aria-disabled="true"])') ?? [])];
+  // Disabled items stay focusable (WAI-ARIA menu pattern) so users can discover them;
+  // they just cannot be activated.
+  const menuItems = () => [...(menuRef.current?.querySelectorAll('[role^="menuitem"]') ?? [])];
 
   function close({ restoreFocus = true } = {}) {
     setOpen(false);
@@ -92,6 +94,9 @@ export function DropdownMenu({ label = 'More actions', items, align = 'end', ren
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       setOpen(true);
+    } else if (event.key === 'Escape' && open) {
+      event.preventDefault();
+      setOpen(false);
     }
   }
 

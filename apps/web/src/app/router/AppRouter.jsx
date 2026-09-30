@@ -1,19 +1,39 @@
-import { createBrowserRouter, Link, RouterProvider } from 'react-router';
+import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import AuditLogsPage from '../../features/audit-logs/AuditLogsPage.jsx';
+import { useSession } from '../../features/auth/SessionProvider.jsx';
+import DashboardPage from '../../features/dashboard/DashboardPage.jsx';
+import PlatformSettingsPage from '../../features/platform-settings/PlatformSettingsPage.jsx';
+import PlatformReportsPage from '../../features/reports/PlatformReportsPage.jsx';
+import SchoolOwnersPage from '../../features/school-owners/SchoolOwnersPage.jsx';
+import SchoolsPage from '../../features/schools/SchoolsPage.jsx';
+import { getRoleProfile } from '../config/navigation.js';
+import RoleLayout from '../layouts/RoleLayout.jsx';
+import NotFoundPage from './NotFoundPage.jsx';
 
-// Role-based routes and navigation are added in Phase 2 (Web Application Shell).
+// "/" sends the user to their role's start page.
+function RoleHome() {
+  const { user } = useSession();
+  return <Navigate to={getRoleProfile(user.role)?.home ?? '/dashboard'} replace />;
+}
+
+// `handle.title` names the page for the topbar and the browser tab.
 const routes = [
   {
     path: '/',
-    element: (
-      <main className="flex min-h-dvh flex-col items-center justify-center gap-3 p-6 text-center">
-        <p className="text-body text-fg-secondary">EduTrack web foundation is running.</p>
-        {import.meta.env.DEV && (
-          <Link to="/design-system" className="text-body font-medium text-interactive hover:underline">
-            Open the design system preview
-          </Link>
-        )}
-      </main>
-    ),
+    element: <RoleLayout />,
+    children: [
+      { index: true, element: <RoleHome /> },
+
+      // SUPER_ADMIN — platform scope (Phase 2: placeholders only)
+      { path: 'dashboard', element: <DashboardPage />, handle: { title: 'Dashboard' } },
+      { path: 'schools', element: <SchoolsPage />, handle: { title: 'Schools' } },
+      { path: 'school-owners', element: <SchoolOwnersPage />, handle: { title: 'School Owners' } },
+      { path: 'platform-reports', element: <PlatformReportsPage />, handle: { title: 'Platform Reports' } },
+      { path: 'audit-logs', element: <AuditLogsPage />, handle: { title: 'Audit Logs' } },
+      { path: 'platform-settings', element: <PlatformSettingsPage />, handle: { title: 'Platform Settings' } },
+
+      { path: '*', element: <NotFoundPage />, handle: { title: 'Page not found' } },
+    ],
   },
 ];
 
@@ -23,7 +43,7 @@ if (import.meta.env.DEV) {
     path: '/design-system',
     // Shown while the lazily loaded preview downloads on first visit.
     HydrateFallback: () => null,
-    lazy:async () => ({ Component: (await import('../dev/DesignSystemLayout.jsx')).default }),
+    lazy: async () => ({ Component: (await import('../dev/DesignSystemLayout.jsx')).default }),
     children: [
       { index: true, lazy: async () => ({ Component: (await import('../dev/FoundationsPreview.jsx')).default }) },
       {

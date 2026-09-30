@@ -56,6 +56,8 @@ No role may access data outside its scope. There is no cross-school access.
 
 Super Admin web navigation: Dashboard, Schools, School Owners, Platform Reports, Audit Logs, Platform Settings. Branches, Managers, Staff and Daily Attendance are not part of it.
 
+In the web app, each role's shell identity and navigation are defined in `apps/web/src/app/config/navigation.js` (`getNavigationForRole(role)`); roles never share navigation. The signed-in user comes from `useSession()` (`features/auth`). Until the authentication phase this is a fixed demo Super Admin session, not real authentication.
+
 ## Repository structure
 
 ```text
@@ -78,7 +80,9 @@ Code is organized by feature, not by technical layer. Each feature folder keeps 
 ### Web (`apps/web/src`)
 
 ```text
-app/          router/, providers/ (ThemeProvider), config/, dev/ (design system preview, development only)
+app/          router/ (routes, placeholder + not-found pages), layouts/ (RoleLayout: the web shell),
+              providers/ (ThemeProvider), config/ (navigation.js: navigation per role),
+              dev/ (design system preview, development only)
 features/     auth, dashboard, schools, school-owners, reports, audit-logs, platform-settings
 components/   ui/, layout/   (shared only)
 hooks/  lib/  utils/

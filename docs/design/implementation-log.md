@@ -131,3 +131,87 @@ Checked with headless Chrome (DevTools protocol) against the dev server: all pre
 ### Status
 
 PHASE 1 COMPLETE
+
+## Phase 2 — Web Application Shell
+
+### Implemented
+
+- AppShell — `app/layouts/RoleLayout.jsx` composes the Phase 1 `AppShell`, `Sidebar`, `Topbar` and `UserMenu` for the signed-in role; pages render only their content
+- Super Admin Sidebar — product name, "Platform Administrator" subtitle, "Super Admin" role badge, two navigation groups with icons
+- Topbar — page title on screens below 1024px (the page header shows it on desktop), navigation button below 1024px, theme toggle, user menu
+- UserMenu — name, role, and a menu with "Profile" and "Sign out" shown disabled (arrive with authentication), labelled as a demo session
+- ThemeToggle integration — Phase 1 `ThemeProvider`/`ThemeToggle`, unchanged
+- PageHeader integration — every page uses the Phase 1 `PageHeader`
+- PageContainer integration — every page uses the Phase 1 `PageContainer`
+- Super Admin navigation — role-aware config in `app/config/navigation.js` (`navigationByRole`, `roleProfiles`, `getNavigationForRole`); only `SUPER_ADMIN` is defined
+- Routing foundation — one layout route for the shell, `/` redirects to the role's start page, `handle.title` per route (topbar + browser tab title), not-found page inside the shell
+- Responsive navigation — Phase 1 sidebar behaviour (fixed + collapsible on desktop, overlay panel below 1024px)
+- Demo session — `features/auth/mockSession.js` + `SessionProvider`/`useSession()`; clearly marked, no login or tokens; replaced in Phase 9
+- Placeholder pages — one per feature folder (`features/<feature>/<Name>Page.jsx`) using a shared `PlaceholderPage` ("Coming in Phase N")
+- On navigation, focus moves to the main content and the tab title updates
+
+### Routes
+
+- /dashboard — Coming in Phase 3
+- /schools — Coming in Phase 4
+- /school-owners — Coming in Phase 5
+- /platform-reports — Coming in Phase 6
+- /audit-logs — Coming in Phase 7
+- /platform-settings — Coming in Phase 8
+- / → redirects to /dashboard (Super Admin start page)
+- any other URL → "Page not found" inside the shell
+- /design-system — Phase 1 preview (development only, unchanged)
+
+### Responsive
+
+- Desktop (≥ 1024px): fixed 240px sidebar, collapsible to 72px icons with tooltips; active item stays marked
+- Tablet (768–1023px): sidebar hidden; menu button opens a 288px slide-in navigation panel
+- Mobile (< 768px): same panel (max 85% of the width); topbar shows the page title, theme toggle and avatar
+
+### Light/Dark Mode
+
+- Light mode validated
+- Dark mode validated
+- Theme applied before the first render (no flash), persisted across reloads, switchable without reload
+
+### Accessibility
+
+- Keyboard navigation: skip link, sidebar links, collapse button, theme toggle and user menu all reachable by Tab with a visible focus indicator
+- Focus states: navy outline in light, gold in dark and on the sidebar
+- Accessible navigation: `<nav aria-label="Main">`, `aria-current="page"` on the active link, accessible names on icon-only links and buttons (tooltips are extra, not the only label)
+- Overlay behaviour: navigation panel and user menu close with Escape and return focus to their trigger; navigating from the panel closes it and moves focus to the content
+
+### Validation
+
+- [x] Desktop
+- [x] Tablet
+- [x] Mobile
+- [x] Light mode
+- [x] Dark mode
+- [x] No horizontal overflow
+- [x] No console errors
+- [x] Existing design-system preview still works
+
+Checked with headless Chrome (DevTools protocol) against the dev server:
+- All 6 routes × 5 widths (1440, 1024, 834, 768, 390px) × 2 themes = 60 page loads: correct page and placeholder, tab title, theme, no horizontal overflow, sidebar at ≥ 1024px / menu button below, exactly one correct active item.
+- `/` redirect, not-found page, nested URL keeps its section active, sidebar click navigates and focuses the content.
+- Collapsed sidebar: 72px, icon-only links keep accessible names, tooltip on keyboard focus, active item kept, no overflow.
+- Navigation panel at 834, 768 and 390px in both themes: opens with focus inside, 6 items, active item and role shown, Escape closes and returns focus, link navigates, closes the panel and focuses the content.
+- User menu opened and closed by keyboard; theme toggle by keyboard; theme persists after reload and is set before React renders.
+- Focus visible on all 10 shell Tab stops in both themes; skip link works.
+- Phase 1 interaction suite re-run (modal, drawer, dropdown, tooltip, mobile nav): all pass. Phase 1 `/design-system` preview renders.
+- `npm run build:web` passes; preview absent from the production bundle; backend health and `prisma validate` pass; no TypeScript or Docker Compose; no raw palette or hex colours in web source.
+
+### Deviations
+
+- **Phase 1 change — `components/ui/DropdownMenu.jsx`:** disabled menu items are now focusable (WAI-ARIA menu pattern), and Escape on the trigger closes an open menu. Found because the demo user menu has only disabled items: keyboard focus had nowhere to go and the menu could not be closed with Escape. Impact: keyboard users can also reach disabled items in other menus; activation of disabled items is still blocked.
+- **Topbar search and notifications** from the references are not included — they are features, not shell structure. The Phase 1 `Topbar` slots for them remain available.
+- **Topbar page title** is shown only below 1024px, where the page header scrolls away; on desktop the page header shows it (the references show no title in the topbar).
+- **Placeholder descriptions** are neutral one-liners instead of the reference subtitles, which describe functionality not yet approved.
+- **Demo session** ships in production builds until Phase 9 because there is no sign-in yet; it is labelled in the user menu and isolated in `features/auth`.
+- **Not-found page** added (not in the route list) so unknown URLs stay inside the shell.
+- Sidebar collapsed state is not remembered across reloads (Phase 1 behaviour, unchanged).
+
+### Status
+
+PHASE 2 COMPLETE
