@@ -1,4 +1,272 @@
 @import "tailwindcss";
 
-/* Design tokens (colors, typography, spacing, dark mode) are defined in Phase 1.
-   See docs/design/design-system.md. */
+/* EduTrack design system tokens. See docs/design/design-system.md.
+   Components use semantic tokens only (bg-surface, text-fg, border-border…).
+   Tailwind's default color, radius, shadow and font-size scales are cleared
+   so hardcoded palette classes (bg-blue-500, text-lg…) cannot be used. */
+
+/* Dark mode is driven by data-theme="dark" on <html> (see ThemeProvider). */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --color-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --text-*: initial;
+
+  /* ---------- Brand palette (raw values; prefer semantic tokens) ---------- */
+  --color-navy-50: #eef4f9;
+  --color-navy-100: #d7e5f0;
+  --color-navy-200: #afc9df;
+  --color-navy-300: #7fa6c6;
+  --color-navy-400: #4b9ad4;
+  --color-navy-500: #1f6394;
+  --color-navy-600: #025584;
+  --color-navy-700: #03446b;
+  --color-navy-800: #0a2f4a;
+  --color-navy-900: #001d31;
+  --color-navy-950: #041521;
+
+  --color-steel-50: #f3f7fb;
+  --color-steel-100: #e6ecf3;
+  --color-steel-200: #d3dce6;
+  --color-steel-300: #b4c1d0;
+  --color-steel-400: #8e9db1;
+  --color-steel-500: #73819a;
+  --color-steel-600: #5a677e;
+  --color-steel-700: #465267;
+  --color-steel-800: #2f3a4c;
+  --color-steel-900: #1c2534;
+
+  --color-gold-50: #fdf6e7;
+  --color-gold-100: #fbeac4;
+  --color-gold-200: #f5d48a;
+  --color-gold-300: #f1c25a;
+  --color-gold-400: #f1b237;
+  --color-gold-500: #d6982d;
+  --color-gold-600: #c4871f;
+  --color-gold-700: #946115;
+  --color-gold-800: #6e4810;
+
+  /* ---------- Semantic tokens: light theme (default) ---------- */
+
+  /* Brand */
+  --color-primary: var(--color-navy-900);
+  --color-secondary: var(--color-steel-500);
+  --color-accent: var(--color-gold-500);
+  --color-accent-hover: var(--color-gold-600);
+  --color-accent-soft: var(--color-gold-50);
+  --color-accent-fg: var(--color-gold-700); /* gold used as text */
+  --color-on-accent: var(--color-navy-900); /* text on gold */
+
+  /* Interactive (links, checked controls, current page) */
+  --color-interactive: var(--color-navy-600);
+  --color-interactive-hover: var(--color-navy-700);
+  --color-interactive-soft: #e0f0fe;
+  --color-on-interactive: #ffffff;
+
+  /* Backgrounds */
+  --color-page: var(--color-steel-50);
+  --color-surface: #ffffff;
+  --color-elevated: #ffffff;
+  --color-muted: #eef3f8;
+
+  /* Text */
+  --color-fg: #0d1932;
+  --color-fg-secondary: #4a566b;
+  --color-fg-muted: #617087;
+  --color-fg-inverse: #ffffff;
+  --color-fg-disabled: #9aa6b6;
+
+  /* Borders */
+  --color-border: #dce3eb;
+  --color-border-strong: #a7b4c4;
+  --color-border-subtle: #eaeff4;
+  --color-border-input: #7f8ea3; /* form control boundary, >= 3:1 on surface */
+
+  /* Status: solid, soft background, text on soft background */
+  --color-success: #16a36a;
+  --color-success-soft: #d6f5e8;
+  --color-success-fg: #0f6b45;
+  --color-warning: #e0a21b;
+  --color-warning-soft: #fdecc7;
+  --color-warning-fg: #7a4f00;
+  --color-error: #d0342f;
+  --color-error-soft: #fee4e2;
+  --color-error-fg: #b42318;
+  --color-info: #2b7fc1;
+  --color-info-soft: #e0f0fe;
+  --color-info-fg: #0b4f82;
+
+  /* Focus, overlay, tooltip */
+  --color-focus: var(--color-navy-600);
+  --color-overlay: rgb(4 21 33 / 0.5);
+  --color-tooltip: var(--color-navy-900); /* text: fg-inverse */
+
+  /* Sidebar (navy in both themes, per reference) */
+  --color-sidebar: var(--color-navy-900);
+  --color-sidebar-fg-strong: #ffffff;
+  --color-sidebar-fg: #d7e1ec;
+  --color-sidebar-fg-muted: #93a6ba;
+  --color-sidebar-hover: rgb(255 255 255 / 0.06);
+  --color-sidebar-active: rgb(214 152 45 / 0.2);
+  --color-sidebar-active-fg: var(--color-gold-300);
+  --color-sidebar-border: rgb(255 255 255 / 0.08);
+  --color-sidebar-focus: var(--color-gold-400);
+
+  /* ---------- Typography ---------- */
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+
+  --text-display: 1.875rem;
+  --text-display--line-height: 2.375rem;
+  --text-display--font-weight: 700;
+  --text-display--letter-spacing: -0.02em;
+
+  --text-page-title: 1.625rem;
+  --text-page-title--line-height: 2rem;
+  --text-page-title--font-weight: 700;
+  --text-page-title--letter-spacing: -0.015em;
+
+  --text-section-title: 1.125rem;
+  --text-section-title--line-height: 1.625rem;
+  --text-section-title--font-weight: 600;
+  --text-section-title--letter-spacing: -0.01em;
+
+  --text-card-title: 0.9375rem;
+  --text-card-title--line-height: 1.375rem;
+  --text-card-title--font-weight: 600;
+
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.375rem;
+
+  --text-small: 0.8125rem;
+  --text-small--line-height: 1.25rem;
+
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+
+  --text-label: 0.8125rem;
+  --text-label--line-height: 1.25rem;
+  --text-label--font-weight: 500;
+
+  --text-button: 0.875rem;
+  --text-button--line-height: 1.25rem;
+  --text-button--font-weight: 600;
+
+  --text-table: 0.8125rem;
+  --text-table--line-height: 1.25rem;
+
+  /* ---------- Radius ---------- */
+  --radius-sm: 0.25rem; /* badges, checkboxes, small chips */
+  --radius-md: 0.375rem; /* buttons, inputs, menus, tooltips */
+  --radius-lg: 0.625rem; /* cards, tables, modals, drawers */
+  --radius-pill: 9999px; /* switches, avatars, pills */
+
+  /* ---------- Shadows ---------- */
+  --shadow-subtle: 0 1px 2px 0 rgb(13 25 50 / 0.05);
+  --shadow-medium: 0 4px 12px -2px rgb(13 25 50 / 0.08), 0 2px 4px -2px rgb(13 25 50 / 0.05);
+  --shadow-large: 0 16px 40px -8px rgb(13 25 50 / 0.2), 0 4px 12px -4px rgb(13 25 50 / 0.08);
+
+  /* ---------- Layout ---------- */
+  --spacing-sidebar: 15rem;
+  --spacing-sidebar-collapsed: 4.5rem;
+  --spacing-topbar: 4rem;
+  --container-page: 90rem;
+}
+
+/* ---------- Semantic tokens: dark theme ---------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-primary: var(--color-navy-900);
+  --color-secondary: var(--color-steel-400);
+  --color-accent: var(--color-gold-400);
+  --color-accent-hover: var(--color-gold-300);
+  --color-accent-soft: rgb(241 178 55 / 0.14);
+  --color-accent-fg: var(--color-gold-400);
+  --color-on-accent: var(--color-navy-900);
+
+  --color-interactive: var(--color-navy-400);
+  --color-interactive-hover: #6aaee0;
+  --color-interactive-soft: rgb(75 154 212 / 0.16);
+  --color-on-interactive: var(--color-navy-950);
+
+  --color-page: #051622;
+  --color-surface: #081e2e;
+  --color-elevated: #0e2536;
+  --color-muted: #0b2232;
+
+  --color-fg: #e8eef5;
+  --color-fg-secondary: #b4c1d0;
+  --color-fg-muted: #8e9db1;
+  --color-fg-inverse: #0d1932;
+  --color-fg-disabled: #4e5d70;
+
+  --color-border: #173049;
+  --color-border-strong: #2c4a66;
+  --color-border-subtle: #102739;
+  --color-border-input: #56708c;
+
+  --color-success: #22c07e;
+  --color-success-soft: rgb(34 192 126 / 0.15);
+  --color-success-fg: #5fe0a8;
+  --color-warning: #f1b237;
+  --color-warning-soft: rgb(241 178 55 / 0.16);
+  --color-warning-fg: #f5c45e;
+  --color-error: #f0605a;
+  --color-error-soft: rgb(240 96 90 / 0.16);
+  --color-error-fg: #ff9994;
+  --color-info: #4b9ad4;
+  --color-info-soft: rgb(75 154 212 / 0.16);
+  --color-info-fg: #8cc3ec;
+
+  --color-focus: var(--color-gold-400);
+  --color-overlay: rgb(0 8 15 / 0.7);
+  --color-tooltip: var(--color-steel-100);
+
+  --color-sidebar: #001a2d;
+  --color-sidebar-border: rgb(255 255 255 / 0.07);
+
+  /* Dark mode relies on surface contrast and borders more than shadows */
+  --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow-medium: 0 4px 12px -2px rgb(0 0 0 / 0.4);
+  --shadow-large: 0 16px 40px -8px rgb(0 0 0 / 0.6);
+}
+
+/* ---------- Base ---------- */
+@layer base {
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-page font-sans text-body text-fg antialiased;
+  }
+
+  /* One consistent, visible focus indicator for every interactive element */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: var(--color-interactive-soft);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Native <dialog> backdrop used by Modal and Drawer */
+dialog::backdrop {
+  background-color: var(--color-overlay);
+}

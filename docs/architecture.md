@@ -25,7 +25,7 @@ Platform
 
 | Layer | Technology |
 |---|---|
-| Web | React (functional components), Vite, JavaScript, Tailwind CSS, React Router |
+| Web | React (functional components), Vite, JavaScript, Tailwind CSS, React Router; lucide-react (icons) and Inter (self-hosted font) |
 | Mobile | React Native, JavaScript, RxDB (offline-first) |
 | Backend | Node.js, Express, JavaScript |
 | Data access | Prisma |
@@ -78,7 +78,7 @@ Code is organized by feature, not by technical layer. Each feature folder keeps 
 ### Web (`apps/web/src`)
 
 ```text
-app/          router/, providers/, config/
+app/          router/, providers/ (ThemeProvider), config/, dev/ (design system preview, development only)
 features/     auth, dashboard, schools, school-owners, reports, audit-logs, platform-settings
 components/   ui/, layout/   (shared only)
 hooks/  lib/  utils/
