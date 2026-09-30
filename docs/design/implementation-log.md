@@ -31,7 +31,14 @@
 ### Deviations
 - `DIRECT_URL` added to `.env.example` alongside `DATABASE_URL`. Neon's pooled connection is used by the API; Prisma migrations need the direct connection.
 - `apps/web/.env.example` added for `VITE_API_URL` (browser-safe, no secrets).
-- Live Neon connection not yet tested: `backend/.env` has not been created with real credentials. No migrations have been run (the schema has no models yet).
+- Neon connection strings use `sslmode=verify-full` (same behaviour as `require` today; avoids the `pg` driver's deprecation warning).
+
+### Neon Connection
+- Neon CLI linked to project `square-truth-27848248`, branch `production` (`.neon`, git-ignored; `neon link` added it to `.gitignore`).
+- `backend/.env` created from the linked branch's connection strings (git-ignored).
+- Verified: API Prisma client connects over the pooled connection (PostgreSQL 18, database `neondb`).
+- Verified: Prisma CLI connects over the direct connection (`prisma migrate status`). Database is empty; no migrations yet.
+- Not used: `neon config init`, `neon.ts`, `neon deploy` (TypeScript and Neon deploy are outside the agreed architecture).
 
 ### Status
 PHASE 0 COMPLETE
