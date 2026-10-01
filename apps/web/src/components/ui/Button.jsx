@@ -1,10 +1,15 @@
+import { useId } from 'react';
 import { cn } from '../../lib/cn.js';
 import { Spinner } from './Spinner.jsx';
+import { Tooltip } from './Tooltip.jsx';
 
 const base =
   'inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md border text-button transition-colors ' +
   'disabled:pointer-events-none disabled:border-border disabled:bg-muted disabled:text-fg-disabled disabled:shadow-none ' +
-  'aria-disabled:pointer-events-none';
+  'aria-busy:pointer-events-none ' +
+  // Unavailable: looks disabled but stays focusable so its reason can be read (see unavailableReason).
+  'data-unavailable:cursor-not-allowed data-unavailable:border-border data-unavailable:bg-muted data-unavailable:text-fg-disabled data-unavailable:shadow-none ' +
+  'data-unavailable:hover:border-border data-unavailable:hover:bg-muted data-unavailable:hover:text-fg-disabled';
 
 const variants = {
   // Gold: the main action on a page or dialog. Use once per view.
@@ -33,12 +38,16 @@ export function buttonClassName({ variant = 'primary', size = 'md', iconOnly = f
 /**
  * Button. Icon-only buttons must pass `aria-label`.
  * `loading` keeps the button's width, shows a spinner and blocks clicks.
+ * `unavailableReason` shows the button as unavailable (e.g. awaiting approved business rules):
+ * it looks disabled and ignores clicks, but stays focusable and explains why in a tooltip and
+ * to screen readers. Use `disabled` instead when no explanation is needed.
  */
 export function Button({
   variant = 'primary',
   size = 'md',
   iconOnly = false,
   loading = false,
+  unavailableReason,
   leftIcon: LeftIcon,
   rightIcon: RightIcon,
   type = 'button',
@@ -48,15 +57,19 @@ export function Button({
   children,
   ...props
 }) {
+  const reasonId = useId();
   const iconClass = size === 'sm' ? 'size-4' : 'size-[1.125rem]';
+  const unavailable = Boolean(unavailableReason);
 
-  return (
+  const button = (
     <button
       type={type}
       disabled={disabled}
       aria-busy={loading || undefined}
-      aria-disabled={loading || undefined}
-      onClick={loading ? undefined : onClick}
+      aria-disabled={loading || unavailable || undefined}
+      aria-describedby={unavailable ? reasonId : undefined}
+      data-unavailable={unavailable || undefined}
+      onClick={loading || unavailable ? undefined : onClick}
       className={buttonClassName({ variant, size, iconOnly, className })}
       {...props}
     >
@@ -68,5 +81,17 @@ export function Button({
       {children}
       {!loading && RightIcon && <RightIcon aria-hidden="true" className={iconClass} />}
     </button>
+  );
+
+  if (!unavailable) return button;
+  return (
+    <>
+      <Tooltip content={unavailableReason} decorative>
+        {button}
+      </Tooltip>
+      <span id={reasonId} hidden>
+        {unavailableReason}
+      </span>
+    </>
   );
 }

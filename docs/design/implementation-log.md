@@ -315,3 +315,82 @@ Checked with headless Chrome against the dev server:
 ### Status
 
 PHASE 3 COMPLETE
+
+## Phase 4 — Schools Management
+
+### Implemented
+
+- Real Super Admin Schools page at `/schools` (replacing the placeholder), inside the existing shell; compared with `schools.png`
+- Page header with a "Demo data" label and "Register New School" (shown unavailable, see Deviations)
+- Four summary cards (Total, Active, Pending Approval, Suspended), counted from the school list and consistent with the dashboard (28 / 25 / 3 / 0)
+- Filter bar: search (name, owner, location; case-insensitive), status, location and registration-date filters, Reset
+- Schools table: #, school name, owner, location, status, registered, actions (View / Review for pending, ⋮ menu); 8 rows per page with the shared Pagination
+- School details side panel at `/schools/:schoolId` (nested route; the list stays mounted): name, status, code, owner, location, registered date, description; Edit / Approve / Suspend shown unavailable
+- Search, filters and page kept in the URL (`?q=&status=&location=&registered=&page=`): shareable, survive opening the panel and back/forward; changing a filter returns to page 1; out-of-range pages are clamped
+- Loading skeleton, "No schools found" (with "Clear search and filters"), "No schools yet", error with retry, "School not found" for unknown ids
+- Feature structure: `features/schools/{pages,components,data,hooks,utils}` + `index.js`
+
+### Demo Data
+
+- `features/schools/data/mockSchools.js` (marked DEMO; documents the response shape; 28 schools, dates relative to today)
+- `data/loadSchools.js` is the single swap point for the API (Phase 9) → `hooks/useSchools.js`; filtering and pagination are pure functions in `utils/filterSchools.js` (become API query parameters later)
+- Development-only `?demoState=loading|error|empty` (stripped from production builds)
+- School fields limited to the reference and approved scope: code, name, owner (display), location, status, registered date, description
+
+### Responsive
+
+- ≥ 1280px: summary 4 across; filters in one row; full table
+- 768–1279px: summary 2 × 2; filters two per row; table scrolls inside its card where needed
+- < 768px: single column; filters stacked; table scrolls inside its card; details panel full screen
+- No horizontal page overflow at 1536, 1440, 1024, 834, 768 or 390px, with or without the panel, in both themes
+
+### Accessibility
+
+- One h1; visually hidden "Summary" h2; KPI h3s; panel uses h2 (title) and h3 (Overview) with a definition list
+- Search and every filter labelled; result count announced politely ("12 schools found")
+- Table with caption and column headers; row actions named per school ("Review Bright Future School", "More actions for Al-Noor Academy")
+- Status always shown as text
+- Panel: opens with focus inside, Escape closes, focus returns to the button that opened it; selected row highlighted
+- Unavailable actions stay focusable, are `aria-disabled`, explain why (tooltip on hover and focus, and as their description), and do nothing when activated
+- Visible focus on all 25 page controls in both themes
+
+### Validation
+
+- [x] `/schools` route, Schools active in navigation, tab title
+- [x] Search, filters (combined), Reset, empty-result clear action
+- [x] Pagination, page in URL, clamping, filters reset the page
+- [x] Details panel by keyboard, deep link, unknown id
+- [x] Unavailable actions (keyboard, mouse, screen reader description)
+- [x] Loading, empty, error, retry
+- [x] Light and dark mode
+- [x] 1536, 1440, 1024, 834, 768, 390px
+- [x] No horizontal overflow
+- [x] No console errors or warnings
+- [x] Production build
+
+Checked with headless Chrome against the dev server: 35 functional checks, 6 tooltip / panel-edge checks, 24 screenshot and overflow checks (6 widths × 2 themes × list and panel), plus the Phase 1, 2 and 3 regression suites (see below). `npm run build:web` passes; preview and `demoState` absent from the production bundle; no TypeScript, Docker Compose, raw palette or hex colours; backend and Prisma untouched.
+
+### Deviations
+
+- **Management actions shown unavailable (approved):** Register New School, Edit School, Approve School (pending), Suspend School (active) and the ⋮ menu's Edit / Approve / Suspend items are visible but unavailable, with the reason "Not available yet: waiting for approved business rules." No forms, rules or state changes.
+- **Not included (later phases / not in scope):** Branches and Staff columns, Branches / Staff / Students counts, and the Owner, Branches, Settings and History tabs of the panel. Students are not part of the product.
+- **No school photo:** no image assets; the panel shows the school icon tile.
+- **No "View Full Details" button:** the side panel is the details view; a separate details page is not in scope.
+- **Review / View:** pending rows say "Review" as in the reference; both open the same read-only panel.
+- **Demo statuses:** Active, Pending and Suspended are display-only; with 0 suspended schools (matching the dashboard) the Suspended filter shows the empty result.
+- **Header description** shortened to "Manage all schools on the platform." (the reference also says "Approve new schools…", which is not available yet).
+- **`design-system.md`:** the Button unavailable state is documented there (added on approval); other shared component changes are recorded here.
+
+### Shared component changes
+
+- **New `Button` prop `unavailableReason`** (`components/ui/Button.jsx`): unavailable-but-explained state (focusable, `aria-disabled`, tooltip + description, click ignored). Loading no longer relies on `aria-disabled` for blocking pointer events (`aria-busy` does).
+- **`Tooltip`** (`components/ui/Tooltip.jsx`): keeps a child's existing `aria-describedby`; new `decorative` option; hidden tooltips use `display: none` and a shown tooltip shifts to stay inside the viewport. Fixes a horizontal scrollbar in the details panel caused by the right-most button's (hidden) tooltip.
+- **Moved to shared:** `KpiCard` → `components/ui/KpiCard.jsx` (used by Dashboard and Schools); date formatting → `lib/format.js`; school status display (`SchoolStatusBadge`, `schoolStatuses`) → `features/schools`, imported by the dashboard. No visual change to the dashboard.
+
+### Regression fixes
+
+- **`app/layouts/RoleLayout.jsx`:** focus moves to the content only when the section changes (first path segment). Opening/closing a school's panel changes the path within Schools; without this, closing the panel sent focus to the page instead of back to the "View" button.
+
+### Status
+
+PHASE 4 COMPLETE

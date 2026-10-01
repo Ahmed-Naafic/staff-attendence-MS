@@ -118,7 +118,7 @@ Import from `components/ui` (barrel `index.js`).
 
 | Component | Variants / states | Notes |
 |---|---|---|
-| **Button** | `primary` (gold), `secondary` (navy), `outline`, `ghost`, `danger`; sizes `sm`/`md`/`lg`; `iconOnly`; default, hover, active, focus, disabled, `loading` | Primary uses navy text on gold. Icon-only needs `aria-label`. Loading shows a spinner and ignores clicks. |
+| **Button** | `primary` (gold), `secondary` (navy), `outline`, `ghost`, `danger`; sizes `sm`/`md`/`lg`; `iconOnly`; default, hover, active, focus, disabled, `loading`, unavailable (`unavailableReason`) | Primary uses navy text on gold. Icon-only needs `aria-label`. Loading shows a spinner and ignores clicks. Unavailable (added Phase 4): looks disabled and ignores clicks but stays focusable; the reason shows as a tooltip and is announced as the button's description. Use it for actions that exist but can't be used yet; use `disabled` when no explanation is needed. |
 | **Input** | text, email, tel, password (show/hide), search, number, date, time; default, focus, error, disabled, read-only; `hideLabel` | Always labelled; hint and error linked with `aria-describedby`. |
 | **Textarea** | same states as Input | |
 | **Select** | default/placeholder, selected, disabled, error; open state is the native list | Native `<select>` for keyboard, screen reader and mobile support. |
@@ -174,6 +174,7 @@ Chart colors: `chart-1` for the main series, `chart-2` for a second series, stat
 | Error | `ErrorState` / `TableError`: message, helpful description, retry; `Alert variant="error"`; field errors under the control with an icon. |
 | Success | `Alert variant="success"`; success badges. |
 | Disabled | Muted background, `fg-disabled` text, `not-allowed` cursor; disabled controls keep their label readable. |
+| Unavailable | Same look as disabled, but focusable and explained: `Button` with `unavailableReason` (tooltip + screen reader description). |
 
 ## Accessibility
 

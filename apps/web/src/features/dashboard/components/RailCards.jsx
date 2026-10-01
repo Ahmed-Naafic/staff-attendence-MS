@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, EmptyState, LinkButton } from '../../../components/ui';
 import { cn } from '../../../lib/cn.js';
-import { formatRelative } from '../utils/format.js';
+import { formatRelative } from '../../../lib/format.js';
 import { ViewAllLink } from './ViewAllLink.jsx';
 
 // Presentation for platform activity types (the events come from audit data later).

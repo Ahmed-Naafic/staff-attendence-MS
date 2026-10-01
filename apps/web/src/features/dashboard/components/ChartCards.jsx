@@ -1,8 +1,8 @@
 import { ChartColumn, ChartPie } from 'lucide-react';
 import { BarChart, DonutChart } from '../../../components/charts';
 import { Card, CardContent, CardHeader, EmptyState } from '../../../components/ui';
-import { formatMonth, formatMonthYear } from '../utils/format.js';
-import { schoolStatuses } from './SchoolStatusBadge.jsx';
+import { formatMonth, formatMonthYear } from '../../../lib/format.js';
+import { schoolStatuses } from '../../schools';
 import { ViewAllLink } from './ViewAllLink.jsx';
 
 const toBars = (points, key) => points.map((p) => ({ label: formatMonth(p.month), value: p[key], month: p.month }));

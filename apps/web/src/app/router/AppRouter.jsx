@@ -5,7 +5,7 @@ import { DashboardPage } from '../../features/dashboard';
 import PlatformSettingsPage from '../../features/platform-settings/PlatformSettingsPage.jsx';
 import PlatformReportsPage from '../../features/reports/PlatformReportsPage.jsx';
 import SchoolOwnersPage from '../../features/school-owners/SchoolOwnersPage.jsx';
-import SchoolsPage from '../../features/schools/SchoolsPage.jsx';
+import { SchoolsPage } from '../../features/schools';
 import { getRoleProfile } from '../config/navigation.js';
 import RoleLayout from '../layouts/RoleLayout.jsx';
 import NotFoundPage from './NotFoundPage.jsx';
@@ -24,9 +24,16 @@ const routes = [
     children: [
       { index: true, element: <RoleHome /> },
 
-      // SUPER_ADMIN — platform scope (Phase 2: placeholders only)
+      // SUPER_ADMIN — platform scope (placeholder pages until their phase)
       { path: 'dashboard', element: <DashboardPage />, handle: { title: 'Dashboard' } },
-      { path: 'schools', element: <SchoolsPage />, handle: { title: 'Schools' } },
+      {
+        path: 'schools',
+        element: <SchoolsPage />,
+        handle: { title: 'Schools' },
+        // /schools/:schoolId opens the details panel over the list (the page stays mounted).
+        // The panel itself is rendered by SchoolsPage, so the child route renders nothing.
+        children: [{ path: ':schoolId', element: <></> }],
+      },
       { path: 'school-owners', element: <SchoolOwnersPage />, handle: { title: 'School Owners' } },
       { path: 'platform-reports', element: <PlatformReportsPage />, handle: { title: 'Platform Reports' } },
       { path: 'audit-logs', element: <AuditLogsPage />, handle: { title: 'Audit Logs' } },

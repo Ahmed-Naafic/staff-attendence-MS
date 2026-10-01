@@ -1,7 +1,7 @@
 import { ArrowDown, ArrowUp, Minus } from 'lucide-react';
-import { Sparkline } from '../../../components/charts';
-import { Card } from '../../../components/ui';
-import { cn } from '../../../lib/cn.js';
+import { Sparkline } from '../charts';
+import { Card } from './Card.jsx';
+import { cn } from '../../lib/cn.js';
 
 const tones = {
   info: { tile: 'bg-info-soft text-info-fg', line: 'var(--color-info)' },

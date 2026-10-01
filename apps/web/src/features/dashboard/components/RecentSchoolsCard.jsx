@@ -11,8 +11,8 @@ import {
   TableHeaderCell,
   TableRow,
 } from '../../../components/ui';
-import { formatDate } from '../utils/format.js';
-import { SchoolStatusBadge } from './SchoolStatusBadge.jsx';
+import { formatDate } from '../../../lib/format.js';
+import { SchoolStatusBadge } from '../../schools';
 import { ViewAllLink } from './ViewAllLink.jsx';
 
 /** Most recently registered schools. "View" opens the Schools area (details arrive in Phase 4). */

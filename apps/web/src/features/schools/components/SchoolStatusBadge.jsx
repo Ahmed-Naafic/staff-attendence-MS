@@ -1,7 +1,7 @@
 import { Badge } from '../../../components/ui';
 
 // Display mapping for the school statuses shown in the reference design.
-// (Status rules themselves belong to the Schools feature, Phase 4.)
+// Display only: the status rules themselves are not defined yet.
 export const schoolStatuses = {
   active: { label: 'Active', variant: 'success', color: 'var(--color-interactive)' },
   pending: { label: 'Pending', variant: 'warning', color: 'var(--color-accent)' },

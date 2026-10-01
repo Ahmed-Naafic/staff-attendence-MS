@@ -73,22 +73,25 @@ function usePageTitle() {
 }
 
 /**
- * On navigation: update the browser tab title and move focus to the main content,
- * so keyboard and screen reader users start at the new page instead of the old link.
+ * On navigation to another section: update the browser tab title and move focus to the main
+ * content, so keyboard and screen reader users start at the new page instead of the old link.
+ * Moves within a section (e.g. /schools → /schools/:id opening a details panel) keep focus
+ * where the page puts it, so closing the panel returns focus to the button that opened it.
  */
 function useRouteAnnouncements(title) {
   const { pathname } = useLocation();
-  // Compare with the previous path rather than using a "first render" flag:
+  const section = pathname.split('/')[1] ?? '';
+  // Compare with the previous section rather than using a "first render" flag:
   // StrictMode re-runs effects on mount, which a flag would mistake for a navigation.
-  const previousPath = useRef(pathname);
+  const previousSection = useRef(section);
 
   useEffect(() => {
     document.title = title ? `${title} · ${PRODUCT_NAME}` : PRODUCT_NAME;
   }, [title]);
 
   useEffect(() => {
-    if (previousPath.current === pathname) return;
-    previousPath.current = pathname;
+    if (previousSection.current === section) return;
+    previousSection.current = section;
     document.getElementById('main-content')?.focus({ preventScroll: true });
-  }, [pathname]);
+  }, [section]);
 }

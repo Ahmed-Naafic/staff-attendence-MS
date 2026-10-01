@@ -1,4 +1,4 @@
-import { cloneElement, useId, useState } from 'react';
+import { cloneElement, useId, useLayoutEffect, useRef, useState } from 'react';
 import { cn } from '../../lib/cn.js';
 
 const placements = {
@@ -11,12 +11,32 @@ const placements = {
 /**
  * Short hint on hover and keyboard focus. The child must be focusable (usually a button).
  * Tooltips supplement a label; they never replace it for icon-only buttons (use aria-label too).
+ * `decorative`: the child already describes itself (e.g. an unavailable Button), so the tooltip
+ * is visual only and is not added to its description.
  */
-export function Tooltip({ content, placement = 'top', children }) {
+export function Tooltip({ content, placement = 'top', decorative = false, children }) {
   const id = useId();
+  const tipRef = useRef(null);
   const [visible, setVisible] = useState(false);
+  const [shift, setShift] = useState(0);
   const show = () => setVisible(true);
   const hide = () => setVisible(false);
+
+  // Keep the tooltip inside the viewport (e.g. on buttons at the right edge of a drawer).
+  useLayoutEffect(() => {
+    if (!visible || !tipRef.current) {
+      setShift(0);
+      return;
+    }
+    const margin = 8;
+    const rect = tipRef.current.getBoundingClientRect();
+    const viewport = document.documentElement.clientWidth;
+    if (rect.right > viewport - margin) setShift(viewport - margin - rect.right);
+    else if (rect.left < margin) setShift(margin - rect.left);
+  }, [visible]);
+  // Keep any description the child already has; add the tooltip while it is shown.
+  const describedBy =
+    [children.props['aria-describedby'], visible && !decorative ? id : null].filter(Boolean).join(' ') || undefined;
 
   return (
     <span
@@ -27,14 +47,18 @@ export function Tooltip({ content, placement = 'top', children }) {
       onBlur={hide}
       onKeyDown={(event) => event.key === 'Escape' && hide()}
     >
-      {cloneElement(children, { 'aria-describedby': visible ? id : undefined })}
+      {cloneElement(children, { 'aria-describedby': describedBy })}
       <span
-        role="tooltip"
+        role={decorative ? undefined : 'tooltip'}
+        aria-hidden={decorative || undefined}
         id={id}
+        ref={tipRef}
+        style={shift ? { marginLeft: shift } : undefined}
         className={cn(
           'pointer-events-none absolute z-40 w-max max-w-60 rounded-md bg-tooltip px-2.5 py-1.5 text-caption font-medium text-fg-inverse shadow-medium',
           placements[placement],
-          visible ? 'visible opacity-100' : 'invisible opacity-0',
+          // Hidden tooltips take no space, so they cannot make their container scroll.
+          visible ? 'block' : 'hidden',
         )}
       >
         {content}

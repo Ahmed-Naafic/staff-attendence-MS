@@ -9,6 +9,7 @@ export { Drawer } from './Drawer.jsx';
 export { DropdownMenu } from './DropdownMenu.jsx';
 export { FieldError, FormField } from './FormField.jsx';
 export { Input, Textarea } from './Input.jsx';
+export { KpiCard } from './KpiCard.jsx';
 export { LinkButton } from './LinkButton.jsx';
 export { Modal } from './Modal.jsx';
 export { Pagination } from './Pagination.jsx';

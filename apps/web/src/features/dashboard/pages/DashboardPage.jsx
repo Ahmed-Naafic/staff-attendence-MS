@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { Building2, CircleOff, Clock, Landmark, Users } from 'lucide-react';
 import { PageContainer, PageHeader } from '../../../components/layout';
-import { Badge, Card, ErrorState, Select } from '../../../components/ui';
+import { Badge, Card, ErrorState, KpiCard, Select } from '../../../components/ui';
 import { NewSchoolsCard, SchoolsGrowthCard, StatusDistributionCard } from '../components/ChartCards.jsx';
 import { DashboardLayout } from '../components/DashboardLayout.jsx';
 import { DashboardSkeleton } from '../components/DashboardSkeleton.jsx';
-import { KpiCard } from '../components/KpiCard.jsx';
 import { QuickActionsCard, RecentActivityCard, SchoolsByLocationCard } from '../components/RailCards.jsx';
 import { RecentSchoolsCard } from '../components/RecentSchoolsCard.jsx';
 import { useDashboardData } from '../hooks/useDashboardData.js';
