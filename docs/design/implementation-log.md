@@ -394,3 +394,71 @@ Checked with headless Chrome against the dev server: 35 functional checks, 6 too
 ### Status
 
 PHASE 4 COMPLETE
+
+## Phase 5 — School Owners Management
+
+### Implemented
+
+- Real Super Admin School Owners page at `/school-owners` (replacing the placeholder), inside the existing shell; compared with `school-owners.png`
+- Page header with a "Demo data" label and "Add School Owner" (shown unavailable)
+- Four summary cards (Total, Active, Pending, Suspended owners), counted from the list
+- Filter bar: search (name, email, school; case-insensitive), status, location and registration-date filters, Reset
+- Owners table: #, owner name, email, phone (from 1536px), school, location, status, registered, actions (View / Review for pending, ⋮ menu with View details, View school and unavailable Edit / Suspend); 8 rows per page
+- Read-only details panel at `/school-owners/:ownerId` (nested route): avatar, status, last sign-in; Personal Information (name, email, phone), School Information (school, location, registered) with a working "View School" link to `/schools/:schoolId`, Account Status
+- Search, filters and page kept in the URL; loading skeleton, "No school owners found" (with clear action), "No school owners yet", error with retry, "School owner not found"
+- Feature structure: `features/school-owners/{pages,components,data,hooks,utils}` + `index.js`, following Phase 4
+
+### Demo Data
+
+- `features/school-owners/data/mockOwners.js` (marked DEMO; documents the response shape) builds one owner per school from the Schools demo set, so names, schools, cities and statuses agree across Dashboard, Schools and School Owners (28 owners: 25 active, 3 pending, 0 suspended)
+- `data/loadOwners.js` is the single swap point for the API (Phase 9) → `hooks/useOwners.js`; filtering and pagination are pure functions in `utils/filterOwners.js`
+- Development-only `?demoState=loading|error|empty` (stripped from production builds)
+- Owner fields limited to the reference: name, email, phone, status, registered date, last sign-in, and the owner's school (id, name, location, registered)
+
+### Responsive
+
+- ≥ 1536px: full table including Phone; ≥ 1280px: summary 4 across, filters in one row, table fits without scrolling
+- 768–1279px: summary 2 × 2, filters two per row, table scrolls inside its card
+- < 768px: single column, filters stacked, table scrolls inside its card, panel full screen
+- No horizontal page or panel overflow at 1536, 1440, 1024, 834, 768 or 390px, in both themes
+
+### Accessibility
+
+- One h1; hidden "Summary" h2; KPI h3s; panel h2 (name) with h3 sections and definition lists
+- Search and every filter labelled; result count announced ("1 school owner found")
+- Table caption and headers; row actions named per owner ("Review Ayaan Ali", "More actions for Fatima Ahmed"); "View school Al-Noor Academy"
+- Status always shown as text
+- Panel: focus moves inside, Escape closes, focus returns to the triggering button
+- Unavailable actions use the shared `Button unavailableReason` (focusable, `aria-disabled`, reason as tooltip and description)
+- Visible focus on all 25 page controls in both themes
+
+### Validation
+
+- [x] `/school-owners` route, navigation, tab title
+- [x] Search (name, email, school), filters (combined), Reset, empty-result clear action
+- [x] Pagination, page in URL, clamping, filters reset the page
+- [x] Details panel by keyboard, deep link, "View School" into Schools, unknown id
+- [x] Unavailable actions
+- [x] Loading, empty, error, retry
+- [x] Light and dark mode
+- [x] 1536, 1440, 1024, 834, 768, 390px
+- [x] No horizontal overflow
+- [x] No console errors or warnings
+- [x] Production build
+
+Checked with headless Chrome against the dev server: 36 functional checks, 2 panel-edge tooltip checks, 28 screenshot / overflow / table-fit checks (6 widths × 2 themes × list and panel), plus the Phase 1–4 regression suites (Phase 1 components, Phase 2 shell, Phase 3 dashboard, Phase 4 schools). `npm run build:web` passes; preview and `demoState` absent from the production bundle; no TypeScript, Docker Compose, raw palette or hex colours; backend and Prisma untouched.
+
+### Deviations
+
+- **Management actions shown unavailable:** Add School Owner, Edit (Personal Information), Edit Owner, Suspend Owner (active owners) and the ⋮ menu's Edit / Suspend — reason "Not available yet: waiting for approved business rules." No forms, rules or state changes.
+- **Not included:** the panel's Access and Activity tabs (access rules not approved; activity belongs to Audit Logs, Phase 7) and the panel's ⋯ menu (no approved actions to put in it). "School" information is shown inside Overview instead of a separate tab.
+- **Phone column from 1536px:** below that, the 9-column table did not fit common laptop widths; the phone number is always in the details panel.
+- **Demo statuses:** match the Schools data (25 / 3 / 0) rather than the reference's sample figures (25 / 2 / 1), so the three pages agree; status meanings are not defined, and the Account Status text only states the status.
+- **"Last sign-in"** (reference: "Last login") is demo data; pending owners show "Not signed in yet".
+- **Header description** shortened to "Manage school owners on the platform." (the reference also mentions creating accounts and assigning schools, which are not available yet).
+- **Demo data reuse:** the owners demo set imports the Schools demo set so all pages agree; both are replaced by the API in Phase 9.
+- No shared components or earlier phases were changed in Phase 5.
+
+### Status
+
+PHASE 5 COMPLETE
