@@ -1,7 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import AuditLogsPage from '../../features/audit-logs/AuditLogsPage.jsx';
 import { useSession } from '../../features/auth/SessionProvider.jsx';
-import DashboardPage from '../../features/dashboard/DashboardPage.jsx';
+import { DashboardPage } from '../../features/dashboard';
 import PlatformSettingsPage from '../../features/platform-settings/PlatformSettingsPage.jsx';
 import PlatformReportsPage from '../../features/reports/PlatformReportsPage.jsx';
 import SchoolOwnersPage from '../../features/school-owners/SchoolOwnersPage.jsx';

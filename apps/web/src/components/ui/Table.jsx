@@ -18,7 +18,7 @@ import { EmptyState, ErrorState } from './States.jsx';
 export function TableContainer({ label, className, children }) {
   return (
     <div className={cn('overflow-hidden rounded-lg border border-border bg-surface', className)}>
-      <div role="region" aria-label={label} tabIndex={0} className="overflow-x-auto focus-visible:outline-offset-[-2px]">
+      <div role="region" aria-label={label} tabIndex={0} className="relative overflow-x-auto focus-visible:outline-offset-[-2px]">
         {children}
       </div>
     </div>

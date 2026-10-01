@@ -1,0 +1,32 @@
+const monthFormat = new Intl.DateTimeFormat('en', { month: 'short' });
+const monthYearFormat = new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric' });
+const dateFormat = new Intl.DateTimeFormat('en', { month: 'short', day: '2-digit', year: 'numeric' });
+const relativeFormat = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
+
+const monthDate = (yearMonth) => {
+  const [year, month] = yearMonth.split('-').map(Number);
+  return new Date(year, month - 1, 1);
+};
+
+/** '2026-03' → 'Mar' */
+export const formatMonth = (yearMonth) => monthFormat.format(monthDate(yearMonth));
+
+/** '2026-03' → 'March 2026' (for screen reader tables) */
+export const formatMonthYear = (yearMonth) => monthYearFormat.format(monthDate(yearMonth));
+
+/** ISO date → 'Jan 12, 2026' */
+export const formatDate = (iso) => dateFormat.format(new Date(iso));
+
+/** ISO date → '2 hours ago', 'yesterday', '3 days ago' */
+export function formatRelative(iso, now = Date.now()) {
+  const seconds = Math.round((new Date(iso).getTime() - now) / 1000);
+  const units = [
+    ['day', 86400],
+    ['hour', 3600],
+    ['minute', 60],
+  ];
+  for (const [unit, size] of units) {
+    if (Math.abs(seconds) >= size) return relativeFormat.format(Math.round(seconds / size), unit);
+  }
+  return 'just now';
+}

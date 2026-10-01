@@ -98,6 +98,10 @@
   --color-info-soft: #e0f0fe;
   --color-info-fg: #0b4f82;
 
+  /* Charts: data series (navy in light, gold in dark, per reference) */
+  --color-chart-1: var(--color-navy-800);
+  --color-chart-2: #2b7fc1;
+
   /* Focus, overlay, tooltip */
   --color-focus: var(--color-navy-600);
   --color-overlay: rgb(4 21 33 / 0.5);
@@ -219,6 +223,9 @@
   --color-info: #4b9ad4;
   --color-info-soft: rgb(75 154 212 / 0.16);
   --color-info-fg: #8cc3ec;
+
+  --color-chart-1: var(--color-gold-400);
+  --color-chart-2: var(--color-gold-300);
 
   --color-focus: var(--color-gold-400);
   --color-overlay: rgb(0 8 15 / 0.7);

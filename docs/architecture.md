@@ -84,7 +84,7 @@ app/          router/ (routes, placeholder + not-found pages), layouts/ (RoleLay
               providers/ (ThemeProvider), config/ (navigation.js: navigation per role),
               dev/ (design system preview, development only)
 features/     auth, dashboard, schools, school-owners, reports, audit-logs, platform-settings
-components/   ui/, layout/   (shared only)
+components/   ui/, layout/, charts/   (shared only)
 hooks/  lib/  utils/
 main.jsx
 ```

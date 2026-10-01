@@ -50,6 +50,7 @@ Two themes, switched with `data-theme="light|dark"` on `<html>`. The choice is s
 | `focus` | Focus outline | Navy 600 | Gold 400 |
 | `overlay` | Modal/drawer backdrop | | |
 | `tooltip` | Tooltip background (text: `fg-inverse`) | Navy 900 | Steel 100 |
+| `chart-1`, `chart-2` | Chart data series (added Phase 3) | Navy 800 / Blue `#2B7FC1` | Gold 400 / Gold 300 |
 | `sidebar*` | Sidebar background, text, hover, active, border, focus | Navy in both themes | |
 
 **Light theme:** near-white page, white surfaces, subtle borders, controlled shadows, navy sidebar, gold accents.
@@ -133,10 +134,23 @@ Import from `components/ui` (barrel `index.js`).
 | **Drawer** | header (+ custom header slot), content, sticky footer actions, close, overlay; `md`/`lg` | Right side panel; full width on phones. |
 | **DropdownMenu** | default, hover/focus, selected (check), disabled, destructive, separator, group label | Menu button pattern; arrow keys; Escape returns focus; never clipped by tables (fixed position, flips up when needed). |
 | **Tooltip** | top, bottom, left, right | Hover and keyboard focus; supplements, never replaces, an accessible label. |
+| **LinkButton** | same variants and sizes as Button | A link that looks like a button, for actions that go to another page (added Phase 3). Shares `buttonClassName()` with Button. |
 | **Avatar** | initials; `sm`/`md`/`lg` | |
 | **Alert** | `success`, `warning`, `error`, `info`; optional title, action, dismiss | Errors/warnings use `role="alert"`. |
 | **Spinner**, **Skeleton** | sizes | |
 | **EmptyState**, **ErrorState**, **LoadingState** | compact and full | See States below. |
+
+## Charts (`components/charts`)
+
+Added in Phase 3. No chart library. Pass colors in full, e.g. `'var(--color-chart-1)'`: Tailwind only keeps CSS variables it can see written out in the source.
+
+| Component | Purpose | Accessibility |
+|---|---|---|
+| **BarChart** | Vertical bars with optional axis, gridlines and value labels | Drawing hidden from screen readers; a visually hidden data table with a caption carries the values |
+| **DonutChart** | Share of a total, with a centre value | Decorative; always pair with a visible legend that states each value |
+| **Sparkline** | Small trend line | Decorative; state the trend in text next to it |
+
+Chart colors: `chart-1` for the main series, `chart-2` for a second series, status tokens for statuses (active = `interactive`, pending = `accent`, suspended = `error`).
 
 ## Layout (`components/layout`)
 

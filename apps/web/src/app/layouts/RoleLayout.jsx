@@ -78,17 +78,17 @@ function usePageTitle() {
  */
 function useRouteAnnouncements(title) {
   const { pathname } = useLocation();
-  const isFirstRender = useRef(true);
+  // Compare with the previous path rather than using a "first render" flag:
+  // StrictMode re-runs effects on mount, which a flag would mistake for a navigation.
+  const previousPath = useRef(pathname);
 
   useEffect(() => {
     document.title = title ? `${title} · ${PRODUCT_NAME}` : PRODUCT_NAME;
   }, [title]);
 
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
+    if (previousPath.current === pathname) return;
+    previousPath.current = pathname;
     document.getElementById('main-content')?.focus({ preventScroll: true });
   }, [pathname]);
 }

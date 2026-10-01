@@ -215,3 +215,103 @@ Checked with headless Chrome (DevTools protocol) against the dev server:
 ### Status
 
 PHASE 2 COMPLETE
+
+## Phase 3 — Super Admin Dashboard
+
+### Implemented
+
+- Real Super Admin platform dashboard at `/dashboard`, replacing the Phase 2 placeholder, rendered inside the existing shell
+- Page header "Platform Overview" (reference wording) with a "Demo data" label and a time period select (Last 30 days / 90 days / 12 months)
+- Five key figure cards: Total Schools, Active Schools, Pending Approval, Suspended Schools, Total School Owners — value, change versus previous period, note, sparkline
+- Schools Growth (bar chart, 12 months), School Status Distribution (donut + legend), New Schools (bar chart with values, 6 months)
+- Recent Schools table with status badges and "View" links
+- Recent Platform Activity list, Quick Actions, Schools by Location (ranked list)
+- Loading, empty and error states
+- Feature structure: `features/dashboard/{pages,components,data,hooks,utils}` + `index.js`
+
+### Dashboard Components
+
+- `KpiCard` — reusable key figure card (label, value, icon, tone, change, note, trend)
+- `SchoolsGrowthCard`, `StatusDistributionCard`, `NewSchoolsCard` (`ChartCards.jsx`)
+- `RecentSchoolsCard`, `SchoolStatusBadge`
+- `RecentActivityCard`, `QuickActionsCard`, `SchoolsByLocationCard` (`RailCards.jsx`)
+- `DashboardLayout` (grid shared with the skeleton), `DashboardSkeleton`, `ViewAllLink`
+- New shared components: `components/charts/` — `BarChart`, `DonutChart`, `Sparkline` (no chart library); `components/ui/LinkButton`
+
+### Data
+
+- Mock data: `features/dashboard/data/mockDashboardData.js` — marked DEMO, documents the response shape, values relative to the current date
+- Source: `data/loadDashboard.js` (the only file to change for the API in Phase 9) → `hooks/useDashboardData.js` (status, data, retry) → page
+- No mock values in JSX; the page shows a visible "Demo data" label while `isDemo` is true
+- Development-only `?demoState=loading|error|empty` previews the states (stripped from production builds)
+- No backend, database or API contract changes
+
+### Light Mode
+
+- Compared side by side with `dashboard.png`: navy growth bars, blue new-school bars, tinted KPI icon tiles, soft status badges, gold primary quick action, navy sidebar with gold active item
+
+### Dark Mode
+
+- Phase 1 dark tokens: deep navy page and surfaces, gold chart bars, blue/gold/red donut, tinted icon tiles, readable badges; matches the reference's dark half
+
+### Responsive
+
+- Desktop: ≥ 1536px — three charts in one row; ≥ 1280px — charts and recent schools on the left, activity / quick actions / locations in a 20rem right column; key figures 5 across from 1360px
+- Tablet: key figures 3 + 2, growth chart full width with status and new schools side by side, rail cards two per row
+- Mobile: single column; the recent schools table scrolls inside its card; no page-wide horizontal scrolling
+
+### Accessibility
+
+- One h1, h2 per section (visually hidden "Key figures" h2), h3 per key figure
+- KPI changes read as text ("Up 12% versus the previous period"); arrows and sparklines are decorative
+- Bar charts carry a visually hidden data table with a caption; the donut is summarised by its visible legend (value and percentage per status)
+- Status badges always show text; "View" links have names per school ("View Al-Noor Academy"); "View all" links state their target
+- All 13 dashboard controls reachable by keyboard with visible focus in both themes; time period select labelled
+- Loading announced ("Loading dashboard"); error uses `role="alert"` with a retry button and no technical details
+
+### States
+
+- Loading — skeleton in the dashboard layout (`DashboardSkeleton`); changing the time period keeps content visible and marks it busy
+- Empty — each section shows its own empty state; key figures show true zeros
+- Error — `ErrorState` with "Try again" (retry reloads)
+
+### Validation
+
+- [x] Dashboard route
+- [x] Navigation
+- [x] Light mode
+- [x] Dark mode
+- [x] 1440px
+- [x] 1024px
+- [x] 834px
+- [x] 768px
+- [x] 390px
+- [x] Keyboard
+- [x] No horizontal overflow
+- [x] No console errors
+- [x] Production build
+
+Checked with headless Chrome against the dev server:
+- Screenshots at 1536 (reference width), 1440, 1024, 834, 768 and 390px in both themes, compared with `dashboard.png`; no horizontal overflow anywhere.
+- 25 functional checks: route, active nav, tab title, heading outline, KPI text, chart data tables, donut legend, demo label, no links outside approved Super Admin areas, every dashboard link opens a real page, time period reload, loading / empty / error states in both themes, retry, keyboard focus on all 13 dashboard controls in both themes.
+- Regression: Phase 2 shell suite (60 route loads across 5 widths × 2 themes, collapsed sidebar, navigation panel at 834/768/390, user menu, theme persistence and no flash, focus, skip link, `/design-system`) and Phase 1 interaction suite (modal, drawer, dropdown, tooltip, mobile nav) all pass.
+- `npm run build:web` passes; preview and `demoState` absent from the production bundle; no TypeScript or Docker Compose; no raw palette or hex colours in web source; backend and Prisma untouched.
+
+### Deviations
+
+- **Schools by Location** is a ranked list with proportional bars instead of the reference's map (no map data in the project). Approved.
+- **Right column starts below the key figures** rather than beside the page title as in the reference, so the five key figures keep enough width at common laptop sizes.
+- **Recent Platform Activity** events are chosen to agree with the other figures (the reference shows a suspension while the suspended count is 0); the "School suspended" type is still supported.
+- **Table title** is "Recent Schools" (the reference's light half says "Recent Growth", its dark half "Recent Schools"). Rows have a single "View" link; the reference's "Review" label and ⋮ row menus are not included because they imply approval and management actions that belong to Phase 4.
+- **Quick actions and "View" links** go to the existing Super Admin pages (`/schools`, `/school-owners`, `/platform-reports`, `/audit-logs`); "Register New School" and "View Pending Schools" open the Schools page until Phase 4 provides those flows.
+- **School statuses** (Active, Pending, Suspended) are shown as in the reference with demo data only; their rules are not defined yet (Phase 4 / business rules).
+- **Time period select** is wired to the data loader; the demo data returns the same figures for every period.
+- **"Demo data" label** added to the page header so sample figures are not mistaken for real data.
+- **Phase 1 extensions:** `chart-1` / `chart-2` tokens (`index.css`), `components/charts/`, `LinkButton` + `buttonClassName()` (`Button.jsx`), documented in `design-system.md`.
+- **Phase 1 fix — `components/ui/Table.jsx`:** the table scroll region is now `relative`. Visually hidden table text (caption, header labels) is absolutely positioned and escaped the scroll container, widening the page on phones. Impact: none visible; prevents page-wide horizontal scrolling for tables.
+- **Phase 2 fix — `app/layouts/RoleLayout.jsx`:** "focus the content after navigation" now compares with the previous path instead of a first-render flag. In development, React StrictMode re-runs effects on mount, so focus jumped into the content on page load and the skip link was skipped. Production was not affected.
+- **Phase 2 cleanup — `app/router/NotFoundPage.jsx`** uses `LinkButton` instead of copied button classes.
+
+### Status
+
+PHASE 3 COMPLETE

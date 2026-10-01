@@ -25,6 +25,11 @@ const sizes = {
 
 const iconSizes = { sm: 'size-8', md: 'size-10', lg: 'size-11' };
 
+/** Button classes, shared with LinkButton so links that look like buttons stay identical. */
+export function buttonClassName({ variant = 'primary', size = 'md', iconOnly = false, className } = {}) {
+  return cn(base, variants[variant], iconOnly ? cn(iconSizes[size], 'px-0') : sizes[size], className);
+}
+
 /**
  * Button. Icon-only buttons must pass `aria-label`.
  * `loading` keeps the button's width, shows a spinner and blocks clicks.
@@ -52,7 +57,7 @@ export function Button({
       aria-busy={loading || undefined}
       aria-disabled={loading || undefined}
       onClick={loading ? undefined : onClick}
-      className={cn(base, variants[variant], iconOnly ? cn(iconSizes[size], 'px-0') : sizes[size], className)}
+      className={buttonClassName({ variant, size, iconOnly, className })}
       {...props}
     >
       {loading ? (
