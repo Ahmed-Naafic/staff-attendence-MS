@@ -535,3 +535,93 @@ Checked with headless Chrome against the dev server: 23 functional checks and 36
 ### Status
 
 PHASE 6 COMPLETE
+
+## Phase 7 — Audit Logs
+
+### Implemented
+
+- Real Super Admin Audit Logs page at `/audit-logs` (replacing the placeholder), read-only, inside the existing shell; compared with `audit-logs.png`
+- Header (reference wording) with a "Demo data" label; no header actions (the reference has none)
+- Six summary figures for the whole log: Total Logs, Today's Logs, Admin Actions, School Actions, Owner Actions, Security Events
+- Filter bar: search, action, user, school, status, date range (Any date / Today / Last 7, 30, 90 days / Custom range with From and To date inputs), Reset
+- Audit table: #, Date & Time, User (avatar + name), Role, Action, Target Type, Target, IP Address, Status, Details (eye button); 10 / 25 / 50 rows per page
+- Read-only details panel "Log Details" at `/audit-logs/:logId` (nested route; the list stays mounted): outcome summary; date and time, user, role, IP address, status; Target Information; Details (action, description, previous / new status for status changes); Additional Information (browser, device)
+- Search, filters, dates, page and page size kept in the URL (`?q=&action=&user=&school=&status=&date=&from=&to=&page=&size=`); opening and closing the panel keeps them; changing a filter or the page size returns to page 1; out-of-range pages are clamped
+- Loading skeleton, "No audit events found" (with "Clear search and filters"), "No audit activity yet", error with retry, "Audit event not found" for unknown ids
+- Feature structure: `features/audit-logs/{pages,components,data,hooks,utils}` + `index.js`
+
+### Demo Audit Data
+
+- `features/audit-logs/data/mockAuditLogs.js` (marked DEMO; documents the response shape) builds a year of fictional history from the Schools and School Owners demo sets: owner account created and school registered for every school, approval for every active school, owners' sign-ins (the latest equals "Last sign-in" on School Owners), a few failed sign-ins, password resets, school and owner updates, two platform settings changes and the Super Admin's sign-ins — 292 events
+- The dashboard's Recent Platform Activity events (Bright Future School registered, Ayaan Ali's account created, Sunrise School and Somali Education Center approved, Al-Noor Academy updated) appear in the log at the same times
+- Event fields limited to the reference: time, action, result, actor (name, role), target (type, name; code and location for schools), the school it belongs to, description, status change, IP address, browser, device
+- IP addresses use the reserved documentation ranges (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24); no credentials, tokens, session identifiers or real personal data
+- `data/loadAuditLogs.js` is the single swap point for the API (Phase 9) → `hooks/useAuditLogs.js`; search, filters, dates and pagination are pure functions in `utils/filterAuditLogs.js`; display names and colors in `utils/auditTypes.js`
+- Development-only `?demoState=loading|error|empty` (stripped from production builds)
+
+### Search, Filters and Dates
+
+- Search (case-insensitive) looks in the action, user, role, target, school and description
+- Filters combine; the user and school lists come from the log; the action list shows every supported type (Suspend School has no events, matching 0 suspended schools)
+- Date presets count back from now; Today starts at local midnight; a custom range includes both whole days in local time. A start date after the end date shows an error on "To" and the range is not applied; leaving Custom range removes the dates
+- Reset clears search, filters and dates and keeps the chosen rows per page
+- Timestamps are shown as `Oct 03, 2026, 14:35:05` (local time, 24-hour) inside `<time datetime>`
+
+### Responsive
+
+- ≥ 1536px: six figures across, filters in one row, all ten columns fit (cell padding 10px for this table; Target wraps when needed)
+- 1280–1535px: figures 3 × 2, filters in one row; Target Type and IP Address hidden (both are in the details panel) so the table fits
+- 768–1279px: figures two per row, filters two per row, table scrolls inside its card
+- < 768px: single column, filters stacked, table scrolls inside its card, details panel uses the shared Drawer's phone layout
+- No horizontal page or panel overflow at 1536, 1440, 1024, 834, 768 or 390px in both themes, including the custom date row and the open panel
+
+### Accessibility
+
+- One h1; hidden "Summary" h2 with an h3 per figure; panel h2 "Log Details" with h3 sections (hidden "Event") and definition lists
+- Search, every filter, the From / To dates (in a fieldset) and "Rows per page" labelled; the date error is linked with `aria-describedby`; result count announced ("7 audit events found")
+- Table caption "Audit events, newest first" and column headers; each details button is named by its event ("View details: Approve School by Demo Administrator, Oct 03, 2026, 09:10:05") and has a "View details" tooltip
+- Role and status always shown as text; action names are text, color only reinforces them
+- Panel: focus moves inside, Escape and the close button close it, focus returns to the row's button; the open row is highlighted
+- Visible focus on all page controls in both themes
+
+### Validation
+
+- [x] `/audit-logs` route, navigation, tab title; the dashboard's activity "View all" link opens it
+- [x] Search (action, user, school, description), combined filters, date presets, custom range and its error, Reset, empty-result clear action
+- [x] Pagination, rows per page, URL state, clamping, filters reset the page
+- [x] Details panel by keyboard and mouse, deep link, browser Back, unknown id
+- [x] Read-only: no edit, delete, retry, undo, replay or export controls; no credentials or session data shown
+- [x] Loading, empty, error, retry
+- [x] Light and dark mode
+- [x] 1536, 1440, 1024, 834, 768, 390px
+- [x] No horizontal overflow
+- [x] No console errors or warnings
+- [x] Production build
+
+Checked with headless Chrome against the dev server: 54 functional checks, 40 screenshot / overflow / table-fit checks (6 widths × 2 themes × list, custom range and panel), the table fitting on all 30 pages at 1536 and 1440px, plus the Phase 1–6 regression suites (the Phase 2 suite's no-flash check can read the page mid-reload; theme persistence without a flash was confirmed separately on /dashboard and /audit-logs in both directions). Filter updates take 16–71 ms in the production build. `npm run build:web` passes; preview and `demoState` absent from the production bundle; no TypeScript, Docker Compose, raw palette or hex colours; backend and Prisma untouched.
+
+### Deviations
+
+- **No change percentages on the summary figures:** each card states what it counts instead ("51 in the last 7 days", "7 yesterday", "By Super Admins", "7 failed"), as in Phase 6, because demo comparisons would be misleading.
+- **Summary definitions:** Admin / Owner Actions count actions by Super Admins / school owners, excluding sign-ins and password resets; School Actions count events whose target is a school; Security Events count sign-ins (including failed) and password resets.
+- **Not included:** branch events (e.g. "Create Branch") and the reference's attendance settings target (branches and attendance are outside Super Admin scope); "Deactivate Owner" and suspension events (no suspended schools or owners in the demo data); topbar search and notifications (shell features, not approved).
+- **Session ID not shown** under Additional Information: session identifiers are sensitive. Browser and device are shown.
+- **Wording:** "Login" / "Login Failed" are shown as "Sign In" with a Success / Failed status (the product says "sign-in"); "Create School" is "Register School" (matches Schools); the user is the demo session's "Demo Administrator".
+- **Row action:** an eye "View details" button instead of the reference's ⋯ menu, because opening the read-only details is the only action.
+- **Date range:** presets plus a custom From / To range built from the existing date inputs, instead of a single range picker.
+- **Target Type and IP Address columns** show from 1536px; below that they are in the details panel.
+- **Panel on phones:** the shared Drawer leaves a narrow strip of the page visible at 390px (native dialog maximum width). Same as Phases 4–5; not changed here.
+
+### Shared component changes
+
+- **`Pagination`** (`components/ui/Pagination.jsx`): optional "Rows per page" select (`pageSizeOptions`, `onPageSizeChange`). Without those props it renders as before. Documented in `design-system.md`.
+- **`lib/format.js`:** new `formatDateTime()`.
+- **`app/router/AppRouter.jsx`:** `/audit-logs` uses the feature's `AuditLogsPage` with a `:logId` child route; the Phase 2 placeholder `features/audit-logs/AuditLogsPage.jsx` was removed.
+
+### Regression fixes
+
+- None needed.
+
+### Status
+
+PHASE 7 COMPLETE

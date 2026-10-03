@@ -30,3 +30,16 @@ export function formatRelative(iso, now = Date.now()) {
   }
   return 'just now';
 }
+
+const dateTimeFormat = new Intl.DateTimeFormat('en', {
+  month: 'short',
+  day: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hourCycle: 'h23',
+});
+
+/** ISO date → 'Jan 12, 2026, 10:24:18' (24-hour, local time) */
+export const formatDateTime = (iso) => dateTimeFormat.format(new Date(iso));

@@ -128,7 +128,7 @@ Import from `components/ui` (barrel `index.js`).
 | **Badge** | `success`, `warning`, `error`, `info`, `neutral`, `accent`; optional dot | Features map business statuses (Active, Pending, PRESENT, LATE…) to a variant. |
 | **Card** (+ `CardHeader`, `CardContent`, `CardFooter`) | `default`, `elevated`, `interactive` (as button/link) | Header has title, description and a right-aligned action. |
 | **Table** (+ `TableContainer`, `TableHead`, `TableBody`, `TableRow`, `TableHeaderCell`, `TableCell`, `TableActions`, `TableLoading`, `TableEmpty`, `TableError`) | header, hover, selected row, actions, status badges, loading (skeleton rows), empty, error with retry | Scrolls horizontally on small screens. |
-| **Pagination** | current page, previous/next, disabled ends, ellipses; "Showing X to Y of Z" | |
+| **Pagination** | current page, previous/next, disabled ends, ellipses; "Showing X to Y of Z"; optional "Rows per page" select (`pageSizeOptions` + `onPageSizeChange`, added Phase 7) | |
 | **Tabs** / **TabPanel** | selected (gold underline), hover, disabled; optional icons | Arrow keys, Home, End. |
 | **Modal** | header, content, footer, close, `loading` (not dismissible), `error`; sizes `sm`/`md`/`lg` | Native `<dialog>`: focus trap, Escape, focus restored to the trigger. |
 | **Drawer** | header (+ custom header slot), content, sticky footer actions, close, overlay; `md`/`lg` | Right side panel; full width on phones. |

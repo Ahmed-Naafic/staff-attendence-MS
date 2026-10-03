@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
-import AuditLogsPage from '../../features/audit-logs/AuditLogsPage.jsx';
+import { AuditLogsPage } from '../../features/audit-logs';
 import { useSession } from '../../features/auth/SessionProvider.jsx';
 import { DashboardPage } from '../../features/dashboard';
 import PlatformSettingsPage from '../../features/platform-settings/PlatformSettingsPage.jsx';
@@ -42,7 +42,13 @@ const routes = [
         children: [{ path: ':ownerId', element: <></> }],
       },
       { path: 'platform-reports', element: <PlatformReportsPage />, handle: { title: 'Platform Reports' } },
-      { path: 'audit-logs', element: <AuditLogsPage />, handle: { title: 'Audit Logs' } },
+      {
+        path: 'audit-logs',
+        element: <AuditLogsPage />,
+        handle: { title: 'Audit Logs' },
+        // /audit-logs/:logId opens the event's details panel over the list (rendered by the page).
+        children: [{ path: ':logId', element: <></> }],
+      },
       { path: 'platform-settings', element: <PlatformSettingsPage />, handle: { title: 'Platform Settings' } },
 
       { path: '*', element: <NotFoundPage />, handle: { title: 'Page not found' } },

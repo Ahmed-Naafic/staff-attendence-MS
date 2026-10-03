@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
+import { Select } from './Select.jsx';
 
 // Page list with ellipses: 1 … 4 5 6 … 20
 function pageItems(page, pageCount) {
@@ -20,8 +21,18 @@ const pageButton =
 /**
  * Table footer: "Showing 1 to 8 of 28 schools" + page buttons.
  * `itemLabel` is the plural noun for the summary (e.g. "schools").
+ * Optional "Rows per page" select: pass `pageSizeOptions` (e.g. [10, 25, 50]) and `onPageSizeChange`.
  */
-export function Pagination({ page, pageSize, total, onPageChange, itemLabel = 'results', className }) {
+export function Pagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  itemLabel = 'results',
+  pageSizeOptions,
+  onPageSizeChange,
+  className,
+}) {
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
@@ -86,6 +97,22 @@ export function Pagination({ page, pageSize, total, onPageChange, itemLabel = 'r
           </li>
         </ul>
       </nav>
+      {pageSizeOptions && onPageSizeChange && (
+        <div className="flex items-center gap-2">
+          <span aria-hidden="true" className="text-small whitespace-nowrap text-fg-muted">
+            Rows per page
+          </span>
+          <Select
+            label="Rows per page"
+            hideLabel
+            size="sm"
+            options={pageSizeOptions.map((size) => ({ value: String(size), label: String(size) }))}
+            value={String(pageSize)}
+            onChange={(event) => onPageSizeChange(Number(event.target.value))}
+            className="w-[4.5rem]"
+          />
+        </div>
+      )}
     </div>
   );
 }
