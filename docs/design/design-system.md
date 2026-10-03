@@ -148,6 +148,7 @@ Added in Phase 3. No chart library. Pass colors in full, e.g. `'var(--color-char
 |---|---|---|
 | **BarChart** | Vertical bars with optional axis, gridlines and value labels | Drawing hidden from screen readers; a visually hidden data table with a caption carries the values |
 | **DonutChart** | Share of a total, with a centre value | Decorative; always pair with a visible legend that states each value |
+| **LineChart** | Trend over time: line, soft area fill and points (added Phase 6) | Same as BarChart: drawing hidden, visually hidden data table with a caption |
 | **Sparkline** | Small trend line | Decorative; state the trend in text next to it |
 
 Chart colors: `chart-1` for the main series, `chart-2` for a second series, status tokens for statuses (active = `interactive`, pending = `accent`, suspended = `error`).

@@ -1,7 +1,7 @@
 import { cn } from '../../lib/cn.js';
 
 // Rounds the axis maximum up to a "nice" number (1, 2, 2.5, 5 × 10ⁿ) so ticks read cleanly.
-function niceMax(value, tickCount) {
+export function niceMax(value, tickCount) {
   if (value <= 0) return tickCount;
   const rough = value / tickCount;
   const magnitude = 10 ** Math.floor(Math.log10(rough));

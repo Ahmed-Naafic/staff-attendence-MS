@@ -462,3 +462,76 @@ Checked with headless Chrome against the dev server: 36 functional checks, 2 pan
 ### Status
 
 PHASE 5 COMPLETE
+
+## Phase 6 — Platform Reports
+
+### Implemented
+
+- Real Super Admin Platform Reports page at `/platform-reports` (replacing the placeholder), read-only, inside the existing shell; compared with `platform-reports.png`
+- Header: "Demo data" label, report period select (Last 3 / 6 / 12 months), "Export Report" (unavailable)
+- Tabs: Overview, Schools, School Owners (tab and period kept in the URL: `?tab=&period=`); a line under the tabs states the period dates and that status and location figures are current
+- Overview: summary cards (Total Schools and Total School Owners with "+N new" in the period, Active Schools, Pending Approval); Platform Growth (schools at the end of each month); Schools by Status (donut + legend); Schools by Location (ranked list, the dashboard card); Quick Reports (Schools Summary / Owners Summary open their tabs; Export Full Report unavailable); New Schools Registration Trend (line chart); Latest Registrations (5 newest in the period)
+- Schools tab: status and location breakdowns, table of schools registered in the period (10 per page)
+- School Owners tab: owner status breakdown, table of owners registered in the period (10 per page)
+- Loading skeleton, "No report data available" per section, error with retry
+- Feature structure: `features/reports/{pages,components,data,hooks}` + `index.js`
+
+### Metrics
+
+All figures are computed from the Schools and School Owners demo sets, so they agree with every other page (28 schools / 28 owners; 25 active, 3 pending, 0 suspended; Mogadishu 12, Hargeisa 5, Garowe 4, Kismayo 4, Baidoa 3). Period-dependent figures (new schools/owners, growth, registrations, tables) change with the period: e.g. +11 new in the last 3 months, +17 in 6, +26 in 12 (two demo schools registered just before the 12-month window).
+
+### Report Data
+
+- `features/reports/data/mockReport.js` (marked DEMO; documents the response shape) aggregates the existing demo sets, standing in for the backend's report query; `data/loadReport.js` is the single swap point for the API (Phase 9) → `hooks/useReport.js`
+- Development-only `?demoState=loading|error|empty` (stripped from production builds)
+
+### Charts
+
+- Reused: `BarChart` (Platform Growth), `DonutChart` (status), `KpiCard` sparklines, the dashboard's Schools by Location card
+- New shared `components/charts/LineChart.jsx` (registration trend): SVG line and area with HTML axes, labels and points; visually hidden data table with caption; added to `design-system.md`. `BarChart` now exports its axis-scaling helper (`niceMax`) for it — no behaviour change
+- Colors from tokens only: `chart-1` (growth), `chart-2` (trend), `interactive` / `accent` / `error` for statuses
+
+### Responsive
+
+- ≥ 1536px: four-column row (growth, status, location, quick reports) and trend beside latest registrations, as in the reference
+- 768–1535px: growth full width, status and location side by side, quick reports as a row of buttons, trend and latest registrations full width
+- < 768px: single column; tables scroll inside their cards
+- No horizontal page overflow on any tab at 1536, 1440, 1024, 834, 768 or 390px in both themes
+
+### Accessibility
+
+- One h1; tabs follow the WAI-ARIA tabs pattern (arrow keys); each section is an h2 inside the tab panel; hidden "Summary" h2 and KPI h3s
+- Charts: bar and line charts carry captioned data tables; donuts are summarised by legends stating value and percentage; location list states counts as text
+- Period select labelled "Report period"; report tables have captions and headers and no row actions
+- Unavailable export actions use `Button unavailableReason` with "Not available yet: reporting export rules are not implemented."
+- Visible focus on all controls in both themes
+
+### Validation
+
+- [x] `/platform-reports` route, navigation, tab title
+- [x] Period select changes the computed figures; tab and period in the URL
+- [x] Tabs (keyboard and Quick Reports buttons), table pagination, period change restarts pagination
+- [x] Figures consistent with Dashboard, Schools and School Owners
+- [x] Unavailable export actions
+- [x] Loading, empty, error, retry
+- [x] Light and dark mode
+- [x] 1536, 1440, 1024, 834, 768, 390px (all three tabs)
+- [x] No horizontal overflow
+- [x] No console errors or warnings
+- [x] Production build
+
+Checked with headless Chrome against the dev server: 23 functional checks and 36 overflow checks (6 widths × 2 themes × 3 tabs) with screenshots, plus the Phase 1–5 regression suites. `npm run build:web` passes; preview and `demoState` absent from the production bundle; no TypeScript, Docker Compose, raw palette or hex colours; backend and Prisma untouched.
+
+### Deviations
+
+- **Out of scope, not included:** Branches, Staff and Attendance tabs; Total Branches, Total Staff and Total Students cards; the Branches and Staff series of Platform Growth; "Branches by Region" (replaced by Schools by Location); "Top 5 Schools by Staff Count"; Branches / Staff / Attendance Summary quick reports; the "Inactive" status (not part of the product).
+- **Summary cards:** four instead of five; Active Schools and Pending Approval added so the row reflects platform status. No change percentages: with demo data the period start can be near zero, which would give misleading percentages; "+N new" is shown instead.
+- **Period control:** a select with Last 3 / 6 / 12 months instead of a free date range; periods are calendar months ending with the current month.
+- **Schools and School Owners tabs:** the reference only shows Overview; these tabs reuse the same breakdowns plus a read-only table of records registered in the period. Quick Reports open these tabs.
+- **Export Report / Export Full Report:** shown unavailable (no files generated).
+- **Header description** shortened to "Insights across all schools on the platform."
+- **Small export additions:** `features/dashboard/index.js` exports `SchoolsByLocationCard`; `features/school-owners/index.js` exports `OwnerStatusBadge` / `ownerStatuses` for reuse. No changes to their behaviour.
+
+### Status
+
+PHASE 6 COMPLETE
