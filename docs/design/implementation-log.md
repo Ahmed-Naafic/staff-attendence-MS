@@ -625,3 +625,94 @@ Checked with headless Chrome against the dev server: 54 functional checks, 40 sc
 ### Status
 
 PHASE 7 COMPLETE
+
+## Phase 8 — Platform Settings
+
+### Implemented
+
+- Real Super Admin Platform Settings page at `/platform-settings` (replacing the placeholder), inside the existing shell; compared with `platform-settings.png`
+- Header with a "Demo data" label; section tabs from the reference (General, Branding, Authentication, Registration, Notifications, System, Integrations, Data & Backup), kept in the URL (`?tab=`)
+- **General** (the only section shown in the reference):
+  - Platform Information — name, description, support email, support phone, website URL (editable in the page)
+  - Platform Logo and Favicon — the current placeholder logo; Change / Remove unavailable
+  - Timezone & Localization — default timezone, language, date format (labelled with today's date), time format, first day of week (editable in the page)
+  - Platform Configuration — the reference's seven switches, read-only with their demo values
+  - Platform Status, System Information, Quick Actions, Danger Zone
+  - Save Changes bar — unsaved-change count, Discard Changes, Save Settings (unavailable)
+- The other seven sections show "‹Section› settings are not available yet" (their contents are not in the reference or approved)
+- Loading skeleton, error with retry
+- Feature structure: `features/platform-settings/{pages,components,data,hooks,utils}` + `index.js`
+
+### Demo Data and Local State
+
+- `data/mockSettings.js` (marked DEMO; documents the response shape) → `data/loadSettings.js` (single swap point for the API in Phase 9) → `hooks/usePlatformSettings.js`
+- Safe placeholder values only: support email and website use the reserved `.example` domain; no environment variables, connection strings, credentials or infrastructure details
+- Localization defaults match how the web app formats dates and times today (MMM DD, YYYY; 24-hour)
+- `hooks/useSettingsForm.js` keeps a page-only draft of Platform Information and Localization: the Save bar counts changed fields ("2 unsaved changes in this page…"), typing a value back removes it from the count, the draft survives switching sections, and Discard Changes restores the loaded values and says so. Nothing is persisted, and no "saved" message is ever shown
+- No validation rules were invented (fields use the fitting input types only)
+- Development-only `?demoState=loading|error` (stripped from production builds)
+
+### Unavailable Functionality
+
+- **Save Settings, Change / Remove logo and favicon:** "Not available yet: platform settings persistence is not implemented."
+- **Platform Configuration switches** (school registration, approval, owner creation, audit logging, email / SMS notifications, maintenance mode): read-only, with the note "Read only. Not available yet: waiting for approved business rules."
+- **Quick Actions** (Clear System Cache, Rebuild Search Index, View System Health, Download System Logs, Restart Services) and **Danger Zone** (Maintenance Mode, Reset Platform): "Not available yet: platform operations are not implemented." Nothing destructive is functional
+- All use the shared `Button unavailableReason` (focusable, `aria-disabled`, reason as tooltip and description)
+
+### Responsive
+
+- ≥ 1536px: two settings columns plus a 20rem system column, Save bar across the bottom (as in the reference)
+- 1024–1535px: two settings columns; system cards below, two per row
+- 768–1023px: settings in one column; system cards two per row
+- < 768px: one column; tabs scroll horizontally with the selected tab kept in view; Save bar buttons stacked full width
+- No horizontal page overflow at 1536, 1440, 1024, 834, 768 or 390px in both themes, for General and the other sections
+
+### Accessibility
+
+- One h1; h2 per card (and the Save bar), h3 "Favicon"; each card is a labelled section
+- Tabs follow the WAI-ARIA tabs pattern (arrow keys, Home, End); the panel is labelled by its tab
+- Every field has a visible label and the fitting type (email, tel, url, select); the language hint is linked to its select
+- Switches keep their names and on/off state for assistive technology, are disabled, and also show "On" / "Off" as text
+- The Save bar's change count is a status message; unavailable actions explain why on hover and focus and to screen readers
+- Visible focus on all page controls in both themes
+
+### Validation
+
+- [x] `/platform-settings` route, navigation, tab title
+- [x] Tabs by keyboard and mouse, URL state, deep links, unknown tab
+- [x] Editing, change count, Discard, draft kept across sections
+- [x] Read-only switches and every unavailable action (keyboard, reason, click does nothing, no fake success)
+- [x] No secrets or environment values on the page
+- [x] Loading, error, retry
+- [x] Light and dark mode
+- [x] 1536, 1440, 1024, 834, 768, 390px
+- [x] No horizontal overflow
+- [x] No console errors or warnings
+- [x] Production build
+
+Checked with headless Chrome against the dev server: 34 functional checks and 36 screenshot / overflow checks (6 widths × 2 themes × General and another section, including selected-tab visibility), plus the Phase 1–7 regression suites. `npm run build:web` passes; preview and `demoState` absent from the production bundle; no TypeScript, Docker Compose, raw palette or hex colours; backend and Prisma untouched.
+
+### Deviations
+
+- **Only General has content.** The other seven tabs from the reference are shown with a "not available yet" message, because their settings are not in the reference or approved.
+- **Platform Configuration switches are read-only** rather than toggles: each implies a workflow rule (registration, approval, notifications, maintenance) that is not approved.
+- **Platform Status** says "Not monitored yet" instead of "All Systems Operational", and **System Information** shows the real app version (0.1.0), build mode and database type, with "Not connected yet" for storage, uptime and last backup; server environment and location are not shown (infrastructure details, and nothing to read them from yet).
+- **No logo upload area or file rules:** the reference's "PNG, JPG or SVG (max 2 MB)" and favicon size rules are not approved; the placeholder logo from Phase 1 is shown.
+- **Values:** `.example` addresses instead of the reference's domain; description says "staff attendance"; time format defaults to 24-hour and first day of week to Saturday (app behaviour and local week) instead of the reference's 12-hour / Monday; English is the only language.
+- **Header description** shortened to "Configure platform-wide settings for all schools." (the reference also mentions managing system configurations).
+- **Danger Zone** wording: "These actions affect the whole platform and cannot be undone."
+- **No theme control:** the reference's General section has none; the existing topbar toggle is unchanged.
+- The topbar search and notifications in the reference are not included (shell features, not approved).
+- `app/router/PlaceholderPage.jsx` is no longer used by any route; it is kept for future placeholders.
+
+### Shared component changes
+
+- None. `app/router/AppRouter.jsx` imports the feature's `PlatformSettingsPage`; the Phase 2 placeholder `features/platform-settings/PlatformSettingsPage.jsx` was removed.
+
+### Regression fixes
+
+- None needed.
+
+### Status
+
+PHASE 8 COMPLETE

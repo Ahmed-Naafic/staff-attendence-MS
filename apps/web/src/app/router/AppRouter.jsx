@@ -2,7 +2,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AuditLogsPage } from '../../features/audit-logs';
 import { useSession } from '../../features/auth/SessionProvider.jsx';
 import { DashboardPage } from '../../features/dashboard';
-import PlatformSettingsPage from '../../features/platform-settings/PlatformSettingsPage.jsx';
+import { PlatformSettingsPage } from '../../features/platform-settings';
 import { PlatformReportsPage } from '../../features/reports';
 import { SchoolOwnersPage } from '../../features/school-owners';
 import { SchoolsPage } from '../../features/schools';
@@ -24,7 +24,7 @@ const routes = [
     children: [
       { index: true, element: <RoleHome /> },
 
-      // SUPER_ADMIN — platform scope (placeholder pages until their phase)
+      // SUPER_ADMIN — platform scope
       { path: 'dashboard', element: <DashboardPage />, handle: { title: 'Dashboard' } },
       {
         path: 'schools',
