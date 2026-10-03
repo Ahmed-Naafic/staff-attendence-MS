@@ -109,22 +109,28 @@ export function OwnerDrawer({ owner, open, onClose }) {
           id="owner-school"
           title="School Information"
           action={
-            <LinkButton to={`/schools/${owner.school.id}`} size="sm" variant="outline" aria-label={`View school ${owner.school.name}`}>
-              View School
-            </LinkButton>
+            owner.school && (
+              <LinkButton to={`/schools/${owner.school.id}`} size="sm" variant="outline" aria-label={`View school ${owner.school.name}`}>
+                View School
+              </LinkButton>
+            )
           }
         >
-          <dl className="flex flex-col gap-3">
-            <Detail icon={Landmark} label="School name">
-              {owner.school.name}
-            </Detail>
-            <Detail icon={MapPin} label="Location">
-              {owner.school.location}, Somalia
-            </Detail>
-            <Detail icon={CalendarDays} label="Registered">
-              <time dateTime={owner.school.registeredAt}>{formatDate(owner.school.registeredAt)}</time>
-            </Detail>
-          </dl>
+          {owner.school ? (
+            <dl className="flex flex-col gap-3">
+              <Detail icon={Landmark} label="School name">
+                {owner.school.name}
+              </Detail>
+              <Detail icon={MapPin} label="Location">
+                {owner.school.location}, Somalia
+              </Detail>
+              <Detail icon={CalendarDays} label="Registered">
+                <time dateTime={owner.school.registeredAt}>{formatDate(owner.school.registeredAt)}</time>
+              </Detail>
+            </dl>
+          ) : (
+            <p className="text-small text-fg-muted">No school is linked to this account.</p>
+          )}
         </Section>
 
         <Section id="owner-status" title="Account Status" action={<OwnerStatusBadge status={owner.status} />}>

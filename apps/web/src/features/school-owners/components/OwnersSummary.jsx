@@ -2,14 +2,17 @@ import { CircleOff, Clock, UserRoundCheck, Users } from 'lucide-react';
 import { KpiCard } from '../../../components/ui';
 
 const cards = [
-  { key: 'totalOwners', label: 'Total Owners', icon: Users, tone: 'info', count: (o) => o.length },
-  { key: 'activeOwners', label: 'Active Owners', icon: UserRoundCheck, tone: 'success', count: (o) => o.filter((x) => x.status === 'active').length },
-  { key: 'pendingOwners', label: 'Pending Owners', icon: Clock, tone: 'warning', count: (o) => o.filter((x) => x.status === 'pending').length },
-  { key: 'suspendedOwners', label: 'Suspended Owners', icon: CircleOff, tone: 'error', count: (o) => o.filter((x) => x.status === 'suspended').length },
+  { key: 'total', label: 'Total Owners', icon: Users, tone: 'info' },
+  { key: 'active', label: 'Active Owners', icon: UserRoundCheck, tone: 'success' },
+  { key: 'pending', label: 'Pending Owners', icon: Clock, tone: 'warning' },
+  { key: 'suspended', label: 'Suspended Owners', icon: CircleOff, tone: 'error' },
 ];
 
-/** Four summary figures for the whole platform (not affected by search or filters). */
-export function OwnersSummary({ owners, summary }) {
+/**
+ * Four summary figures for the whole platform (not affected by search or filters), counted by
+ * the server. No change percentages: comparing periods needs an approved definition.
+ */
+export function OwnersSummary({ counts }) {
   return (
     <section aria-labelledby="owners-summary">
       <h2 id="owners-summary" className="sr-only">
@@ -22,9 +25,7 @@ export function OwnersSummary({ owners, summary }) {
             label={card.label}
             icon={card.icon}
             tone={card.tone}
-            value={card.count(owners)}
-            changePercent={summary[card.key]?.changePercent}
-            trend={summary[card.key]?.trend}
+            value={counts[card.key]}
           />
         ))}
       </ul>

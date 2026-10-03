@@ -79,3 +79,22 @@ CHECK_IN, CHECK_OUT, EXCUSE_SUBMITTED, CORRECTION_REQUESTED.
 
 - A staff member may get a check-in reminder when they are inside the branch geofence and have not checked in.
 - The reminder is based on actual geofence presence. No repeated notifications until a frequency rule is approved.
+
+## Schools and owners
+
+- Each school has exactly one owner, and each School Owner account belongs to exactly one school (approved in Phase 9).
+- School statuses (Active, Pending, Suspended) and account statuses (Active, Pending, Suspended) are stored and shown, but nothing changes them yet.
+
+## Not yet decided
+
+Open questions found while building the platform. These are **not rules**: the related actions stay unavailable until they are answered.
+
+- **School registration:** who registers a school (Super Admin, or the owner?), what is required, and whether the owner account is created at the same time.
+- **School approval:** who approves, what is checked, and what "Pending" allows a school or owner to do.
+- **Suspension:** what suspending a school or an owner blocks (sign-in? the school's branches and staff?), who can suspend, and how it is undone.
+- **School and owner edits:** which fields can change, and by whom.
+- **Owner accounts:** how an owner is invited and sets a password (staff use phone OTP; owners are not defined).
+- **Account security:** password policy, lockout policy, session length, and password reset. Technical defaults are in use (minimum 12 characters for created accounts, 5 failed sign-ins per 15 minutes, 12-hour sessions); they are not approved policy.
+- **Platform settings:** what each setting controls, who may change it, and whether changes are audited (information, localization, and the Platform Configuration switches).
+- **Report definitions:** how a "change versus the previous period" is defined (percentages are not shown until then).
+- **Super Admin accounts:** whether there can be several, and who creates them (today: a command-line script only).

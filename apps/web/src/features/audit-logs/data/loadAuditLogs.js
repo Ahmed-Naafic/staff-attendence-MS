@@ -1,20 +1,60 @@
-import { createEmptyMockAuditLogs, createMockAuditLogs } from './mockAuditLogs.js';
+import { apiRequest, previewDelay, previewState } from '../../../lib/api.js';
+import { dateBounds } from '../utils/filterAuditLogs.js';
+
+const EMPTY = {
+  isDemo: false,
+  items: [],
+  total: 0,
+  page: 1,
+  pageSize: 10,
+  pageCount: 1,
+  summary: { total: 0, lastWeek: 0, today: 0, yesterday: 0, admin: 0, school: 0, owner: 0, security: 0, failed: 0 },
+  users: [],
+  schools: [],
+};
+
+const iso = (ms) => (ms === null || ms === undefined ? undefined : new Date(ms).toISOString());
 
 /**
- * Loads the platform's audit events, newest first.
- *
- * SOURCE: demo data until the backend exists (Phase 9). Replace the body with the API call;
- * it must resolve to the shape documented in mockAuditLogs.js. Search, filters and pagination
- * are applied in the browser for now (see utils/filterAuditLogs.js).
+ * One page of audit events from the API (GET /api/platform/audit-logs), newest first, with the
+ * summary figures and the filter choices (users, schools). Date ranges are worked out in the
+ * viewer's local time and sent as exact instants. Event shape: see mockAuditLogs.js.
  */
-export async function loadAuditLogs() {
-  // Development only: preview page states with ?demoState=loading | error | empty
-  const demoState = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('demoState') : null;
-  if (demoState === 'loading') return new Promise(() => {});
+export async function loadAuditLogs(filters, page, pageSize) {
+  // Development only (removed from production builds): preview page states with ?demoState=loading | error | empty
+  if (import.meta.env.DEV) {
+    const preview = previewState();
+    if (preview === 'loading') return new Promise(() => {});
+    if (preview) await previewDelay();
+    if (preview === 'error') throw new Error('Preview: audit log request failed');
+    if (preview === 'empty') return { ...EMPTY, pageSize };
+  }
 
-  await new Promise((resolve) => setTimeout(resolve, 350)); // simulated network latency
+  const { since, until, invalid } = dateBounds(filters);
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  return apiRequest('/platform/audit-logs', {
+    query: {
+      q: filters.query,
+      action: filters.action,
+      user: filters.user,
+      school: filters.school,
+      status: filters.status,
+      since: invalid ? undefined : iso(since),
+      until: invalid ? undefined : iso(until),
+      dayStart: midnight.toISOString(),
+      page,
+      pageSize,
+    },
+  });
+}
 
-  if (demoState === 'error') throw new Error('Demo: audit log request failed');
-  if (demoState === 'empty') return createEmptyMockAuditLogs();
-  return createMockAuditLogs();
+/** One audit event by id (GET /api/platform/audit-logs/:id); null when it does not exist. */
+export async function loadAuditEvent(id) {
+  try {
+    return (await apiRequest(`/platform/audit-logs/${encodeURIComponent(id)}`)).event;
+  } catch (error) {
+    if (error.status === 404) return null;
+    throw error;
+  }
 }

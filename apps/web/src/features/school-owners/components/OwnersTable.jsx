@@ -77,8 +77,8 @@ export function OwnersTable({ rows, total, page, offset, onPageChange, selectedI
                   <TableCell className="font-medium whitespace-nowrap">{owner.name}</TableCell>
                   <TableCell className="whitespace-nowrap text-fg-secondary">{owner.email}</TableCell>
                   <TableCell className="hidden whitespace-nowrap text-fg-secondary tabular-nums 2xl:table-cell">{owner.phone}</TableCell>
-                  <TableCell className="whitespace-nowrap text-fg-secondary">{owner.school.name}</TableCell>
-                  <TableCell className="whitespace-nowrap text-fg-secondary">{owner.school.location}</TableCell>
+                  <TableCell className="whitespace-nowrap text-fg-secondary">{owner.school?.name ?? '—'}</TableCell>
+                  <TableCell className="whitespace-nowrap text-fg-secondary">{owner.school?.location ?? '—'}</TableCell>
                   <TableCell>
                     <OwnerStatusBadge status={owner.status} />
                   </TableCell>
@@ -100,7 +100,9 @@ export function OwnersTable({ rows, total, page, offset, onPageChange, selectedI
                         label={`More actions for ${owner.name}`}
                         items={[
                           { label: 'View details', icon: Eye, onSelect: () => navigate(detailsLink(owner.id)) },
-                          { label: 'View school', icon: Landmark, onSelect: () => navigate(`/schools/${owner.school.id}`) },
+                          ...(owner.school
+                            ? [{ label: 'View school', icon: Landmark, onSelect: () => navigate(`/schools/${owner.school.id}`) }]
+                            : []),
                           { type: 'separator' },
                           { type: 'label', label: 'Not available yet' },
                           { label: 'Edit owner', icon: Pencil, disabled: true },

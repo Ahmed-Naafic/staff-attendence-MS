@@ -1,8 +1,12 @@
 // EduTrack Staff Attendance Management System — Prisma schema
 //
-// Phase 0: infrastructure only. No models are defined yet.
-// Models are added in later phases, following the approved hierarchy
-// (School → Branch → Staff) and role scopes documented in docs/architecture.md.
+// Phase 9: platform foundation for the Super Admin web app — users and roles, schools and their
+// owners, sign-in sessions, audit events and platform settings. Branches, staff, attendance and
+// excuses are added in later phases, following the hierarchy (School → Branch → Staff) and role
+// scopes in docs/architecture.md.
+//
+// Statuses are stored and displayed only: the rules for changing them (approval, suspension)
+// are not approved yet, so nothing in the API changes them.
 //
 // Connection strings come from environment variables (see backend/prisma.config.js
 // and backend/src/config/prisma.js). Never hardcode credentials here.
@@ -13,4 +17,137 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum Role {
+  SUPER_ADMIN // PLATFORM scope
+  OWNER // SCHOOL scope
+  MANAGER // BRANCH scope
+  STAFF // SELF scope
+}
+
+enum AccountStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum SchoolStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum AuditResult {
+  SUCCESS
+  FAILURE
+}
+
+/// Anyone who can sign in. Only ACTIVE accounts with a password can sign in.
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  /// Stored lower-case; the sign-in identifier for web users.
+  email        String?       @unique
+  phone        String?
+  role         Role
+  status       AccountStatus @default(ACTIVE)
+  /// scrypt hash (see backend/src/features/auth/password.js). Never returned by the API.
+  passwordHash String?
+  lastSignInAt DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  /// For OWNER accounts: the one school they own.
+  ownedSchool School?      @relation("SchoolOwner")
+  sessions    Session[]
+  auditEvents AuditEvent[] @relation("AuditActor")
+
+  @@index([role, status])
+}
+
+model School {
+  id           String       @id @default(uuid())
+  /// Display code, e.g. SCL-2026-028.
+  code         String       @unique
+  name         String
+  /// City.
+  location     String
+  status       SchoolStatus @default(PENDING)
+  description  String?
+  registeredAt DateTime     @default(now())
+  /// One owner per school; an owner owns one school.
+  ownerId      String?      @unique
+  owner        User?        @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  auditEvents AuditEvent[]
+
+  @@index([status])
+  @@index([location])
+  @@index([registeredAt])
+}
+
+/// A signed-in browser. The cookie holds a random token; only its SHA-256 hash is stored.
+model Session {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  lastUsedAt DateTime @default(now())
+  ipAddress  String?
+  userAgent  String?
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// Record of an important platform action. Actor and target names are copied at the time of the
+/// event so the history stays readable if records change later. Never store secrets here.
+model AuditEvent {
+  id          String      @id @default(uuid())
+  occurredAt  DateTime    @default(now())
+  /// e.g. SIGN_IN, SIGN_OUT (see backend/src/features/audit-logs/auditActions.js)
+  action      String
+  result      AuditResult
+  actorId     String?
+  actor       User?       @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName   String?
+  actorRole   Role?
+  /// 'school' | 'owner' | 'system' | 'user'
+  targetType  String
+  targetId    String?
+  targetName  String?
+  schoolId    String?
+  school      School?     @relation(fields: [schoolId], references: [id], onDelete: SetNull)
+  description String
+  /// { field, from, to } for status changes.
+  change      Json?
+  ipAddress   String?
+  userAgent   String?
+
+  @@index([occurredAt])
+  @@index([action])
+  @@index([actorId])
+  @@index([schoolId])
+}
+
+/// Platform-wide settings: a single row (id = 'platform'). Only the fields whose meaning is clear
+/// are stored; none are editable through the API yet (persistence rules not approved).
+model PlatformSettings {
+  id             String   @id @default("platform")
+  platformName   String?
+  description    String?
+  supportEmail   String?
+  supportPhone   String?
+  websiteUrl     String?
+  timezone       String?
+  language       String?
+  dateFormat     String?
+  timeFormat     String?
+  firstDayOfWeek String?
+  updatedAt      DateTime @updatedAt
 }

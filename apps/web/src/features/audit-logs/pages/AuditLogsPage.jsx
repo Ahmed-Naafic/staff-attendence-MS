@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { PageContainer, PageHeader } from '../../../components/layout';
 import { Alert, Badge, Card, ErrorState } from '../../../components/ui';
@@ -8,8 +7,8 @@ import { AuditSkeleton } from '../components/AuditSkeleton.jsx';
 import { AuditSummary } from '../components/AuditSummary.jsx';
 import { AuditTable } from '../components/AuditTable.jsx';
 import { useAuditFilters } from '../hooks/useAuditFilters.js';
-import { useAuditLogs } from '../hooks/useAuditLogs.js';
-import { dateBounds, filterAuditLogs, paginate, schoolsOf, usersOf } from '../utils/filterAuditLogs.js';
+import { useAuditEventDetails, useAuditLogs } from '../hooks/useAuditLogs.js';
+import { dateBounds } from '../utils/filterAuditLogs.js';
 
 /**
  * Super Admin Audit Logs: read-only history of platform actions with search, filters, a date
@@ -18,13 +17,10 @@ import { dateBounds, filterAuditLogs, paginate, schoolsOf, usersOf } from '../ut
 export default function AuditLogsPage() {
   const { logId } = useParams();
   const navigate = useNavigate();
-  const { status, data, retry } = useAuditLogs();
   const { filters, page, pageSize, isFiltered, setFilter, setPage, setPageSize, reset, search } = useAuditFilters();
-
-  const events = useMemo(() => data?.events ?? [], [data]);
-  const filtered = useMemo(() => filterAuditLogs(events, filters), [events, filters]);
-  const current = paginate(filtered, page, pageSize);
-  const selected = logId ? events.find((e) => e.id === logId) : null;
+  // Search, filters and pagination run on the server; `data` is the current page.
+  const { status, data, retry } = useAuditLogs(filters, page, pageSize);
+  const { event: selected, notFound } = useAuditEventDetails(logId, data?.items);
   const dateError = dateBounds(filters).invalid ? 'The end date must be on or after the start date.' : undefined;
   const closeDetails = () => navigate({ pathname: '/audit-logs', search });
 
@@ -56,7 +52,7 @@ export default function AuditLogsPage() {
 
       {data && status !== 'error' && (
         <>
-          {logId && !selected && (
+          {notFound && (
             <Alert variant="warning" title="Audit event not found">
               That audit event does not exist or is no longer available.{' '}
               <Link to={{ pathname: '/audit-logs', search }} className="font-medium underline">
@@ -65,12 +61,12 @@ export default function AuditLogsPage() {
             </Alert>
           )}
 
-          <AuditSummary events={events} />
+          <AuditSummary summary={data.summary} />
 
           <AuditFilters
             filters={filters}
-            users={usersOf(events)}
-            schools={schoolsOf(events)}
+            users={data.users}
+            schools={data.schools}
             dateError={dateError}
             onChange={setFilter}
             onReset={reset}
@@ -79,15 +75,15 @@ export default function AuditLogsPage() {
 
           {/* Announces the result count after searching or filtering. */}
           <p aria-live="polite" className="sr-only">
-            {isFiltered ? `${filtered.length} ${filtered.length === 1 ? 'audit event' : 'audit events'} found` : ''}
+            {isFiltered && status === 'success' ? `${data.total} ${data.total === 1 ? 'audit event' : 'audit events'} found` : ''}
           </p>
 
           <AuditTable
-            rows={current.rows}
-            total={filtered.length}
-            page={current.page}
+            rows={data.items}
+            total={data.total}
+            page={data.page}
             pageSize={pageSize}
-            offset={current.offset}
+            offset={(data.page - 1) * pageSize}
             onPageChange={setPage}
             onPageSizeChange={setPageSize}
             selectedId={selected?.id}

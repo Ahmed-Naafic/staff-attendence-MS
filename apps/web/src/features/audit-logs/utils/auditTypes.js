@@ -14,6 +14,7 @@ export const auditActions = {
   OWNER_CREATED: { label: 'Create Owner Account', tone: 'success', done: 'Owner account created successfully.' },
   OWNER_UPDATED: { label: 'Update Owner', tone: 'info', done: 'Owner details updated successfully.' },
   SIGN_IN: { label: 'Sign In', tone: 'success', security: true, done: 'Signed in successfully.', failed: 'Sign-in attempt failed.' },
+  SIGN_OUT: { label: 'Sign Out', tone: 'info', security: true, done: 'Signed out successfully.' },
   PASSWORD_RESET: { label: 'Reset Password', tone: 'info', security: true, done: 'Password reset completed successfully.' },
   SETTINGS_UPDATED: { label: 'Update Platform Settings', tone: 'info', done: 'Platform settings updated successfully.' },
 };
@@ -29,6 +30,8 @@ export const outcomeOf = (event) => {
 export const auditRoles = {
   SUPER_ADMIN: { label: 'Super Admin', variant: 'accent' },
   OWNER: { label: 'School Owner', variant: 'info' },
+  MANAGER: { label: 'Manager', variant: 'neutral' },
+  STAFF: { label: 'Staff', variant: 'neutral' },
 };
 
 export const auditResults = {
@@ -40,6 +43,7 @@ export const targetTypes = {
   school: 'School',
   owner: 'School Owner',
   system: 'System',
+  user: 'User',
 };
 
 export const isSecurityEvent = (event) => Boolean(actionOf(event.action).security);

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Outlet, useLocation, useMatches } from 'react-router';
+import { Outlet, useLocation, useMatches, useNavigate } from 'react-router';
 import { LogOut, UserRound } from 'lucide-react';
 import { AppShell, Sidebar, Topbar, UserMenu } from '../../components/layout';
-import { EmptyState } from '../../components/ui';
+import { Button, EmptyState } from '../../components/ui';
 import { useSession } from '../../features/auth/SessionProvider.jsx';
 import { getNavigationForRole, getRoleProfile } from '../config/navigation.js';
 
@@ -14,8 +14,16 @@ const PRODUCT_NAME = 'EduTrack';
  * Pages render only their own content, starting with <PageContainer>.
  */
 export default function RoleLayout() {
-  const { user, isDemo } = useSession();
+  const { user, signOut } = useSession();
+  const navigate = useNavigate();
   const profile = getRoleProfile(user.role);
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } finally {
+      navigate('/login', { replace: true });
+    }
+  };
   const title = usePageTitle();
   useRouteAnnouncements(title);
 
@@ -26,6 +34,11 @@ export default function RoleLayout() {
         <EmptyState
           title="No web workspace for this role yet"
           description="This account's role does not have web navigation in this version."
+          action={
+            <Button variant="outline" onClick={handleSignOut}>
+              Sign out
+            </Button>
+          }
         />
       </main>
     );
@@ -50,11 +63,10 @@ export default function RoleLayout() {
               name={user.name}
               roleLabel={profile.label}
               items={[
-                ...(isDemo ? [{ type: 'label', label: 'Demo session — no sign-in yet' }] : []),
-                // Profile and sign-out arrive with the authentication phase.
+                // Profile is not available yet (no approved profile features).
                 { label: 'Profile', icon: UserRound, disabled: true },
                 { type: 'separator' },
-                { label: 'Sign out', icon: LogOut, disabled: true },
+                { label: 'Sign out', icon: LogOut, onSelect: handleSignOut },
               ]}
             />
           }

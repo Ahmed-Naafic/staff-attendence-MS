@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Plus } from 'lucide-react';
 import { PageContainer, PageHeader } from '../../../components/layout';
@@ -9,8 +8,8 @@ import { OwnersSkeleton } from '../components/OwnersSkeleton.jsx';
 import { OwnersSummary } from '../components/OwnersSummary.jsx';
 import { OwnersTable } from '../components/OwnersTable.jsx';
 import { useOwnerFilters } from '../hooks/useOwnerFilters.js';
-import { useOwners } from '../hooks/useOwners.js';
-import { filterOwners, locationsOf, paginate } from '../utils/filterOwners.js';
+import { useOwnerDetails, useOwners } from '../hooks/useOwners.js';
+import { PAGE_SIZE } from '../utils/filterOwners.js';
 
 /**
  * Super Admin School Owners: platform-wide list with search, filters, pagination and a
@@ -19,13 +18,10 @@ import { filterOwners, locationsOf, paginate } from '../utils/filterOwners.js';
 export default function SchoolOwnersPage() {
   const { ownerId } = useParams();
   const navigate = useNavigate();
-  const { status, data, retry } = useOwners();
   const { filters, page, isFiltered, setFilter, setPage, reset, search } = useOwnerFilters();
-
-  const owners = useMemo(() => data?.owners ?? [], [data]);
-  const filtered = useMemo(() => filterOwners(owners, filters), [owners, filters]);
-  const current = paginate(filtered, page);
-  const selected = ownerId ? owners.find((o) => o.id === ownerId) : null;
+  // Search, filters and pagination run on the server; `data` is the current page.
+  const { status, data, retry } = useOwners(filters, page);
+  const { owner: selected, notFound } = useOwnerDetails(ownerId, data?.items);
   const closeDetails = () => navigate({ pathname: '/school-owners', search });
 
   return (
@@ -61,7 +57,7 @@ export default function SchoolOwnersPage() {
 
       {data && status !== 'error' && (
         <>
-          {ownerId && !selected && (
+          {notFound && (
             <Alert variant="warning" title="School owner not found">
               That school owner does not exist or is no longer available.{' '}
               <Link to={{ pathname: '/school-owners', search }} className="font-medium underline">
@@ -70,11 +66,11 @@ export default function SchoolOwnersPage() {
             </Alert>
           )}
 
-          <OwnersSummary owners={owners} summary={data.summary} />
+          <OwnersSummary counts={data.summary} />
 
           <OwnersFilters
             filters={filters}
-            locations={locationsOf(owners)}
+            locations={data.locations}
             onChange={setFilter}
             onReset={reset}
             isFiltered={isFiltered}
@@ -82,14 +78,14 @@ export default function SchoolOwnersPage() {
 
           {/* Announces the result count after searching or filtering. */}
           <p aria-live="polite" className="sr-only">
-            {isFiltered ? `${filtered.length} ${filtered.length === 1 ? 'school owner' : 'school owners'} found` : ''}
+            {isFiltered && status === 'success' ? `${data.total} ${data.total === 1 ? 'school owner' : 'school owners'} found` : ''}
           </p>
 
           <OwnersTable
-            rows={current.rows}
-            total={filtered.length}
-            page={current.page}
-            offset={current.offset}
+            rows={data.items}
+            total={data.total}
+            page={data.page}
+            offset={(data.page - 1) * PAGE_SIZE}
             onPageChange={setPage}
             selectedId={selected?.id}
             search={search}

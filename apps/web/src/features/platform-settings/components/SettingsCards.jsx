@@ -11,6 +11,9 @@ import {
   UNAVAILABLE,
 } from '../utils/settingsOptions.js';
 
+// Shown in a select when no value is stored yet.
+const NOT_SET = 'Not set';
+
 /** Platform name, description and public contact details (editable in the page only). */
 export function PlatformInfoCard({ values, onChange }) {
   const set = (name) => (event) => onChange('information', name, event.target.value);
@@ -101,18 +104,19 @@ export function LocalizationCard({ values, onChange }) {
         description="Default timezone and formats for the platform."
       />
       <CardContent className="flex flex-col gap-4">
-        <Select label="Default timezone" options={timezoneOptions} value={values.timezone} onChange={set('timezone')} />
+        <Select label="Default timezone" placeholder={NOT_SET} options={timezoneOptions} value={values.timezone} onChange={set('timezone')} />
         <Select
           label="Default language"
+          placeholder={NOT_SET}
           options={languageOptions}
           value={values.language}
           onChange={set('language')}
           hint="English is the only language available."
         />
-        <Select label="Date format" options={dateFormats} value={values.dateFormat} onChange={set('dateFormat')} />
+        <Select label="Date format" placeholder={NOT_SET} options={dateFormats} value={values.dateFormat} onChange={set('dateFormat')} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-          <Select label="Time format" options={timeFormatOptions} value={values.timeFormat} onChange={set('timeFormat')} />
-          <Select label="First day of week" options={firstDayOptions} value={values.firstDayOfWeek} onChange={set('firstDayOfWeek')} />
+          <Select label="Time format" placeholder={NOT_SET} options={timeFormatOptions} value={values.timeFormat} onChange={set('timeFormat')} />
+          <Select label="First day of week" placeholder={NOT_SET} options={firstDayOptions} value={values.firstDayOfWeek} onChange={set('firstDayOfWeek')} />
         </div>
       </CardContent>
     </Card>
@@ -122,6 +126,7 @@ export function LocalizationCard({ values, onChange }) {
 /**
  * Platform-wide switches, shown read-only: each one depends on workflow rules
  * (registration, approval, notifications, maintenance) that are not approved yet.
+ * They are not stored either, so without values each switch is off and marked "Not set".
  */
 export function ConfigurationCard({ values }) {
   return (
@@ -138,9 +143,13 @@ export function ConfigurationCard({ values }) {
         <ul className="flex flex-col gap-3.5">
           {configurationItems.map((item) => (
             <li key={item.key} className="flex items-start justify-between gap-3">
-              <Switch label={item.label} description={item.description} checked={values[item.key]} disabled />
-              <span className="mt-0.5 shrink-0 text-caption font-medium text-fg-secondary" aria-hidden="true">
-                {values[item.key] ? 'On' : 'Off'}
+              <Switch label={item.label} description={item.description} checked={values?.[item.key] === true} disabled />
+              <span className="mt-0.5 shrink-0 text-caption font-medium text-fg-secondary">
+                {values?.[item.key] === undefined || values?.[item.key] === null ? (
+                  NOT_SET
+                ) : (
+                  <span aria-hidden="true">{values[item.key] ? 'On' : 'Off'}</span>
+                )}
               </span>
             </li>
           ))}

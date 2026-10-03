@@ -1,16 +1,27 @@
 import express from 'express';
-import { notFound } from './middleware/notFound.js';
+import { authRouter } from './features/auth/auth.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
+import { notFound } from './middleware/notFound.js';
+import { sameOrigin } from './middleware/sameOrigin.js';
+import { platformRouter } from './platform/platform.routes.js';
 
 const app = express();
 
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '10kb' }));
+// Responses carry private data: never cache them in shared caches.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+app.use('/api', sameOrigin);
 
-// Phase 0: foundation health check only. Feature routers (src/features/*)
-// are mounted here in later phases.
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
+
+app.use('/api/auth', authRouter);
+app.use('/api/platform', platformRouter);
 
 app.use(notFound);
 app.use(errorHandler);

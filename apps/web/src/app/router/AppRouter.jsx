@@ -1,6 +1,6 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AuditLogsPage } from '../../features/audit-logs';
-import { useSession } from '../../features/auth/SessionProvider.jsx';
+import { LoginPage, RequireSession, useSession } from '../../features/auth';
 import { DashboardPage } from '../../features/dashboard';
 import { PlatformSettingsPage } from '../../features/platform-settings';
 import { PlatformReportsPage } from '../../features/reports';
@@ -18,9 +18,15 @@ function RoleHome() {
 
 // `handle.title` names the page for the topbar and the browser tab.
 const routes = [
+  // Public: the sign-in page. Everything else requires a session.
+  { path: '/login', element: <LoginPage /> },
   {
     path: '/',
-    element: <RoleLayout />,
+    element: (
+      <RequireSession>
+        <RoleLayout />
+      </RequireSession>
+    ),
     children: [
       { index: true, element: <RoleHome /> },
 

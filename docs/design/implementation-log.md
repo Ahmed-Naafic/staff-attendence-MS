@@ -716,3 +716,87 @@ Checked with headless Chrome against the dev server: 34 functional checks and 36
 ### Status
 
 PHASE 8 COMPLETE
+
+## Phase 9 — Backend Integration & Authorization
+
+### Architecture audit (before Phase 9)
+
+- Backend: Express 5 with only `GET /api/health`, `notFound` and `errorHandler`; empty feature folders; no validation, tests, CORS or rate limiting
+- Prisma 7 (pg adapter, pooled runtime / direct CLI connections) with **no models and no migrations**; the Neon `production` branch was empty (checked read-only)
+- No authentication or roles; `JWT_SECRET` existed in the environment but nothing used it
+- Web: no API client; six API-shaped demo loaders; a fixed demo session (`mockSession.js`)
+
+### Decisions (approved before implementation)
+
+- Authentication: **database sessions in an httpOnly cookie** (not JWTs)
+- Ownership: **one owner per school, one school per owner**
+- Data: a **seeded Neon `dev` branch** for development and tests; production keeps no sample data
+- Scope: **read-only integration** — Phase 4/5 workflow actions and all Platform Settings stay unavailable; audit events only for sign-in, failed sign-in and sign-out
+
+### Implemented
+
+- **Database:** migration `platform_foundation` (additive only: 4 enums, 5 tables, indexes, foreign keys; SQL inspected) — `User`, `School`, `Session`, `AuditEvent`, `PlatformSettings`. Applied to the `dev` branch only.
+- **Authentication:** `POST /api/auth/login`, `GET /api/auth/session`, `POST /api/auth/logout`; scrypt passwords (Node `crypto`), random session tokens stored as SHA-256 hashes, `HttpOnly` + `SameSite=Lax` + `Path=/api` cookie (`Secure` in production), 12-hour sessions, failed sign-in limiter (5 per email and address per 15 minutes), same-origin + JSON guard for state-changing requests, identical errors and timing for unknown accounts, only `ACTIVE` accounts sign in
+- **Authorization:** `requireAuth` + `requireRole('SUPER_ADMIN')` on every `/api/platform/*` route (401 without a session, 403 for other roles)
+- **Platform API (read-only):** dashboard, schools (+ details), owners (+ details), reports, audit logs (+ details), settings — server-side search, filters and pagination with validated query parameters; consistent `{ error, code }` errors; internal errors never exposed; `Cache-Control: no-store`
+- **Audit logging:** `recordAuditEvent()`; real events are `SIGN_IN` (success / failure) and `SIGN_OUT`. Failed sign-ins for unknown accounts store no typed email; no passwords, tokens or request bodies are ever stored; the raw user agent is reduced to browser and device in responses
+- **Web:** `lib/api.js` (the only API client: same-origin cookie, JSON, query encoding, `ApiError`, session-ended signal), `hooks/useApiData.js`; the six demo loaders now call the API (hooks and UI unchanged); Schools, School Owners and Audit Logs use server-side lists and fetch details by id for deep links; sign-in page (`/login`), route guard with return to the requested page, session restore on reload, "Your session ended" after a 401, real **Sign out** in the user menu; non-admin roles see "No web workspace for this role yet" with Sign out; Vite dev proxy (`/api` → API)
+- **Scripts:** `create-super-admin` (password from env or hidden prompt; never printed; refuses existing emails), `seed:dev` (dev branch only; refuses elsewhere; no-op if already seeded; never deletes)
+- **Tests:** `backend/test/api.test.js` (`npm run test:api`) — 24 tests against the dev branch with temporary accounts for every role, removed afterwards
+
+### Frontend integration
+
+| Page | Before | Now |
+|---|---|---|
+| Dashboard | `mockDashboardData.js` | `GET /api/platform/dashboard` |
+| Schools | `mockSchools.js`, filtered in the browser | `GET /api/platform/schools`, `/:id` (server-side) |
+| School Owners | `mockOwners.js`, filtered in the browser | `GET /api/platform/owners`, `/:id` (server-side) |
+| Platform Reports | `mockReport.js` | `GET /api/platform/reports` |
+| Audit Logs | `mockAuditLogs.js`, filtered in the browser | `GET /api/platform/audit-logs`, `/:id` (server-side; local date ranges sent as instants) |
+| Platform Settings | `mockSettings.js` | `GET /api/platform/settings` (read-only) |
+| Session | `mockSession.js` (deleted) | `GET /api/auth/session` |
+
+The mock modules remain only as the source of the dev-branch seed and of the development-only `?demoState=empty` previews, which are loaded dynamically and absent from production builds. A failing API shows the error state; nothing falls back to demo data.
+
+### Metrics and settings decisions
+
+- Figures are direct counts of stored records (schools, owner accounts, statuses, cities, registration months in the viewer's time zone). **Change percentages are no longer shown** on Dashboard, Schools and School Owners: comparing periods needs an approved definition and status history (not stored).
+- Dashboard "Recent Platform Activity" lists audit events other than sign-ins / sign-outs; with real data it is empty until school or owner actions exist.
+- Platform Settings: information and localization values are read from `PlatformSettings` (empty on production); Platform Configuration switches are **not stored** (rules not approved) and show "Not set". Nothing is editable through the API; Save stays unavailable.
+
+### Security tests (API, real requests)
+
+| Caller | `/api/platform/*` (9 endpoints) |
+|---|---|
+| No session, forged or expired cookie | 401 |
+| STAFF, MANAGER, OWNER | 403 |
+| SUPER_ADMIN | 200 (404 for unknown ids) |
+
+Also verified: cookie flags; hash-only token storage; identical failures for wrong password and unknown email; suspended account refused; 429 after repeated failures (even with the right password); logout revokes server-side; cross-origin and form-encoded requests refused (403); invalid query parameters → 400 (15 cases); SQL-like search text is a parameter; no write endpoints; responses contain no password hashes, tokens or raw user agents; audit metadata contains no passwords or tokens. Web: the same roles signed in through the UI see no admin workspace and get 403 from the platform API.
+
+### Validation
+
+- [x] `npm run test:api`: 24 / 24
+- [x] Web sign-in suite (redirect with return path, empty / wrong credentials, session restore, sign-out, session ended mid-use, API failure → error state → retry, phone widths): 15 / 15; roles suite (OWNER, MANAGER, STAFF): 6 / 6
+- [x] Phase 1–8 regression suites against the real API (see Regression)
+- [x] `npm run build:web`; production bundle contains no demo data, previews or demo session
+- [x] `prisma validate`, `prisma generate`; migration applied to the dev branch
+
+### Regression
+
+The Phase 1–8 browser suites were re-run against the API on the dev branch with these test-only adjustments: sign in first (the app now requires a session); demo ids (`sch-028`, `own-024`, `evt-0289`, `demo-super-admin`) mapped to the same records' UUIDs; wait for API requests to finish after an action instead of a fixed pause (results now come over the network); expectations that legitimately changed — no "Demo data" label, no change percentages, live audit counts read from the API (the log grows with real sign-ins), Platform Configuration "Not set". Results: Phase 1 components — all interactions and focus checks correct; Phase 2 shell 21 / 21; Phase 3 dashboard 25 / 25 + 12 / 12; Phase 4 schools 35 / 35 + 6 / 6 + 24 / 24; Phase 5 owners 36 / 36 + 2 / 2 + 28 / 28; Phase 6 reports 23 / 23 + 36 / 36; Phase 7 audit logs 54 / 54 + 40 / 40; Phase 8 settings 34 / 34 + 36 / 36. The Phase 2 "theme applied before first render" probe still fails intermittently (it reads the page mid-reload, as in Phases 7–8; theme persistence without a flash was verified separately). The browser logs "Failed to load resource" for responses the suites trigger on purpose (404 for unknown ids, 401 / 500 in sign-in tests); there are no script errors.
+
+### Deviations and notes
+
+- **No API versioning** (none existed); `/api/platform` groups the Super Admin endpoints.
+- **`GET /api/auth/session` returns `{ user: null }`** when signed out (not 401), so a signed-out visit causes no error; data endpoints still return 401.
+- **Database pool:** idle connections are released after 20 s — Neon closes idle connections and suspends idle compute, which caused "Connection terminated unexpectedly" during testing.
+- **Production branch not migrated and has no Super Admin yet:** run `npm run prisma:deploy` and `npm run create-super-admin -- --email … --name …` (needs your credentials). Until then the web app cannot sign in against production.
+- **Hosting:** the web app and API must share one origin (`/api`); `WEB_ORIGIN` must be set to the web app's origin.
+- **Sign-in limiter** is in memory (per API process); several API instances would each count separately.
+- `JWT_SECRET` is no longer used; it is removed from `.env.example` (an existing value in `backend/.env` is ignored).
+- Unresolved business rules are listed in `docs/business-rules.md` → "Not yet decided".
+
+### Status
+
+Phase 9 work is complete on the dev branch. Remaining before production use: apply the migration to the production branch (`npm run prisma:deploy`) and create the first real Super Admin (`npm run create-super-admin`).

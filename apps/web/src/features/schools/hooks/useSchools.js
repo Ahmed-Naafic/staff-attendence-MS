@@ -1,23 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
-import { loadSchools } from '../data/loadSchools.js';
+import { useApiData } from '../../../hooks/useApiData.js';
+import { loadSchool, loadSchools } from '../data/loadSchools.js';
 
-/** { status: 'loading' | 'success' | 'error', data, retry } */
-export function useSchools() {
-  const [state, setState] = useState({ status: 'loading', data: null });
-  const [attempt, setAttempt] = useState(0);
+/** The current page of schools for the filters: { status, data, retry }. Typing in search waits briefly. */
+export function useSchools(filters, page) {
+  return useApiData(() => loadSchools(filters, page), JSON.stringify([filters, page]), { delayMs: 200 });
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    setState((previous) => ({ status: 'loading', data: previous.data }));
-    loadSchools().then(
-      (data) => !cancelled && setState({ status: 'success', data }),
-      () => !cancelled && setState({ status: 'error', data: null }),
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [attempt]);
-
-  const retry = useCallback(() => setAttempt((n) => n + 1), []);
-  return { ...state, retry };
+/**
+ * The school shown in the details panel. Uses the row already on the page when there is one,
+ * otherwise asks the API (e.g. a shared link to a school on another page).
+ */
+export function useSchoolDetails(schoolId, rows) {
+  const fromPage = schoolId ? rows?.find((s) => s.id === schoolId) : undefined;
+  const fetched = useApiData(() => (schoolId && !fromPage ? loadSchool(schoolId) : Promise.resolve(null)), `${schoolId}|${Boolean(fromPage)}`);
+  if (!schoolId) return { school: null, notFound: false };
+  if (fromPage) return { school: fromPage, notFound: false };
+  return { school: fetched.data ?? null, notFound: fetched.status === 'success' && !fetched.data, error: fetched.status === 'error' };
 }

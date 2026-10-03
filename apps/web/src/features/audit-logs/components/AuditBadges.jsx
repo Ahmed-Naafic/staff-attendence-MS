@@ -11,8 +11,9 @@ export function AuditAction({ event, className }) {
   return <span className={cn('font-medium', toneClass[tone], className)}>{action.label}</span>;
 }
 
+/** Role at the time of the event; "Unknown" when the account could not be identified (e.g. a failed sign-in). */
 export function RoleBadge({ role }) {
-  const { label, variant } = auditRoles[role] ?? { label: role, variant: 'neutral' };
+  const { label, variant } = auditRoles[role] ?? { label: role ?? 'Unknown', variant: 'neutral' };
   return <Badge variant={variant}>{label}</Badge>;
 }
 

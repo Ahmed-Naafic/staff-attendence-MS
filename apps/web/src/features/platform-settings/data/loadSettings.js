@@ -1,19 +1,17 @@
-import { createMockSettings } from './mockSettings.js';
+import { apiRequest, previewDelay, previewState } from '../../../lib/api.js';
 
 /**
- * Loads the platform settings.
- *
- * SOURCE: demo data until the backend exists (Phase 9). Replace the body with the API call;
- * it must resolve to the shape documented in mockSettings.js. There is no save yet: changes
- * stay in the page until settings persistence is implemented.
+ * Loads the platform settings from the API (GET /api/platform/settings), shaped as documented in
+ * mockSettings.js. Read-only: there is no save until settings persistence rules are approved.
  */
 export async function loadSettings() {
-  // Development only: preview page states with ?demoState=loading | error
-  const demoState = import.meta.env.DEV ? new URLSearchParams(window.location.search).get('demoState') : null;
-  if (demoState === 'loading') return new Promise(() => {});
+  // Development only (removed from production builds): preview page states with ?demoState=loading | error
+  if (import.meta.env.DEV) {
+    const preview = previewState();
+    if (preview === 'loading') return new Promise(() => {});
+    if (preview) await previewDelay();
+    if (preview === 'error') throw new Error('Preview: settings request failed');
+  }
 
-  await new Promise((resolve) => setTimeout(resolve, 350)); // simulated network latency
-
-  if (demoState === 'error') throw new Error('Demo: settings request failed');
-  return createMockSettings();
+  return apiRequest('/platform/settings');
 }

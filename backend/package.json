@@ -5,12 +5,17 @@
   "type": "module",
   "main": "src/server.js",
   "scripts": {
-    "dev": "node --watch src/server.js",
+    "dev": "node --env-file=.env.dev --watch src/server.js",
     "start": "node src/server.js",
+    "test": "node --env-file=.env.dev --test --test-concurrency=1 \"test/**/*.test.js\"",
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate:dev-branch": "node --env-file=.env.dev ../node_modules/prisma/build/index.js migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "seed:dev": "node --env-file=.env.dev scripts/seed-dev.js",
+    "create-super-admin": "node scripts/create-super-admin.js",
+    "create-super-admin:dev-branch": "node --env-file=.env.dev scripts/create-super-admin.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

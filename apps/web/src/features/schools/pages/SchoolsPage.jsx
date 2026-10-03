@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { Plus } from 'lucide-react';
 import { PageContainer, PageHeader } from '../../../components/layout';
@@ -9,8 +8,8 @@ import { SchoolsSkeleton } from '../components/SchoolsSkeleton.jsx';
 import { SchoolsSummary } from '../components/SchoolsSummary.jsx';
 import { SchoolsTable } from '../components/SchoolsTable.jsx';
 import { useSchoolFilters } from '../hooks/useSchoolFilters.js';
-import { useSchools } from '../hooks/useSchools.js';
-import { filterSchools, locationsOf, paginate } from '../utils/filterSchools.js';
+import { useSchoolDetails, useSchools } from '../hooks/useSchools.js';
+import { PAGE_SIZE } from '../utils/filterSchools.js';
 
 /**
  * Super Admin Schools: platform-wide list with search, filters, pagination and a details panel.
@@ -19,13 +18,10 @@ import { filterSchools, locationsOf, paginate } from '../utils/filterSchools.js'
 export default function SchoolsPage() {
   const { schoolId } = useParams();
   const navigate = useNavigate();
-  const { status, data, retry } = useSchools();
   const { filters, page, isFiltered, setFilter, setPage, reset, search } = useSchoolFilters();
-
-  const schools = useMemo(() => data?.schools ?? [], [data]);
-  const filtered = useMemo(() => filterSchools(schools, filters), [schools, filters]);
-  const current = paginate(filtered, page);
-  const selected = schoolId ? schools.find((s) => s.id === schoolId) : null;
+  // Search, filters and pagination run on the server; `data` is the current page.
+  const { status, data, retry } = useSchools(filters, page);
+  const { school: selected, notFound } = useSchoolDetails(schoolId, data?.items);
   const closeDetails = () => navigate({ pathname: '/schools', search });
 
   return (
@@ -61,7 +57,7 @@ export default function SchoolsPage() {
 
       {data && status !== 'error' && (
         <>
-          {schoolId && !selected && (
+          {notFound && (
             <Alert variant="warning" title="School not found">
               That school does not exist or is no longer available.{' '}
               <Link to={{ pathname: '/schools', search }} className="font-medium underline">
@@ -70,11 +66,11 @@ export default function SchoolsPage() {
             </Alert>
           )}
 
-          <SchoolsSummary schools={schools} summary={data.summary} />
+          <SchoolsSummary counts={data.summary} />
 
           <SchoolsFilters
             filters={filters}
-            locations={locationsOf(schools)}
+            locations={data.locations}
             onChange={setFilter}
             onReset={reset}
             isFiltered={isFiltered}
@@ -82,14 +78,14 @@ export default function SchoolsPage() {
 
           {/* Announces the result count after searching or filtering. */}
           <p aria-live="polite" className="sr-only">
-            {isFiltered ? `${filtered.length} ${filtered.length === 1 ? 'school' : 'schools'} found` : ''}
+            {isFiltered && status === 'success' ? `${data.total} ${data.total === 1 ? 'school' : 'schools'} found` : ''}
           </p>
 
           <SchoolsTable
-            rows={current.rows}
-            total={filtered.length}
-            page={current.page}
-            offset={current.offset}
+            rows={data.items}
+            total={data.total}
+            page={data.page}
+            offset={(data.page - 1) * PAGE_SIZE}
             onPageChange={setPage}
             selectedId={selected?.id}
             search={search}

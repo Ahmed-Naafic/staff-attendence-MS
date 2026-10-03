@@ -1,38 +1,11 @@
 import { Building2, CalendarCheck, ClipboardList, ShieldAlert, ShieldCheck, UserRound } from 'lucide-react';
 import { KpiCard } from '../../../components/ui';
-import { isSecurityEvent } from '../utils/auditTypes.js';
-
-const DAY = 24 * 60 * 60 * 1000;
-
-const startOfToday = (now) => {
-  const date = new Date(now);
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-};
-
-/** Counts for the whole log (not affected by search or filters). */
-function summarise(events, now) {
-  const today = startOfToday(now);
-  const at = (e) => new Date(e.occurredAt).getTime();
-  const count = (test) => events.filter(test).length;
-  return {
-    total: events.length,
-    lastWeek: count((e) => at(e) >= now - 7 * DAY),
-    today: count((e) => at(e) >= today),
-    yesterday: count((e) => at(e) >= today - DAY && at(e) < today),
-    admin: count((e) => e.actor.role === 'SUPER_ADMIN' && !isSecurityEvent(e)),
-    school: count((e) => e.target.type === 'school'),
-    owner: count((e) => e.actor.role === 'OWNER' && !isSecurityEvent(e)),
-    security: count(isSecurityEvent),
-    failed: count((e) => isSecurityEvent(e) && e.result === 'failure'),
-  };
-}
-
 /**
- * Six key figures. No change percentages: they would compare demo periods of very different
- * sizes, so each card states what it counts instead.
+ * Six key figures for the whole log (not affected by search or filters), counted by the server.
+ * No change percentages: each card states what it counts instead.
+ * Admin / Owner Actions exclude sign-ins, sign-outs and password changes (Security Events).
  */
-export function AuditSummary({ events, now = Date.now() }) {
-  const s = summarise(events, now);
+export function AuditSummary({ summary: s }) {
   const cards = [
     { key: 'total', label: 'Total Logs', icon: ClipboardList, tone: 'info', value: s.total, note: `${s.lastWeek} in the last 7 days` },
     { key: 'today', label: "Today's Logs", icon: CalendarCheck, tone: 'success', value: s.today, note: `${s.yesterday} yesterday` },

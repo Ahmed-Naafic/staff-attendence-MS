@@ -12,7 +12,13 @@ export function getPrisma() {
       throw new Error('DATABASE_URL is not set. Copy .env.example to backend/.env.');
     }
     prisma = new PrismaClient({
-      adapter: new PrismaPg({ connectionString: env.databaseUrl }),
+      adapter: new PrismaPg({
+        connectionString: env.databaseUrl,
+        // Neon closes idle connections (and suspends idle compute). Release pooled connections
+        // well before that, so a query never picks up a connection the server already closed.
+        idleTimeoutMillis: 20_000,
+        connectionTimeoutMillis: 15_000,
+      }),
     });
   }
   return prisma;
