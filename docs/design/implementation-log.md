@@ -711,7 +711,7 @@ Checked with headless Chrome against the dev server: 34 functional checks and 36
 
 ### Regression fixes
 
-- None needed.
+- **Selected tab partly hidden on narrow screens (Phase 8):** opening a section by link on a first visit scrolled the tab strip before the web font loaded, and the wider text then pushed the selected tab partly out of view (seen at 834 and 390px). The page now scrolls the selected tab into view again once fonts have loaded. Found by the full Phase 1–8 regression run; Phase 1–7 results were unchanged.
 
 ### Status
 

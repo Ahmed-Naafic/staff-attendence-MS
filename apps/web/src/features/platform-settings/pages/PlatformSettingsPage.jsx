@@ -26,8 +26,16 @@ export default function PlatformSettingsPage() {
 
   // On narrow screens the tab strip scrolls: keep the selected section's tab in view (e.g. after a deep link).
   const tabsRef = useRef(null);
+  // Repeated once web fonts have loaded, because they change the tabs' widths.
   useEffect(() => {
-    tabsRef.current?.querySelector('[role=tab][aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    let active = true;
+    const reveal = () =>
+      active && tabsRef.current?.querySelector('[role=tab][aria-selected=true]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    reveal();
+    document.fonts?.ready.then(reveal);
+    return () => {
+      active = false;
+    };
   }, [tab]);
 
   return (
