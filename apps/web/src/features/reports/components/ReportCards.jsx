@@ -1,136 +1,145 @@
-import { Building2, ChartColumn, ChartLine, ChartPie, CircleOff, Download, FileText, Landmark, Users } from 'lucide-react';
-import { BarChart, DonutChart, LineChart } from '../../../components/charts';
-import { Button, Card, CardContent, CardHeader, EmptyState, KpiCard } from '../../../components/ui';
-import { formatMonth, formatMonthYear } from '../../../lib/format.js';
+import { Building2, ChartColumn, ChartPie, CircleOff, Landmark, MapPin, UserCheck, UserX, Users } from 'lucide-react';
+import { BarChart, DonutChart } from '../../../components/charts';
+import { Card, CardContent, CardHeader, EmptyState, KpiCard } from '../../../components/ui';
+import { formatDay, formatFullDay, formatMonth, formatMonthYear } from '../../../lib/format.js';
 
-export const EXPORT_UNAVAILABLE = 'Not available yet: reporting export rules are not implemented.';
+// Colors per status (ACTIVE and SUSPENDED only).
+const statusColors = { active: 'var(--color-interactive)', suspended: 'var(--color-error)' };
+const statusLabels = { active: 'Active', suspended: 'Suspended' };
 
-const toPoints = (points, key) => points.map((p) => ({ label: formatMonth(p.month), value: p[key] }));
-const rangeText = (points) => `${formatMonthYear(points[0].month)} to ${formatMonthYear(points.at(-1).month)}`;
+export const UNKNOWN_CITY = 'Unknown';
 
-// Colors per status, shared by the school (active, suspended) and owner (also pending) breakdowns.
-export const statusColors = {
-  active: 'var(--color-interactive)',
-  pending: 'var(--color-accent)',
-  suspended: 'var(--color-error)',
+const plural = (n, one, many) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
+
+const summaryCards = {
+  schools: [
+    { key: 'total', label: 'Total Schools', icon: Landmark, tone: 'info' },
+    { key: 'active', label: 'Active Schools', icon: Building2, tone: 'success' },
+    { key: 'suspended', label: 'Suspended Schools', icon: CircleOff, tone: 'error' },
+  ],
+  owners: [
+    { key: 'total', label: 'Total Owners', icon: Users, tone: 'info' },
+    { key: 'active', label: 'Active Owners', icon: UserCheck, tone: 'success' },
+    { key: 'suspended', label: 'Suspended Owners', icon: UserX, tone: 'error' },
+  ],
 };
 
-/** Summary figures. "New" counts depend on the period; the others are current totals. */
-/** The period is stated above the cards, so the note stays short. */
-export function ReportSummary({ summary }) {
-  const note = (n) => `+${n} new`;
+/** Total / Active / Suspended for schools or owners. Current counts (not limited to the trend period). */
+export function SummaryCards({ kind, summary }) {
   return (
-    <section aria-labelledby="report-summary">
-      <h2 id="report-summary" className="sr-only">
-        Summary
-      </h2>
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Total Schools" icon={Landmark} tone="info" value={summary.totalSchools.value} note={note(summary.totalSchools.newInPeriod)} trend={summary.totalSchools.trend} />
-        <KpiCard label="Total School Owners" icon={Users} tone="success" value={summary.totalOwners.value} note={note(summary.totalOwners.newInPeriod)} trend={summary.totalOwners.trend} />
-        <KpiCard label="Active Schools" icon={Building2} tone="success" value={summary.activeSchools.value} />
-        <KpiCard label="Suspended Schools" icon={CircleOff} tone="error" value={summary.suspendedSchools.value} />
-      </ul>
-    </section>
+    <ul aria-label={kind === 'schools' ? 'School summary' : 'Owner summary'} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      {summaryCards[kind].map((card) => (
+        <KpiCard key={card.key} label={card.label} icon={card.icon} tone={card.tone} value={summary[card.key]} />
+      ))}
+    </ul>
   );
 }
 
-/** Schools on the platform at the end of each month in the period. */
-export function GrowthCard({ growth }) {
-  const hasData = growth.some((p) => p.total > 0);
-  return (
-    <Card className="h-full">
-      <CardHeader titleAs="h2" title="Platform Growth" description="Schools on the platform at the end of each month" />
-      <CardContent className="pt-5">
-        {hasData ? (
-          <BarChart label={`Schools on the platform at the end of each month, ${rangeText(growth)}`} data={toPoints(growth, 'total')} />
-        ) : (
-          <EmptyState compact icon={ChartColumn} title="No report data available" description="No schools on the platform in this period." />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Status breakdown: donut plus a legend that states every value (the accessible summary). */
-export function StatusBreakdownCard({ title, counts, statuses, unit }) {
-  const total = Object.values(counts).reduce((sum, n) => sum + n, 0);
-  const rows = Object.entries(statuses).map(([key, status]) => ({
-    key,
-    label: status.label,
-    color: statusColors[key],
-    value: counts[key] ?? 0,
-    percent: total ? Math.round(((counts[key] ?? 0) / total) * 100) : 0,
-  }));
+/** Status distribution: donut plus a legend that states every count (the accessible version). */
+export function StatusDistributionCard({ title, summary, unit, emptyTitle, emptyDescription }) {
+  const rows = ['active', 'suspended'].map((key) => ({ key, label: statusLabels[key], color: statusColors[key], value: summary[key] }));
+  const total = rows.reduce((n, row) => n + row.value, 0);
 
   return (
     <Card className="h-full">
-      <CardHeader titleAs="h2" title={title} description="Current" />
+      <CardHeader title={title} description="Current status" />
       <CardContent className="pt-5">
         {total > 0 ? (
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-4">
             <DonutChart segments={rows} centerValue={total} centerLabel={`Total ${unit}`} size={124} thickness={18} />
-            <ul aria-label={`${title}, ${total} ${unit} in total`} className="flex min-w-36 flex-1 flex-col gap-2.5">
+            <ul aria-label={`${title}: ${plural(total, unit.replace(/s$/, ''), unit)}`} className="flex min-w-36 flex-1 flex-col gap-2.5">
               {rows.map((row) => (
                 <li key={row.key} className="flex items-center gap-2.5 text-small">
                   <span aria-hidden="true" className="size-2.5 shrink-0 rounded-pill" style={{ backgroundColor: row.color }} />
                   <span className="flex-1 text-fg-secondary">{row.label}</span>
-                  <span className="w-8 text-right font-semibold text-fg tabular-nums">{row.value}</span>
-                  <span className="w-10 text-right text-fg-muted tabular-nums">
-                    {row.percent}%<span className="sr-only"> of {unit}</span>
+                  <span className="font-semibold text-fg tabular-nums">
+                    {row.value.toLocaleString()}
+                    <span className="sr-only"> {unit}</span>
                   </span>
                 </li>
               ))}
             </ul>
           </div>
         ) : (
-          <EmptyState compact icon={ChartPie} title="No report data available" description={`No ${unit} to break down yet.`} />
+          <EmptyState compact icon={ChartPie} title={emptyTitle} description={emptyDescription} />
         )}
       </CardContent>
     </Card>
   );
 }
 
-/** New schools registered per month in the period. */
-export function RegistrationTrendCard({ registrations }) {
-  const hasData = registrations.some((p) => p.count > 0);
+/** Schools per city, most first (ties A–Z); schools without a city are listed as "Unknown". */
+export function SchoolsByCityCard({ cities, isFiltered }) {
+  const max = Math.max(1, ...cities.map((c) => c.count));
   return (
     <Card className="h-full">
-      <CardHeader titleAs="h2" title="New Schools Registration Trend" description="Schools registered per month" />
-      <CardContent className="pt-5">
-        {hasData ? (
-          <LineChart label={`New schools registered per month, ${rangeText(registrations)}`} data={toPoints(registrations, 'count')} />
-        ) : (
-          <EmptyState compact icon={ChartLine} title="No report data available" description="No schools registered in this period." />
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-/** Shortcuts to the summary tabs. Export is unavailable until its rules exist. */
-export function QuickReportsCard({ onOpen }) {
-  return (
-    <Card className="h-full">
-      <CardHeader titleAs="h2" title="Quick Reports" />
+      <CardHeader title="Schools by City" description="Current, most schools first" />
       <CardContent>
-        {/* Stacked in the narrow 4-column layout (2xl) and on phones; in a row in between. */}
-        <ul className="flex flex-col gap-2 md:flex-row md:flex-wrap 2xl:flex-col">
-          <li>
-            <Button variant="outline" size="sm" leftIcon={FileText} onClick={() => onOpen('schools')} className="w-full justify-start md:w-auto 2xl:w-full">
-              Schools Summary
-            </Button>
-          </li>
-          <li>
-            <Button variant="outline" size="sm" leftIcon={Users} onClick={() => onOpen('owners')} className="w-full justify-start md:w-auto 2xl:w-full">
-              Owners Summary
-            </Button>
-          </li>
-          <li className="flex flex-col">
-            <Button variant="outline" size="sm" leftIcon={Download} unavailableReason={EXPORT_UNAVAILABLE} className="w-full justify-start md:w-auto 2xl:w-full">
-              Export Full Report
-            </Button>
-          </li>
-        </ul>
+        {cities.length === 0 ? (
+          <EmptyState
+            compact
+            icon={MapPin}
+            title={isFiltered ? 'No schools match these filters' : 'No schools yet'}
+            description={isFiltered ? 'Try another status or city.' : 'Cities appear once schools are registered.'}
+          />
+        ) : (
+          <ol aria-label="Schools by city" className="flex flex-col gap-3">
+            {cities.map((row, index) => (
+              <li key={row.city ?? UNKNOWN_CITY} className="flex flex-col gap-1.5">
+                <div className="flex items-center justify-between gap-3 text-small">
+                  <span className="flex min-w-0 items-center gap-2 text-fg">
+                    <MapPin aria-hidden="true" className="size-3.5 shrink-0 text-fg-muted" />
+                    <span className={row.city === null ? 'truncate text-fg-muted italic' : 'truncate'}>{row.city ?? UNKNOWN_CITY}</span>
+                  </span>
+                  <span className="font-semibold text-fg tabular-nums">
+                    {row.count.toLocaleString()}
+                    <span className="sr-only"> {row.count === 1 ? 'school' : 'schools'}</span>
+                  </span>
+                </div>
+                <span aria-hidden="true" className="h-1.5 overflow-hidden rounded-pill bg-muted">
+                  <span
+                    className="block h-full rounded-pill"
+                    style={{ width: `${(row.count / max) * 100}%`, backgroundColor: index === 0 ? 'var(--color-accent)' : 'var(--color-chart-1)' }}
+                  />
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Axis label, full label, and a readable range for trend keys ('YYYY-MM-DD' or 'YYYY-MM'). */
+const formatters = {
+  day: { short: formatDay, full: formatFullDay },
+  month: { short: formatMonth, full: formatMonthYear },
+};
+export const trendRange = (trend, unit) => `${formatters[unit].full(trend[0].key)} – ${formatters[unit].full(trend.at(-1).key)}`;
+
+/** Records created per day or month in the trend period (zero days / months included). */
+export function CreationTrendCard({ title, trend, unit, noun, emptyTitle, color }) {
+  const per =unit === 'day' ? 'day' : 'month';
+  const range = trendRange(trend, unit);
+  const data = trend.map((p) => ({ label: formatters[unit].short(p.key), fullLabel: formatters[unit].full(p.key), value: p.count }));
+
+  return (
+    <Card className="h-full">
+      <CardHeader title={title} description={`${noun} created per ${per}, ${range}`} />
+      <CardContent className="pt-5">
+        {trend.some((p) => p.count > 0) ? (
+          <BarChart
+            label={`${noun} created per ${per}, ${range}`}
+            data={data}
+            color={color}
+            // Whole-number ticks for small counts (e.g. 1 → 0, 1 rather than 0, 0.25 … rounded).
+            ticks={Math.min(4, Math.max(...trend.map((p) => p.count)))}
+            labelEvery={trend.length > 12 ? 7 : 1}
+          />
+        ) : (
+          <EmptyState compact icon={ChartColumn} title={emptyTitle} description={`Nothing was created between ${range}.`} />
+        )}
       </CardContent>
     </Card>
   );

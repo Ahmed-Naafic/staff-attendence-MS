@@ -1,22 +1,33 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
-import { periods } from '../data/mockReport.js';
+import { DEFAULT_PERIOD, periods, schoolStatusOptions } from '../data/reportOptions.js';
 
-export const reportTabs = ['overview', 'schools', 'owners'];
+const statuses = schoolStatusOptions.map((o) => o.value).filter(Boolean);
 
-/** Active tab and period kept in the URL (?tab=&period=) so a report view can be shared. */
+/**
+ * Report filters kept in the URL (?period=&status=&city=) so a report view can be shared.
+ * Unknown values (e.g. an old ?status=pending link) fall back to the default instead of an error.
+ */
 export function useReportView() {
   const [params, setParams] = useSearchParams();
-  const tab = reportTabs.includes(params.get('tab')) ? params.get('tab') : 'overview';
-  const period = periods.some((p) => p.value === params.get('period')) ? params.get('period') : '12m';
 
-  const update = useCallback(
-    (key, value, fallback) =>
+  const filters = useMemo(
+    () => ({
+      period: periods.some((p) => p.value === params.get('period')) ? params.get('period') : DEFAULT_PERIOD,
+      status: statuses.includes(params.get('status')) ? params.get('status') : '',
+      city: params.get('city') ?? '',
+    }),
+    [params],
+  );
+  const isFiltered = filters.period !== DEFAULT_PERIOD || Boolean(filters.status || filters.city);
+
+  const setFilter = useCallback(
+    (name, value) =>
       setParams(
         (current) => {
           const next = new URLSearchParams(current);
-          if (value === fallback) next.delete(key);
-          else next.set(key, value);
+          if (value && !(name === 'period' && value === DEFAULT_PERIOD)) next.set(name, value);
+          else next.delete(name);
           return next;
         },
         { replace: true },
@@ -24,8 +35,7 @@ export function useReportView() {
     [setParams],
   );
 
-  const setTab = useCallback((value) => update('tab', value, 'overview'), [update]);
-  const setPeriod = useCallback((value) => update('period', value, '12m'), [update]);
+  const reset = useCallback(() => setParams({}, { replace: true }), [setParams]);
 
-  return { tab, period, setTab, setPeriod };
+  return { filters, isFiltered, setFilter, reset };
 }

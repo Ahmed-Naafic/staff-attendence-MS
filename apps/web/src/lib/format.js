@@ -14,6 +14,19 @@ export const formatMonth = (yearMonth) => monthFormat.format(monthDate(yearMonth
 /** '2026-03' → 'March 2026' (for screen reader tables) */
 export const formatMonthYear = (yearMonth) => monthYearFormat.format(monthDate(yearMonth));
 
+const dayFormat = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' });
+const fullDayFormat = new Intl.DateTimeFormat('en', { month: 'long', day: 'numeric', year: 'numeric' });
+const dayDate = (yearMonthDay) => {
+  const [year, month, day] = yearMonthDay.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+/** '2026-03-07' → 'Mar 7' */
+export const formatDay = (yearMonthDay) => dayFormat.format(dayDate(yearMonthDay));
+
+/** '2026-03-07' → 'March 7, 2026' (for screen reader tables) */
+export const formatFullDay = (yearMonthDay) => fullDayFormat.format(dayDate(yearMonthDay));
+
 /** ISO date → 'Jan 12, 2026' */
 export const formatDate = (iso) => dateFormat.format(new Date(iso));
 

@@ -129,9 +129,11 @@ Each feature has a `*.service.js` (Prisma queries, response shapes) and, where i
 | `PATCH /api/platform/owners/:id` | SUPER_ADMIN | Edit name, email, phone (never the school or role) |
 | `POST /api/platform/owners/:id/suspend` `{ reason }` | SUPER_ADMIN | ACTIVE → SUSPENDED; ends the owner's sessions |
 | `POST /api/platform/owners/:id/reactivate` | SUPER_ADMIN | SUSPENDED → ACTIVE |
-| `GET /api/platform/reports?period&tz` | SUPER_ADMIN | Platform report |
+| `GET /api/platform/reports?period&status&city&tz` | SUPER_ADMIN | Platform Reports, read-only (`period`: 7d, 30d, 3m, 6m, 12m — default 12m; `status`: active, suspended; `city`; see below) |
 | `GET /api/platform/audit-logs?q&action&user&school&status&since&until&dayStart&page&pageSize`, `/:id` | SUPER_ADMIN | Audit log |
 | `GET /api/platform/settings` | SUPER_ADMIN | Platform settings (read-only) |
+
+**Platform Reports** (`features/reports/reports.service.js`, definitions in `business-rules.md`): one request returns `{ filters, period: { value, unit, start, end }, timeZone, cities, schools: { summary, byCity, trend }, owners: { summary, trend } }`. Every figure is a database aggregate (`groupBy`, and SQL `GROUP BY` for cities and trends with bound parameters, never string-built SQL); no records are listed and no names, emails or ids are returned. Trend buckets are calendar days or months in `tz` (the viewer's time zone, sent by the web app; default UTC), zero-filled by the service. `status` and `city` filter school figures only. Uses the existing `School` indexes on `status`, `location` and `registeredAt`; no report tables or caching.
 
 Platform endpoints are read-only except School Management (register, edit, suspend, reactivate) and School Owner Management (add, edit, suspend, reactivate); there is no deletion, approval, rejection or ownership transfer. Each change and its audit event are written in one transaction (adding an owner also assigns the school in the same transaction), and invalid status changes are refused (409 `INVALID_STATUS`), using a conditional update so two simultaneous requests cannot both succeed. No API versioning yet (none existed); `/api/platform` groups the Super Admin scope. Errors are `{ error, code, details? }` with codes `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CODE_TAKEN` / `EMAIL_TAKEN` / `SCHOOL_HAS_OWNER` / `INVALID_STATUS` (409), `TOO_MANY_REQUESTS` (429) and `INTERNAL_ERROR` (500).
 

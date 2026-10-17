@@ -914,3 +914,44 @@ No delete, transfer, approve or reject endpoints. Owner and school statuses neve
 - Backend `npm test`: 79 / 79 (24 Phase 9, 23 School Management, 32 Owner Management: authorization for every endpoint and role, IDOR, add / edit / suspend / reactivate, validation, duplicate email, school already owned, simultaneous adds and suspensions, sessions ended on suspension, sign-in after reactivation, audit without secrets, no delete or transfer).
 - Browser, Owner Management: 32 / 32 functional and 16 / 16 responsive and keyboard checks (1536, 1440, 1024, 834, 768, 390px, light and dark).
 - Regression at commit time: Phase 1 no failures. Phases 2–5 were rerun while the dev database was slow (about 1–2 s per request); remaining Phase 2–4 failures are page-load timing. Older suites were updated for the approved owner rules and for counts that depend on data. Phases 6–8 and the screenshot suites still need a run.
+
+## Super Admin Platform Reports (approved definitions)
+
+Scope: Platform Reports only (School Summary, Owner Summary, Schools by City, School Creation Trend, Owner Creation Trend, Status Distribution). No export, no percentages, no branch, staff, attendance, student or revenue figures, no Phase 10.
+
+### Decisions
+
+- **No schema change.** Every figure is calculated from the existing `School` and `User` records, using the existing indexes (`School.status`, `location`, `registeredAt`; `User.role, status`).
+- **School creation date = `registeredAt`.** It is set when a school is registered and never changes; `updatedAt` is never used. The dev seed back-dates `registeredAt` (its `createdAt` is the seed run), so `registeredAt` is the meaningful date.
+- **Owners = OWNER accounts assigned to a school.** Other roles and OWNER accounts without a school never count. The School Owners list still shows every OWNER account, so the two can differ only if an OWNER account has no school (none on the dev branch; the API tests create one temporarily).
+- **3 months = calendar months** (as in the existing reports), so 3, 6 and 12 months are all monthly; 7 and 30 days are daily.
+- **Time zone:** the established behavior is kept: calendar days and months in the viewer's time zone (`tz`, sent by the web app). A platform reporting time zone is listed as an open question in `business-rules.md` (`PlatformSettings.timezone` exists, but what it controls is not approved).
+- **Verified:** the dev branch has no PENDING owners (29 owners: all ACTIVE, all assigned to a school) and no school without a city.
+
+### API
+
+`GET /api/platform/reports?period&status&city&tz` (SUPER_ADMIN), extended in place; no new endpoint. `period`: 7d, 30d, 3m, 6m, 12m (default 12m); `status`: active, suspended; `city`: up to 100 characters; anything else, or a repeated parameter, → 400 `VALIDATION_ERROR`. It returns aggregates only (`schools: { summary, byCity, trend }`, `owners: { summary, trend }`, `cities`, `period`, `filters`, `timeZone`), and no names, emails or ids. Cities and trends use SQL `GROUP BY` with bound parameters. Trends are zero-filled by the service. Status and city filter school figures only. Viewing writes nothing and is not audited. Removed from the response: the lists of schools and owners registered in the period, the cumulative growth series and the "+N new" figures (not part of the approved reports).
+
+### Web
+
+- `/platform-reports`: a filter card (Trend period, School status, City, Reset; each filter has a visible label and a hint saying what it affects), then a **Schools** section (Total / Active / Suspended cards, Schools by City ranked bars with Unknown for an empty city, School Status Distribution donut with counts, School Creation Trend bar chart) and a **School Owners** section (Total / Active / Suspended cards, Owner Status Distribution, Owner Creation Trend). A line states that summaries are current and which time zone the trends use.
+- Filters are kept in the URL (`?period=&status=&city=`); old or invalid values fall back to the defaults. Each change requests the report from the API. Reset clears the URL.
+- Removed: tabs, the "Demo data" label, the Export buttons, Quick Reports, Platform Growth, the period record tables, status percentages, and the demo report generator (`mockReport.js`; the dev-only `?demoState=empty` preview now zeroes the real response).
+- Empty states ("No schools yet", "No owners yet", "No schools match these filters", "No … created in this period") and the existing error state with Try again.
+
+### Shared component change
+
+- **`BarChart`**: optional `labelEvery` (show every nth axis label, counted back from the last bar; with sparse labels the last one is right-aligned and label columns can shrink, so long day labels stay inside the card at 390px), and optional `fullLabel` per point for the tooltip and the screen-reader table. Default behavior is unchanged. The trend cards use whole-number ticks for small counts.
+- **`lib/format.js`**: `formatDay` ('Mar 7') and `formatFullDay` ('March 7, 2026').
+
+### Tests
+
+- Backend `backend/test/reports.test.js`: 39 / 39. Covers authorization (401; 403 for OWNER, MANAGER and STAFF; 200 for SUPER_ADMIN); school and owner summaries against direct database counts and exact deltas from fixtures; owners without a school, managers and staff never counted; Schools by City grouping, order, tie-break and Unknown; every period's buckets, grouping, period start and zero-filling; creation dates (not `updatedAt`); the viewer's time zone near midnight; status and city filters alone and combined; unknown city; validation; SQL text as a parameter; nothing written; no personal data in the response.
+- Full backend `npm test`: 117 / 118 on the first run (`api.test.js` updated for the new response). The one failure was Owner Management's simultaneous-add test: Prisma "Unable to start a transaction in the given time" (P2028) while the dev database was slow. That code is unchanged; `owners.test.js` rerun alone: 32 / 32. Final verification run of the full suite: **118 / 118** (Platform Reports 39 / 39).
+- `registeredAt` checked on the running API: set when a school is registered (equal to `createdAt`); unchanged by edit, suspend and reactivate; an edit that sends `registeredAt` → 400. Every school on the dev branch has one (the column is NOT NULL, default `CURRENT_TIMESTAMP`), and none is in the future.
+- Browser (headless Chrome, dev server and dev API): Platform Reports 51 / 51. Figures match the API; each period gives the right buckets and URL; status, city and combined filters; Reset; invalid URL values; unknown city; empty and error states and retry after a real failed request; keyboard order and visible focus; arrow keys change the select; labels and hints; chart tables; reduced motion; no overflow at 1536, 1440, 1024, 834, 768 and 390px in light and dark; signed-out redirect; no console errors. Regression sweep: Dashboard, Schools, School Owners, Platform Reports, Audit Logs, Platform Settings and `/design-system` at 1440 and 390px in both themes: 30 / 30, no console errors. The earlier per-phase browser suites are not in the repository and were not rerun.
+- `npm run build:web` passes.
+
+### Status
+
+Platform Reports is implemented and tested on the dev branch. No migration needed.

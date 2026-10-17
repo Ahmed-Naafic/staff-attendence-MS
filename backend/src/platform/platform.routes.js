@@ -82,9 +82,16 @@ platformRouter.post('/owners/:id/reactivate', async (req, res) => {
   res.json({ owner: await reactivateOwner(req.params.id, req.user, req) });
 });
 
+// Read-only. period: trend period; status and city: school filters (owner figures are not filtered).
 platformRouter.get('/reports', async (req, res) => {
-  const period = optionalEnum(req.query, 'period', Object.keys(REPORT_PERIODS)) ?? '12m';
-  res.json(await getReport({ period, tz: optionalTimeZone(req.query, 'tz') }));
+  res.json(
+    await getReport({
+      period: optionalEnum(req.query, 'period', Object.keys(REPORT_PERIODS)) ?? '12m',
+      status: optionalEnum(req.query, 'status', SCHOOL_STATUSES),
+      city: optionalString(req.query, 'city', { max: 100 }),
+      tz: optionalTimeZone(req.query, 'tz'),
+    }),
+  );
 });
 
 platformRouter.get('/audit-logs', async (req, res) => {

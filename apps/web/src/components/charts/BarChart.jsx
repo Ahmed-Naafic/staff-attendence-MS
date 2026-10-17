@@ -11,9 +11,11 @@ export function niceMax(value, tickCount) {
 
 /**
  * Vertical bar chart drawn with HTML/CSS (crisp text at any size, no chart library).
- * data:  [{ label, value }]
+ * data:  [{ label, value, fullLabel? }] — fullLabel (e.g. 'March 7, 2026') is used in the table
+ *        and tooltip when the axis label is short
  * color: a CSS color, written out in full so Tailwind keeps the token,
  *        e.g. 'var(--color-chart-1)' (navy in light, gold in dark)
+ * labelEvery: show every nth axis label, counted back from the last bar (for long series)
  * Screen readers get a data table captioned with `label`; the drawing is hidden from them.
  */
 export function BarChart({
@@ -23,6 +25,7 @@ export function BarChart({
   showValues = false,
   showAxis = true,
   ticks = 4,
+  labelEvery = 1,
   height = 'h-40',
   formatValue = (value) => value.toLocaleString(),
   className,
@@ -61,7 +64,7 @@ export function BarChart({
                     <span className="mb-1 text-caption font-semibold text-fg tabular-nums">{formatValue(d.value)}</span>
                   )}
                   <span
-                    title={`${d.label}: ${formatValue(d.value)}`}
+                    title={`${d.fullLabel ?? d.label}: ${formatValue(d.value)}`}
                     className="w-full max-w-5 rounded-t-sm"
                     style={{
                       height: `${(d.value / max) * 100}%`,
@@ -75,10 +78,16 @@ export function BarChart({
           </div>
           {/* X labels */}
           <div className="mt-2 flex justify-around gap-1.5">
-            {data.map((d) => (
-              // Centred and allowed to overflow its narrow column rather than being cut off.
-              <span key={d.label} className="flex max-w-8 flex-1 justify-center">
-                <span className="text-caption whitespace-nowrap text-fg-muted">{d.label}</span>
+            {data.map((d, index) => (
+              // Centred and allowed to overflow its narrow column rather than being cut off. With
+              // sparse labels (long series) the last one ends at the edge so it stays inside the card.
+              <span
+                key={d.label}
+                className={cn('flex max-w-8 min-w-0 flex-1', labelEvery > 1 && index === data.length - 1 ? 'justify-end' : 'justify-center')}
+              >
+                {(data.length - 1 - index) % labelEvery === 0 && (
+                  <span className="text-caption whitespace-nowrap text-fg-muted">{d.label}</span>
+                )}
               </span>
             ))}
           </div>
@@ -92,7 +101,7 @@ export function BarChart({
         <tbody>
           {data.map((d) => (
             <tr key={d.label}>
-              <th scope="row">{d.label}</th>
+              <th scope="row">{d.fullLabel ?? d.label}</th>
               <td>{formatValue(d.value)}</td>
             </tr>
           ))}

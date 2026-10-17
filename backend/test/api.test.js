@@ -296,12 +296,14 @@ describe('platform data (Super Admin)', () => {
     assert.equal(dashboard.schoolsByLocation.reduce((n, l) => n + l.count, 0), schools.total);
     assert.ok(!('changePercent' in dashboard.summary.totalSchools), 'no undefined change percentages');
     const report = (await get('/api/platform/reports?period=6m&tz=Africa/Mogadishu')).body;
-    assert.equal(report.schoolGrowth.length, 6);
-    assert.equal(report.registrations.length, 6);
-    assert.equal(report.summary.totalSchools.newInPeriod, report.schools.length);
-    assert.equal(report.summary.totalOwners.newInPeriod, report.owners.length);
-    assert.deepEqual(report.schoolStatus, { active: schools.active, suspended: schools.suspended });
-    assert.ok(!('pendingSchools' in dashboard.summary) && !('pendingSchools' in report.summary), 'no pending/approval figures');
+    assert.equal(report.schools.trend.length, 6);
+    assert.equal(report.owners.trend.length, 6);
+    assert.deepEqual(report.schools.summary, schools);
+    assert.equal(report.schools.byCity.reduce((n, c) => n + c.count, 0), schools.total);
+    // The owner list also shows OWNER accounts without a school (this file's test OWNER); the report counts School Owners only.
+    assert.equal(report.owners.summary.total, await prisma.user.count({ where: { role: 'OWNER', ownedSchool: { isNot: null } } }));
+    assert.ok(report.owners.summary.total <= owners.total);
+    assert.ok(!('pendingSchools' in dashboard.summary) && !('pending' in report.schools.summary) && !('pending' in report.owners.summary), 'no pending/approval figures');
   });
 
   test('audit logs: filters, pagination, summary, details', async () => {

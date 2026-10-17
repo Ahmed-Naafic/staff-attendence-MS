@@ -2,9 +2,10 @@ import { getPrisma } from '../../config/prisma.js';
 import { OWNER_STATUSES, SCHOOL_STATUSES, statusSummary } from '../../common/listQuery.js';
 
 /*
- * Platform aggregates shared by the dashboard and Platform Reports. Every figure is a direct count
- * of stored records (schools, school-owner accounts, their statuses, cities and registration
- * dates). Months are calendar months in the viewer's time zone.
+ * Platform aggregates for the dashboard, and the calendar helpers it shares with Platform Reports.
+ * Every figure is a direct count of stored records (schools, school-owner accounts, their statuses,
+ * cities and registration dates). Days and months are calendar days and months in the viewer's
+ * time zone.
  */
 
 /** 'YYYY-MM' of `date` in time zone `tz`. */
@@ -33,11 +34,33 @@ function tzOffset(date, tz) {
   return asUtc - Math.floor(date.getTime() / 1000) * 1000;
 }
 
+// The instant a calendar date starts in `tz`.
+function localMidnight(year, month, day, tz) {
+  const guess = new Date(Date.UTC(year, month - 1, day));
+  return new Date(guess.getTime() - tzOffset(guess, tz));
+}
+
 /** The instant a month ('YYYY-MM') starts in `tz`. */
 export function monthStart(key, tz) {
   const [year, month] = key.split('-').map(Number);
-  const guess = new Date(Date.UTC(year, month - 1, 1));
-  return new Date(guess.getTime() - tzOffset(guess, tz));
+  return localMidnight(year, month, 1, tz);
+}
+
+/** 'YYYY-MM-DD' of `date` in time zone `tz`. */
+export function dayKey(date, tz) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
+/** The last `count` day keys ending with today in `tz`. */
+export function lastDays(count, tz, now = new Date()) {
+  const [year, month, day] = dayKey(now, tz).split('-').map(Number);
+  return Array.from({ length: count }, (_, i) => new Date(Date.UTC(year, month - 1, day - (count - 1 - i))).toISOString().slice(0, 10));
+}
+
+/** The instant a day ('YYYY-MM-DD') starts in `tz`. */
+export function dayStart(key, tz) {
+  const [year, month, day] = key.split('-').map(Number);
+  return localMidnight(year, month, day, tz);
 }
 
 /** Registrations per month for schools or owner accounts: Map('YYYY-MM' → count). */

@@ -1,2 +1,2 @@
-// Super Admin Platform Reports (Phase 6).
+// Super Admin Platform Reports.
 export { default as PlatformReportsPage } from './pages/PlatformReportsPage.jsx';
