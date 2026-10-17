@@ -1,5 +1,5 @@
 import { getPrisma } from '../../config/prisma.js';
-import { statusSummary } from '../../common/listQuery.js';
+import { OWNER_STATUSES, SCHOOL_STATUSES, statusSummary } from '../../common/listQuery.js';
 
 /*
  * Platform aggregates shared by the dashboard and Platform Reports. Every figure is a direct count
@@ -80,13 +80,14 @@ export async function platformFigures({ tz, months: monthCount, since }) {
     schoolTotals: cumulative(schoolCounts, growthMonths),
     ownerTotals: cumulative(ownerCounts, growthMonths),
     schoolCounts,
-    schoolStatus: statusSummary(schoolGroups),
-    ownerStatus: statusSummary(ownerGroups),
+    schoolStatus: statusSummary(schoolGroups, SCHOOL_STATUSES),
+    ownerStatus: statusSummary(ownerGroups, OWNER_STATUSES),
     schoolsByLocation: locations.map((l) => ({ location: l.location, count: l._count._all })),
     newSchools,
     newOwners,
   };
 }
 
-const withoutTotal = ({ active, pending, suspended }) => ({ active, pending, suspended });
+// Status counts without the total (for status charts and legends).
+const withoutTotal = ({ total, ...counts }) => counts;
 export { withoutTotal };

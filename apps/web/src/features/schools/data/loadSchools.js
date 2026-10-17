@@ -1,13 +1,13 @@
 import { apiRequest, previewDelay, previewState } from '../../../lib/api.js';
 import { PAGE_SIZE } from '../utils/filterSchools.js';
 
-const EMPTY = { items: [], total: 0, page: 1, pageSize: PAGE_SIZE, pageCount: 1, summary: { total: 0, active: 0, pending: 0, suspended: 0 }, locations: [] };
+const EMPTY = { items: [], total: 0, page: 1, pageSize: PAGE_SIZE, pageCount: 1, summary: { total: 0, active: 0, suspended: 0 }, locations: [] };
 
 /**
  * One page of schools from the API (GET /api/platform/schools). Search, filters and pagination
  * are applied by the server. Resolves to
  * { items: [{ id, code, name, ownerName, location, status, registeredAt, description }],
- *   total, page, pageSize, pageCount, summary: { total, active, pending, suspended }, locations }.
+ *   total, page, pageSize, pageCount, summary: { total, active, suspended }, locations }.
  */
 export async function loadSchools({ query, status, location, registered }, page) {
   // Development only (removed from production builds): preview page states with ?demoState=loading | error | empty

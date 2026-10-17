@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
+import { schoolStatuses } from '../components/SchoolStatusBadge.jsx';
 
 const KEYS = { query: 'q', status: 'status', location: 'location', registered: 'registered' };
 
@@ -13,7 +14,8 @@ export function useSchoolFilters() {
   const filters = useMemo(
     () => ({
       query: params.get(KEYS.query) ?? '',
-      status: params.get(KEYS.status) ?? '',
+      // Only current statuses; an old link (e.g. ?status=pending) shows all schools instead of an error.
+      status: schoolStatuses[params.get(KEYS.status)] ? params.get(KEYS.status) : '',
       location: params.get(KEYS.location) ?? '',
       registered: params.get(KEYS.registered) ?? '',
     }),

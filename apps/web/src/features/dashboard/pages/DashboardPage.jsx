@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Building2, CircleOff, Clock, Landmark, Users } from 'lucide-react';
+import { Building2, CircleOff, Landmark, Users } from 'lucide-react';
 import { PageContainer, PageHeader } from '../../../components/layout';
 import { Badge, Card, ErrorState, KpiCard, Select } from '../../../components/ui';
 import { NewSchoolsCard, SchoolsGrowthCard, StatusDistributionCard } from '../components/ChartCards.jsx';
@@ -19,7 +19,6 @@ const ranges = [
 const kpiCards = [
   { key: 'totalSchools', label: 'Total Schools', icon: Landmark, tone: 'info' },
   { key: 'activeSchools', label: 'Active Schools', icon: Building2, tone: 'success' },
-  { key: 'pendingSchools', label: 'Pending Approval', icon: Clock, tone: 'warning' },
   { key: 'suspendedSchools', label: 'Suspended Schools', icon: CircleOff, tone: 'error' },
   { key: 'totalOwners', label: 'Total School Owners', icon: Users, tone: 'info' },
 ];

@@ -5,8 +5,8 @@ export function SchoolsSkeleton() {
   return (
     <div role="status" aria-busy="true" className="flex flex-col gap-6">
       <span className="sr-only">Loading schools</span>
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, i) => (
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {Array.from({ length: 3 }, (_, i) => (
           <Card key={i} as="li" className="flex-row gap-3 p-4">
             <Skeleton className="size-10 shrink-0" />
             <div className="flex flex-1 flex-col gap-2">

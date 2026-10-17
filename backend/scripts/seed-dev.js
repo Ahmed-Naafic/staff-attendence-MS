@@ -31,7 +31,6 @@ if ((await prisma.school.count()) > 0) {
 }
 
 const now = new Date();
-const UPPER = (status) => status.toUpperCase();
 
 const admin =
   (await prisma.user.findUnique({ where: { email: 'admin@edutrack.example' } })) ??
@@ -56,7 +55,8 @@ for (const owner of owners.toReversed()) {
       email: owner.email,
       phone: owner.phone,
       role: 'OWNER',
-      status: UPPER(owner.status),
+      // Owner accounts are ACTIVE / SUSPENDED only.
+      status: owner.status === 'suspended' ? 'SUSPENDED' : 'ACTIVE',
       createdAt: new Date(owner.registeredAt),
       lastSignInAt: owner.lastSignInAt ? new Date(owner.lastSignInAt) : null,
     },
@@ -67,7 +67,8 @@ for (const owner of owners.toReversed()) {
       code: `SCL-${new Date(owner.school.registeredAt).getFullYear()}-${owner.school.id.slice(-3)}`,
       name: owner.school.name,
       location: owner.school.location,
-      status: UPPER(owner.status),
+      // School statuses are ACTIVE / SUSPENDED only (no approval step).
+      status: owner.status === 'suspended' ? 'SUSPENDED' : 'ACTIVE',
       description: `${owner.school.name} is a school in ${owner.school.location}, Somalia.`,
       registeredAt: new Date(owner.school.registeredAt),
       ownerId: user.id,
@@ -97,9 +98,12 @@ function userAgentFor({ browser, device }) {
 const { events } = createMockAuditLogs({ now });
 const idOf = (mockId) => (mockId === 'demo-super-admin' ? admin.id : (ownerIds.get(mockId) ?? schoolIds.get(mockId) ?? null));
 await prisma.auditEvent.createMany({
-  data: events.map((e) => ({
+  data: events
+    // No approval step exists any more; sample registrations use SCHOOL_CREATED.
+    .filter((e) => e.action !== 'SCHOOL_APPROVED')
+    .map((e) => ({
     occurredAt: new Date(e.occurredAt),
-    action: e.action,
+    action: e.action === 'SCHOOL_REGISTERED' ? 'SCHOOL_CREATED' : e.action,
     result: e.result === 'failure' ? 'FAILURE' : 'SUCCESS',
     actorId: idOf(e.actor.id),
     actorName: e.actor.name,
@@ -108,8 +112,9 @@ await prisma.auditEvent.createMany({
     targetId: e.target.id ? idOf(e.target.id) : null,
     targetName: e.target.name,
     schoolId: e.school ? schoolIds.get(e.school.id) : null,
-    description: e.description,
-    change: e.change ?? undefined,
+    // Registrations start ACTIVE (no approval step).
+    description: e.description.replace(' and is waiting for approval.', '.'),
+    change: e.action === 'SCHOOL_REGISTERED' ? { field: 'Status', from: null, to: 'Active' } : (e.change ?? undefined),
     ipAddress: e.context.ipAddress,
     userAgent: userAgentFor(e.context),
   })),

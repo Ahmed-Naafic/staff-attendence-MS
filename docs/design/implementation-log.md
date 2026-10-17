@@ -800,3 +800,117 @@ The Phase 1–8 browser suites were re-run against the API on the dev branch wit
 ### Status
 
 Phase 9 work is complete on the dev branch. Remaining before production use: apply the migration to the production branch (`npm run prisma:deploy`) and create the first real Super Admin (`npm run create-super-admin`).
+
+Production follow-up (after the Phase 9 commit): the `platform_foundation` migration was applied to the production branch, and the first Super Admin account was created by the owner; sign-in, platform endpoints and sign-out were verified against production.
+
+## Super Admin School Management (approved rules)
+
+Phase 10 was paused for this. Scope: School Management only (no owner management, branches, staff, attendance or mobile).
+
+### Decisions
+
+- **School code:** suggested from the name's initials plus the next free number (e.g. Jamhuriya Academy → JA-001); the admin may change it before registering. Format: 3–20 characters, uppercase letters, digits and single hyphens. Unique (database constraint) and immutable.
+- **PENDING removed:** the existing `SchoolStatus` enum had PENDING (and it was the default). It was removed — the enum is now `ACTIVE | SUSPENDED`, default ACTIVE — after converting PENDING rows to ACTIVE.
+
+### Database
+
+Migration `20261004090000_school_management` (hand-written from `prisma migrate diff`, inspected; applied to the **dev branch only**):
+
+- `UPDATE` PENDING schools → ACTIVE (dev: 3 sample schools; production: none)
+- recreate `SchoolStatus` as `ACTIVE | SUSPENDED` (only the enum type is replaced; no data lost), default ACTIVE
+- add nullable `phone`, `address`, `email`, `website`, `suspensionReason`, `suspendedAt` to `School` (required fields are enforced by the API; existing rows have none)
+
+Production is not migrated yet: it needs `npm run prisma:deploy` after approval.
+
+Dev-branch sample data only: 28 sample "registration" audit events renamed to `SCHOOL_CREATED` (status change "→ Active"), and 25 sample approval events removed, so no approval history remains; the dev seed produces the same.
+
+### API (all SUPER_ADMIN)
+
+| Endpoint | Result |
+|---|---|
+| `GET /api/platform/schools/code-suggestion?name` | `{ code }` |
+| `POST /api/platform/schools` | 201 `{ school }` (ACTIVE); 400 per-field errors; 409 `CODE_TAKEN` |
+| `PATCH /api/platform/schools/:id` | 200 `{ school }`; the code (or any non-editable field) → 400; unknown id → 404 |
+| `POST /api/platform/schools/:id/suspend` `{ reason }` | ACTIVE → SUSPENDED; no reason → 400; already suspended → 409 `INVALID_STATUS` |
+| `POST /api/platform/schools/:id/reactivate` | SUSPENDED → ACTIVE; already active → 409 `INVALID_STATUS` |
+
+No delete, approve or reject endpoints. Validation in `features/schools/schoolInput.js` (unknown fields rejected, whitespace-only values treated as empty, lengths, email, phone, website, code format). Each change and its audit event are written in one transaction; status changes use a conditional update, so of several simultaneous suspensions exactly one succeeds. Lists keep server-side search (now also by code), filters (status: active, suspended) and pagination.
+
+### Audit
+
+`SCHOOL_CREATED`, `SCHOOL_UPDATED` (changed field names only), `SCHOOL_SUSPENDED` (with the reason), `SCHOOL_REACTIVATED` — recorded only after the change succeeds; failed or refused requests record nothing. The Audit Logs action filter and search include them.
+
+### Web
+
+- **Schools page:** "Register New School" opens a dialog (shared `Modal`). The code is suggested when the name field is left, and uppercased while typing. Problems are shown next to each field, both from the form's own checks and from the API (e.g. "This School Code is already in use."). On success the dialog closes, a success message appears, the list reloads and the new school's panel opens.
+- **Details panel:** shows phone, email, address, website, owner ("No owner linked yet"), and the suspension date and reason when suspended. Footer: Edit School, plus Suspend School (active) or Reactivate School (suspended).
+- **Row ⋮ menu:** View details, Edit school, then Suspend school or Reactivate school.
+- **Edit dialog:** prefilled; the code is shown as unchangeable and has no field.
+- **Suspend dialog:** school name, warning, required reason.
+- **Reactivate dialog:** confirmation, showing the current reason.
+- **Summary:** Total, Active and Suspended. The status filter offers Active and Suspended; an old `?status=pending` link shows all schools instead of an error.
+- **No pending or approval anywhere:**
+  - Dashboard: 4 key figures, and "View Pending Schools" removed.
+  - Platform Reports: "Suspended Schools" replaces "Pending Approval".
+  - Status charts show Active and Suspended.
+  - Platform Settings: the "Require approval for new schools" switch was removed.
+  - "Review" buttons were removed.
+- Schools without an owner show "—" (with "No owner linked" for screen readers).
+- `lib/api.js` passes the API's per-field `details` on `ApiError`.
+- The Vite proxy target can be set with `API_PROXY_TARGET`.
+
+### Shared component change
+
+- **`useDialog`** (`components/ui/useDialog.js`): Tab and Shift+Tab now wrap inside open dialogs (Modal, Drawer, navigation panel). Found by the School Management keyboard test: after the last button, the browser moved focus out of the dialog to the page's skip link. Native modal dialogs leave that to the browser.
+
+### Tests
+
+- Backend `npm test`: 47 / 47 (24 Phase 9 API tests, updated for the new rules, plus 23 School Management tests): authorization for every endpoint and role, registration, validation, duplicate code, edit, immutable code, unknown ids, suspend / reactivate, invalid transitions, simultaneous suspensions, audit events only after success, no secrets, no delete / approve / reject. Temporary records are removed afterwards.
+- Browser, School Management: 28 / 28 functional (register with validation and code suggestion, duplicate code, edit, suspend with required reason, reactivate from the row menu, audit log, dashboard and reports) and 14 / 14 responsive and keyboard checks (register and status dialogs at 1536, 1440, 1024, 834, 768 and 390px in both themes; focus stays in the dialog with visible focus).
+
+### Status
+
+School Management is implemented and tested on the dev branch. Production needs the `school_management` migration (`npm run prisma:deploy`) after approval.
+
+## Super Admin School Owner Management (approved rules)
+
+Scope: School Owners only (add, view, edit, suspend, reactivate). No branches, managers, staff, attendance, mobile or Phase 10.
+
+### Decisions
+
+- **One school ↔ one owner**, already enforced by the database (`School.ownerId` unique); no schema change was needed for it.
+- **Activation:** no activation workflow existed. Approved: the Super Admin sets an initial password (at least 12 characters) when adding the owner; only the scrypt hash is stored; it is never returned, logged or audited.
+- **PENDING:** kept in `AccountStatus` (later account types may use it) but never given to owners. Dev branch only: the 3 sample PENDING owners were set to ACTIVE, and the seed no longer creates them. Production had no owners.
+- **Sessions:** requests already refuse sessions of accounts that are not ACTIVE. Suspending an owner also deletes their sessions (the sign-out mechanism), so reactivation does not revive old sessions.
+
+### Database
+
+Migration `20261017090000_owner_management` (additive): nullable `suspensionReason` and `suspendedAt` on `User`. Applied to the **dev branch only**; production needs `npm run prisma:deploy` after approval (together with `school_management`).
+
+### API (all SUPER_ADMIN)
+
+| Endpoint | Result |
+|---|---|
+| `POST /api/platform/owners` `{ name, email, phone, schoolId, password }` | 201 `{ owner }` (ACTIVE, assigned to the school in the same transaction); 400 per-field errors (unknown school included); 409 `EMAIL_TAKEN` / `SCHOOL_HAS_OWNER` |
+| `PATCH /api/platform/owners/:id` | name, email, phone; school, role, status or password → 400; unknown id → 404 |
+| `POST /api/platform/owners/:id/suspend` `{ reason }` | ACTIVE → SUSPENDED, sessions ended; otherwise 409 `INVALID_STATUS` |
+| `POST /api/platform/owners/:id/reactivate` | SUSPENDED → ACTIVE; otherwise 409 `INVALID_STATUS` |
+| `GET /api/platform/schools?owner=none` | schools without an owner (choices for Add Owner) |
+
+No delete, transfer, approve or reject endpoints. Owner and school statuses never change each other. Search also matches the school code.
+
+### Audit
+
+`OWNER_CREATED`, `OWNER_UPDATED` (changed field names only), `OWNER_SUSPENDED` (with the reason), `OWNER_REACTIVATED` — only after success; in the Audit Logs filter and the dashboard's recent activity.
+
+### Web
+
+- **School Owners page:** "Add School Owner" opens a dialog (name, email, phone, school, initial password; only schools without an owner are listed). Edit, Suspend (required reason) and Reactivate open from the panel and the row ⋮ menu. Success messages; the list and panel reload.
+- **Panel:** school code and status, account creation, last sign-in, suspension date and reason.
+- **No pending:** summary is Total / Active / Suspended; the status filter offers Active and Suspended; an old `?status=pending` link shows all owners. "View" replaces "Review".
+
+### Tests
+
+- Backend `npm test`: 79 / 79 (24 Phase 9, 23 School Management, 32 Owner Management: authorization for every endpoint and role, IDOR, add / edit / suspend / reactivate, validation, duplicate email, school already owned, simultaneous adds and suspensions, sessions ended on suspension, sign-in after reactivation, audit without secrets, no delete or transfer).
+- Browser, Owner Management: 32 / 32 functional and 16 / 16 responsive and keyboard checks (1536, 1440, 1024, 834, 768, 390px, light and dark).
+- Regression at commit time: Phase 1 no failures. Phases 2–5 were rerun while the dev database was slow (about 1–2 s per request); remaining Phase 2–4 failures are page-load timing. Older suites were updated for the approved owner rules and for counts that depend on data. Phases 6–8 and the screenshot suites still need a run.

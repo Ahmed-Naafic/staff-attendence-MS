@@ -78,7 +78,7 @@ export function SchoolsReportTable({ schools, title, description, limit }) {
       renderRow={(s) => (
         <>
           <TableCell className="font-medium whitespace-nowrap">{s.name}</TableCell>
-          <TableCell className={cell}>{s.ownerName}</TableCell>
+          <TableCell className={cell}>{s.ownerName || <><span aria-hidden="true">—</span><span className="sr-only">No owner linked</span></>}</TableCell>
           <TableCell className={cell}>{s.location}</TableCell>
           <TableCell>
             <SchoolStatusBadge status={s.status} />

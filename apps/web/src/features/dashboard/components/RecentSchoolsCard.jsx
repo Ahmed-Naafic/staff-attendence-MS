@@ -45,7 +45,7 @@ export function RecentSchoolsCard({ schools }) {
                   <TableCell className="text-fg-muted">{index + 1}</TableCell>
                   <TableCell className="font-medium whitespace-nowrap">{school.name}</TableCell>
                   <TableCell className="whitespace-nowrap text-fg-secondary">{school.location}</TableCell>
-                  <TableCell className="whitespace-nowrap text-fg-secondary">{school.ownerName}</TableCell>
+                  <TableCell className="whitespace-nowrap text-fg-secondary">{school.ownerName ?? <><span aria-hidden="true">—</span><span className="sr-only">No owner linked</span></>}</TableCell>
                   <TableCell>
                     <SchoolStatusBadge status={school.status} />
                   </TableCell>

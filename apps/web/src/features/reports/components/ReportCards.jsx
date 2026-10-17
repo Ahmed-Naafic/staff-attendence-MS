@@ -1,4 +1,4 @@
-import { Building2, ChartColumn, ChartLine, ChartPie, Clock, Download, FileText, Landmark, Users } from 'lucide-react';
+import { Building2, ChartColumn, ChartLine, ChartPie, CircleOff, Download, FileText, Landmark, Users } from 'lucide-react';
 import { BarChart, DonutChart, LineChart } from '../../../components/charts';
 import { Button, Card, CardContent, CardHeader, EmptyState, KpiCard } from '../../../components/ui';
 import { formatMonth, formatMonthYear } from '../../../lib/format.js';
@@ -8,7 +8,7 @@ export const EXPORT_UNAVAILABLE = 'Not available yet: reporting export rules are
 const toPoints = (points, key) => points.map((p) => ({ label: formatMonth(p.month), value: p[key] }));
 const rangeText = (points) => `${formatMonthYear(points[0].month)} to ${formatMonthYear(points.at(-1).month)}`;
 
-// Colors per status, shared by the school and owner breakdowns.
+// Colors per status, shared by the school (active, suspended) and owner (also pending) breakdowns.
 export const statusColors = {
   active: 'var(--color-interactive)',
   pending: 'var(--color-accent)',
@@ -28,7 +28,7 @@ export function ReportSummary({ summary }) {
         <KpiCard label="Total Schools" icon={Landmark} tone="info" value={summary.totalSchools.value} note={note(summary.totalSchools.newInPeriod)} trend={summary.totalSchools.trend} />
         <KpiCard label="Total School Owners" icon={Users} tone="success" value={summary.totalOwners.value} note={note(summary.totalOwners.newInPeriod)} trend={summary.totalOwners.trend} />
         <KpiCard label="Active Schools" icon={Building2} tone="success" value={summary.activeSchools.value} />
-        <KpiCard label="Pending Approval" icon={Clock} tone="warning" value={summary.pendingSchools.value} />
+        <KpiCard label="Suspended Schools" icon={CircleOff} tone="error" value={summary.suspendedSchools.value} />
       </ul>
     </section>
   );

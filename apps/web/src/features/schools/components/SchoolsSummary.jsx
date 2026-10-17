@@ -1,10 +1,9 @@
-import { Building2, CircleOff, Clock, Landmark } from 'lucide-react';
+import { Building2, CircleOff, Landmark } from 'lucide-react';
 import { KpiCard } from '../../../components/ui';
 
 const cards = [
   { key: 'total', label: 'Total Schools', icon: Landmark, tone: 'info' },
   { key: 'active', label: 'Active Schools', icon: Building2, tone: 'success' },
-  { key: 'pending', label: 'Pending Approval', icon: Clock, tone: 'warning' },
   { key: 'suspended', label: 'Suspended Schools', icon: CircleOff, tone: 'error' },
 ];
 
@@ -18,7 +17,7 @@ export function SchoolsSummary({ counts }) {
       <h2 id="schools-summary" className="sr-only">
         Summary
       </h2>
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {cards.map((card) => (
           <KpiCard
             key={card.key}

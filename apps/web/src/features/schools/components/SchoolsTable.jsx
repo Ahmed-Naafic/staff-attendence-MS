@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { Eye, Pencil, CircleCheck, CircleOff, School, SearchX } from 'lucide-react';
+import { CircleOff, Eye, Pencil, RotateCcw, School, SearchX } from 'lucide-react';
 import {
   Button,
   Card,
@@ -22,10 +22,10 @@ import { SchoolStatusBadge } from './SchoolStatusBadge.jsx';
 const COLUMNS = 7;
 
 /**
- * Schools table with View/Review (opens the details panel), a ⋮ menu and pagination.
- * Management actions are shown but unavailable until their business rules are approved.
+ * Schools table with View (opens the details panel), a ⋮ menu (view, edit, suspend or reactivate)
+ * and pagination.
  */
-export function SchoolsTable({ rows, total, page, offset, onPageChange, selectedId, search, isFiltered, onReset }) {
+export function SchoolsTable({ rows, total, page, offset, onPageChange, selectedId, search, isFiltered, onReset, onEdit, onSuspend, onReactivate }) {
   const navigate = useNavigate();
   const detailsLink = (id) => ({ pathname: `/schools/${id}`, search });
 
@@ -62,12 +62,19 @@ export function SchoolsTable({ rows, total, page, offset, onPageChange, selected
                 <TableEmpty columns={COLUMNS} icon={School} title="No schools yet" description="Schools will appear here once they are registered." />
               ))}
             {rows.map((school, index) => {
-              const isPending = school.status === 'pending';
+              const suspended = school.status === 'suspended';
               return (
                 <TableRow key={school.id} selected={school.id === selectedId}>
                   <TableCell className="text-fg-muted tabular-nums">{offset + index + 1}</TableCell>
                   <TableCell className="font-medium whitespace-nowrap">{school.name}</TableCell>
-                  <TableCell className="whitespace-nowrap text-fg-secondary">{school.ownerName}</TableCell>
+                  <TableCell className="whitespace-nowrap text-fg-secondary">
+                    {school.ownerName ?? (
+                      <span className="text-fg-muted">
+                        <span aria-hidden="true">—</span>
+                        <span className="sr-only">No owner linked</span>
+                      </span>
+                    )}
+                  </TableCell>
                   <TableCell className="whitespace-nowrap text-fg-secondary">{school.location}</TableCell>
                   <TableCell>
                     <SchoolStatusBadge status={school.status} />
@@ -81,22 +88,20 @@ export function SchoolsTable({ rows, total, page, offset, onPageChange, selected
                         to={detailsLink(school.id)}
                         size="sm"
                         variant="outline"
-                        aria-label={`${isPending ? 'Review' : 'View'} ${school.name}`}
+                        aria-label={`View ${school.name}`}
                         className="min-w-[4.5rem]"
                       >
-                        {isPending ? 'Review' : 'View'}
+                        View
                       </LinkButton>
                       <DropdownMenu
                         label={`More actions for ${school.name}`}
                         items={[
                           { label: 'View details', icon: Eye, onSelect: () => navigate(detailsLink(school.id)) },
+                          { label: 'Edit school', icon: Pencil, onSelect: () => onEdit(school) },
                           { type: 'separator' },
-                          { type: 'label', label: 'Not available yet' },
-                          { label: 'Edit school', icon: Pencil, disabled: true },
-                          ...(isPending ? [{ label: 'Approve school', icon: CircleCheck, disabled: true }] : []),
-                          ...(school.status === 'active'
-                            ? [{ label: 'Suspend school', icon: CircleOff, disabled: true, destructive: true }]
-                            : []),
+                          suspended
+                            ? { label: 'Reactivate school', icon: RotateCcw, onSelect: () => onReactivate(school) }
+                            : { label: 'Suspend school', icon: CircleOff, destructive: true, onSelect: () => onSuspend(school) },
                         ]}
                       />
                     </TableActions>

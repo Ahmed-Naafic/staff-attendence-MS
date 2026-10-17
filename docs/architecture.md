@@ -118,27 +118,36 @@ Each feature has a `*.service.js` (Prisma queries, response shapes) and, where i
 | `GET /api/auth/session` | public | `{ user }` or `{ user: null }` |
 | `POST /api/auth/logout` | public | Ends the session (idempotent) |
 | `GET /api/platform/dashboard?range&tz` | SUPER_ADMIN | Platform overview |
-| `GET /api/platform/schools?q&status&location&registered&page&pageSize`, `/:id` | SUPER_ADMIN | Schools |
-| `GET /api/platform/owners` (same parameters), `/:id` | SUPER_ADMIN | School owners |
+| `GET /api/platform/schools?q&status&location&registered&owner&page&pageSize`, `/:id` | SUPER_ADMIN | Schools (`status`: active, suspended; `owner=none`: schools without an owner) |
+| `GET /api/platform/schools/code-suggestion?name` | SUPER_ADMIN | Suggested School Code for a name |
+| `POST /api/platform/schools` | SUPER_ADMIN | Register a school (starts ACTIVE) |
+| `PATCH /api/platform/schools/:id` | SUPER_ADMIN | Edit a school (never the code) |
+| `POST /api/platform/schools/:id/suspend` `{ reason }` | SUPER_ADMIN | ACTIVE → SUSPENDED |
+| `POST /api/platform/schools/:id/reactivate` | SUPER_ADMIN | SUSPENDED → ACTIVE |
+| `GET /api/platform/owners?q&status&location&registered&page&pageSize`, `/:id` | SUPER_ADMIN | School owners (`status`: active, suspended) |
+| `POST /api/platform/owners` `{ name, email, phone, schoolId, password }` | SUPER_ADMIN | Add an owner (ACTIVE) to a school without one |
+| `PATCH /api/platform/owners/:id` | SUPER_ADMIN | Edit name, email, phone (never the school or role) |
+| `POST /api/platform/owners/:id/suspend` `{ reason }` | SUPER_ADMIN | ACTIVE → SUSPENDED; ends the owner's sessions |
+| `POST /api/platform/owners/:id/reactivate` | SUPER_ADMIN | SUSPENDED → ACTIVE |
 | `GET /api/platform/reports?period&tz` | SUPER_ADMIN | Platform report |
 | `GET /api/platform/audit-logs?q&action&user&school&status&since&until&dayStart&page&pageSize`, `/:id` | SUPER_ADMIN | Audit log |
 | `GET /api/platform/settings` | SUPER_ADMIN | Platform settings (read-only) |
 
-All platform endpoints are read-only. No API versioning yet (none existed); `/api/platform` groups the Super Admin scope. Errors are `{ error, code, details? }` with codes `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `TOO_MANY_REQUESTS` (429) and `INTERNAL_ERROR` (500).
+Platform endpoints are read-only except School Management (register, edit, suspend, reactivate) and School Owner Management (add, edit, suspend, reactivate); there is no deletion, approval, rejection or ownership transfer. Each change and its audit event are written in one transaction (adding an owner also assigns the school in the same transaction), and invalid status changes are refused (409 `INVALID_STATUS`), using a conditional update so two simultaneous requests cannot both succeed. No API versioning yet (none existed); `/api/platform` groups the Super Admin scope. Errors are `{ error, code, details? }` with codes `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CODE_TAKEN` / `EMAIL_TAKEN` / `SCHOOL_HAS_OWNER` / `INVALID_STATUS` (409), `TOO_MANY_REQUESTS` (429) and `INTERNAL_ERROR` (500).
 
 ## Authentication and authorization
 
-- **Sessions in the database, carried by a cookie.** Sign-in (email and password) creates a `Session` row and sets `edutrack_session`: a random 256-bit token, `HttpOnly`, `SameSite=Lax`, `Path=/api`, `Secure` in production, lasting `SESSION_HOURS` (12). Only the token's SHA-256 hash is stored. Sign-out deletes the row, so revocation is immediate. Page scripts never see the token.
+- **Sessions in the database, carried by a cookie.** Sign-in (email and password) creates a `Session` row and sets `edutrack_session`: a random 256-bit token, `HttpOnly`, `SameSite=Lax`, `Path=/api`, `Secure` in production, lasting `SESSION_HOURS` (12). Only the token's SHA-256 hash is stored. Sign-out deletes the row, so revocation is immediate. Every request rechecks the account: a session of an account that is not ACTIVE is refused. Suspending an owner also deletes their sessions (the same mechanism as sign-out), so a reactivated owner must sign in again. Page scripts never see the token.
 - **Passwords:** scrypt (Node `crypto`; N=16384, r=8, p=1, 16-byte salt; parameters stored with each hash). Unknown emails are checked against a dummy hash so timing does not reveal accounts, and every failure returns the same message. Only `ACTIVE` accounts with a password can sign in.
 - **Failed sign-ins:** after 5 failures for the same email and address within 15 minutes, sign-in is refused (429) until the window passes (in memory, per API process).
 - **Cross-site requests:** state-changing requests must come from `WEB_ORIGIN` and send JSON (`sameOrigin` middleware); together with `SameSite=Lax` this blocks request forgery.
 - **Authorization is enforced by the API:** every `/api/platform/*` route uses `requireAuth` + `requireRole('SUPER_ADMIN')`. Other roles get 403, no session gets 401. Hiding pages in the web app is only for usability. Super Admin queries are platform-wide (no school or branch filter) and expose no branch, staff or attendance operations.
-- **Creating accounts:** Super Admins are created only with `npm run create-super-admin -- --email … --name …` (password from `SUPER_ADMIN_PASSWORD` or a hidden prompt; never printed). There is no sign-up.
+- **Creating accounts:** School Owner accounts are added by a Super Admin (Add School Owner), with an initial password that is hashed and never returned. Super Admins are created only with `npm run create-super-admin -- --email … --name …` (password from `SUPER_ADMIN_PASSWORD` or a hidden prompt; never printed). There is no sign-up.
 - **Hosting assumption:** the web app and API share one origin (`/api` on the same site), as the Vite dev server does with its proxy. An API on a different site would need CORS and a different cookie setup.
 
 ## Data model (Phase 9)
 
-`User` (role, status, email, phone, scrypt hash, last sign-in) · `School` (code, name, location, status, description, registeredAt, `ownerId`: one owner per school, one school per owner) · `Session` · `AuditEvent` (action, result, actor and target names copied at the time, school, description, status change, IP address, user agent) · `PlatformSettings` (single row: information and localization fields). School and account statuses are stored and displayed only; nothing changes them yet.
+`User` (role, status, email — unique, phone, scrypt hash, last sign-in, suspensionReason, suspendedAt) · `School` (code — unique, immutable; name; location = city; phone; address; email; website; description; status ACTIVE | SUSPENDED; suspensionReason, suspendedAt; registeredAt; `ownerId`: one owner per school, one school per owner, optional) · `Session` · `AuditEvent` (action, result, actor and target names copied at the time, school, description, status change, IP address, user agent) · `PlatformSettings` (single row: information and localization fields). School statuses change only through School Management, owner account statuses only through Owner Management (ACTIVE | SUSPENDED; `AccountStatus` also has PENDING for later account types, never given to owners). The owner relation has no cascade: an owner and a school are never deleted with each other.
 
 ## Databases and branches
 

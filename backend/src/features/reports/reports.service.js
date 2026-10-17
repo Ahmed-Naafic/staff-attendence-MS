@@ -39,7 +39,7 @@ export async function getReport({ period, tz }) {
       totalSchools: { value: figures.schoolStatus.total, newInPeriod: figures.newSchools, trend: figures.schoolTotals.slice(-8) },
       totalOwners: { value: figures.ownerStatus.total, newInPeriod: figures.newOwners, trend: figures.ownerTotals.slice(-8) },
       activeSchools: { value: figures.schoolStatus.active },
-      pendingSchools: { value: figures.schoolStatus.pending },
+      suspendedSchools: { value: figures.schoolStatus.suspended },
     },
     schoolGrowth: months.map((month) => ({ month, total: figures.schoolTotals[index(month)] })),
     registrations: months.map((month) => ({ month, count: figures.schoolCounts.get(month) ?? 0 })),

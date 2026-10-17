@@ -1,15 +1,14 @@
-import { CircleOff, Clock, UserRoundCheck, Users } from 'lucide-react';
+import { CircleOff, UserRoundCheck, Users } from 'lucide-react';
 import { KpiCard } from '../../../components/ui';
 
 const cards = [
   { key: 'total', label: 'Total Owners', icon: Users, tone: 'info' },
   { key: 'active', label: 'Active Owners', icon: UserRoundCheck, tone: 'success' },
-  { key: 'pending', label: 'Pending Owners', icon: Clock, tone: 'warning' },
   { key: 'suspended', label: 'Suspended Owners', icon: CircleOff, tone: 'error' },
 ];
 
 /**
- * Four summary figures for the whole platform (not affected by search or filters), counted by
+ * Three summary figures for the whole platform (not affected by search or filters), counted by
  * the server. No change percentages: comparing periods needs an approved definition.
  */
 export function OwnersSummary({ counts }) {
@@ -18,7 +17,7 @@ export function OwnersSummary({ counts }) {
       <h2 id="owners-summary" className="sr-only">
         Summary
       </h2>
-      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <ul className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {cards.map((card) => (
           <KpiCard
             key={card.key}

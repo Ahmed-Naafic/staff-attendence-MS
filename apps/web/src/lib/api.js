@@ -6,11 +6,13 @@
  */
 const BASE_URL = (import.meta.env.VITE_API_URL || '/api').replace(/\/$/, '');
 
+/** status (0 = network), code (e.g. VALIDATION_ERROR), message, and per-field `details` when the API sends them. */
 export class ApiError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, details) {
     super(message);
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -50,7 +52,7 @@ export async function apiRequest(path, { method = 'GET', query, body, signal, qu
   if (response.ok) return data;
 
   if (response.status === 401 && !quietUnauthorized) unauthorizedListeners.forEach((listener) => listener());
-  throw new ApiError(response.status, data?.code ?? 'HTTP_ERROR', data?.error ?? 'Something went wrong. Try again later.');
+  throw new ApiError(response.status, data?.code ?? 'HTTP_ERROR', data?.error ?? 'Something went wrong. Try again later.', data?.details);
 }
 
 /** The viewer's time zone, so monthly figures use the same calendar months the viewer sees. */

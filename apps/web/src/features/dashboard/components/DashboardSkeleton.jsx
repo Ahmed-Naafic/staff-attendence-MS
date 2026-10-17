@@ -21,7 +21,7 @@ export function DashboardSkeleton() {
     <div role="status" aria-busy="true">
       <span className="sr-only">Loading dashboard</span>
       <DashboardLayout
-        kpis={Array.from({ length: 5 }, (_, i) => (
+        kpis={Array.from({ length: 4 }, (_, i) => (
           <Card key={i} as="li" className="flex-row gap-3 p-4">
             <Skeleton className="size-10 shrink-0" />
             <div className="flex flex-1 flex-col gap-2">

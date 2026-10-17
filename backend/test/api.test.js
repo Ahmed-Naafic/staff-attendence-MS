@@ -216,10 +216,13 @@ describe('authorization: SUPER_ADMIN only on every platform endpoint', () => {
     assert.equal((await call('/api/auth/session', { cookie: cookies.STAFF })).body.user.role, 'STAFF');
   });
 
-  test('no write endpoints exist on the platform API', async () => {
+  test('only the approved writes exist: no settings writes, no school or owner deletion, approval, rejection or transfer', async () => {
     for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
-      assert.equal((await call('/api/platform/settings', { method, body: {}, cookie: cookies.SUPER_ADMIN })).status, 404, method);
-      assert.equal((await call('/api/platform/schools', { method, body: {}, cookie: cookies.SUPER_ADMIN })).status, 404, method);
+      assert.equal((await call('/api/platform/settings', { method, body: {}, cookie: cookies.SUPER_ADMIN })).status, 404, `settings ${method}`);
+    }
+    const id = randomUUID();
+    for (const [method, path] of [['PUT', '/api/platform/schools'], ['DELETE', '/api/platform/schools'], ['PUT', `/api/platform/schools/${id}`], ['DELETE', `/api/platform/schools/${id}`], ['POST', `/api/platform/schools/${id}/approve`], ['POST', `/api/platform/schools/${id}/reject`], ['POST', `/api/platform/schools/${id}/delete`], ['PUT', '/api/platform/owners'], ['DELETE', '/api/platform/owners'], ['PUT', `/api/platform/owners/${id}`], ['DELETE', `/api/platform/owners/${id}`], ['PATCH', `/api/platform/owners/${id}/school`], ['POST', `/api/platform/owners/${id}/transfer`], ['POST', `/api/platform/owners/${id}/approve`], ['POST', `/api/platform/owners/${id}/reject`], ['POST', `/api/platform/owners/${id}/delete`]]) {
+      assert.equal((await call(path, { method, body: {}, cookie: cookies.SUPER_ADMIN })).status, 404, `${method} ${path}`);
     }
   });
 });
@@ -239,26 +242,27 @@ describe('platform data (Super Admin)', () => {
     assert.equal(res.body.page, 1);
     assert.equal(res.body.pageSize, 8);
     assert.equal(res.body.total, res.body.summary.total);
-    assert.equal(res.body.summary.total, res.body.summary.active + res.body.summary.pending + res.body.summary.suspended);
+    assert.deepEqual(Object.keys(res.body.summary).sort(), ['active', 'suspended', 'total'], 'statuses are ACTIVE and SUSPENDED only');
+    assert.equal(res.body.summary.total, res.body.summary.active + res.body.summary.suspended);
     assert.ok(res.body.locations.length > 0);
     const dates = res.body.items.map((s) => s.registeredAt);
     assert.deepEqual(dates, [...dates].sort().reverse(), 'newest first');
-    assert.deepEqual(Object.keys(res.body.items[0]).sort(), ['code', 'description', 'id', 'location', 'name', 'ownerId', 'ownerName', 'registeredAt', 'status']);
+    assert.deepEqual(Object.keys(res.body.items[0]).sort(), ['address', 'code', 'description', 'email', 'id', 'location', 'name', 'ownerId', 'ownerName', 'phone', 'registeredAt', 'status', 'suspendedAt', 'suspensionReason', 'website']);
   });
 
   test('schools: search, filters combine, clamping, details', async () => {
-    const pending = await get('/api/platform/schools?status=pending');
-    assert.ok(pending.body.items.every((s) => s.status === 'pending'));
-    assert.equal(pending.body.total, pending.body.summary.pending);
-    const city = pending.body.items[0].location;
-    const both = await get(`/api/platform/schools?status=pending&location=${encodeURIComponent(city)}`);
-    assert.ok(both.body.items.every((s) => s.status === 'pending' && s.location === city));
-    const name = pending.body.items[0].name;
+    const active = await get('/api/platform/schools?status=active');
+    assert.ok(active.body.items.every((s) => s.status === 'active'));
+    assert.equal(active.body.total, active.body.summary.active);
+    const city = active.body.items[0].location;
+    const both = await get(`/api/platform/schools?status=active&location=${encodeURIComponent(city)}`);
+    assert.ok(both.body.items.every((s) => s.status === 'active' && s.location === city));
+    const name = active.body.items[0].name;
     const search = await get(`/api/platform/schools?q=${encodeURIComponent(name.slice(0, 5).toUpperCase())}`);
     assert.ok(search.body.items.some((s) => s.name === name), 'search ignores case');
     const clamped = await get('/api/platform/schools?page=999');
     assert.equal(clamped.body.page, clamped.body.pageCount);
-    const detail = await get(`/api/platform/schools/${name && pending.body.items[0].id}`);
+    const detail = await get(`/api/platform/schools/${active.body.items[0].id}`);
     assert.equal(detail.body.school.name, name);
     assert.equal((await get('/api/platform/schools/not-an-id')).status, 404);
   });
@@ -268,6 +272,7 @@ describe('platform data (Super Admin)', () => {
     assert.equal(res.status, 200);
     assert.ok(res.body.items.every((o) => o.school === null || o.school.name));
     assert.ok(!/passwordHash|tokenHash|scrypt/.test(JSON.stringify(res.body)));
+    assert.deepEqual(Object.keys(res.body.summary).sort(), ['active', 'suspended', 'total'], 'owner statuses are ACTIVE and SUSPENDED only');
     const others = ['SUPER_ADMIN', 'MANAGER', 'STAFF'].map((role) => accounts[role].email);
     assert.ok(!res.body.items.some((o) => others.includes(o.email)), 'only OWNER accounts are listed');
     const first = res.body.items.find((o) => o.school);
@@ -295,7 +300,8 @@ describe('platform data (Super Admin)', () => {
     assert.equal(report.registrations.length, 6);
     assert.equal(report.summary.totalSchools.newInPeriod, report.schools.length);
     assert.equal(report.summary.totalOwners.newInPeriod, report.owners.length);
-    assert.deepEqual(report.schoolStatus, { active: schools.active, pending: schools.pending, suspended: schools.suspended });
+    assert.deepEqual(report.schoolStatus, { active: schools.active, suspended: schools.suspended });
+    assert.ok(!('pendingSchools' in dashboard.summary) && !('pendingSchools' in report.summary), 'no pending/approval figures');
   });
 
   test('audit logs: filters, pagination, summary, details', async () => {
@@ -327,10 +333,13 @@ describe('platform data (Super Admin)', () => {
       '/api/platform/schools?page=0',
       '/api/platform/schools?pageSize=1000',
       '/api/platform/schools?status=closed',
+      '/api/platform/schools?status=pending',
       '/api/platform/schools?registered=5y',
       `/api/platform/schools?q=${'a'.repeat(101)}`,
       '/api/platform/schools?status=active&status=pending',
       '/api/platform/owners?status=closed',
+      '/api/platform/owners?status=pending',
+      '/api/platform/schools?owner=some',
       '/api/platform/dashboard?range=1y',
       '/api/platform/dashboard?tz=Mars/Base',
       '/api/platform/reports?period=2y',

@@ -1,10 +1,9 @@
 import { Badge } from '../../../components/ui';
 
-// Display mapping for the school statuses shown in the reference design.
-// Display only: the status rules themselves are not defined yet.
+// School statuses (approved lifecycle): registered schools are Active; Super Admins suspend and
+// reactivate them. There is no approval step, so there is no Pending status.
 export const schoolStatuses = {
   active: { label: 'Active', variant: 'success', color: 'var(--color-interactive)' },
-  pending: { label: 'Pending', variant: 'warning', color: 'var(--color-accent)' },
   suspended: { label: 'Suspended', variant: 'error', color: 'var(--color-error)' },
 };
 

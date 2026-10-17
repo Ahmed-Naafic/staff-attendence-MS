@@ -10,12 +10,12 @@
  *   isDemo, period, periodStart, periodEnd, generatedAt,
  *   summary: {
  *     totalSchools, totalOwners: { value, newInPeriod, trend: number[] },
- *     activeSchools, pendingSchools: { value },
+ *     activeSchools, suspendedSchools: { value },
  *   },
  *   schoolGrowth:   [{ month: 'YYYY-MM', total }],     // schools at the end of each month
  *   registrations:  [{ month: 'YYYY-MM', count }],     // new schools per month
- *   schoolStatus:   { active, pending, suspended },    // current
- *   ownerStatus:    { active, pending, suspended },    // current
+ *   schoolStatus:   { active, suspended },             // current
+ *   ownerStatus:    { active, suspended },             // current
  *   schoolsByLocation: [{ location, count }],          // current, most first
  *   schools: [{ id, name, ownerName, location, status, registeredAt }], // registered in period, newest first
  *   owners:  [{ id, name, email, schoolName, location, status, registeredAt }], // registered in period
@@ -32,12 +32,15 @@ export const periods = [
 
 const monthKey = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
+// Statuses are ACTIVE / SUSPENDED only; the older sample data's 'pending' counts as active (as in the dev seed).
 const countBy = (items, key) =>
-  items.reduce((counts, item) => ({ ...counts, [item[key]]: (counts[item[key]] ?? 0) + 1 }), {
-    active: 0,
-    pending: 0,
-    suspended: 0,
-  });
+  items.reduce(
+    (counts, item) => {
+      const status = item[key] === 'pending' ? 'active' : item[key];
+      return { ...counts, [status]: counts[status] + 1 };
+    },
+    { active: 0, suspended: 0 },
+  );
 
 export function createMockReport({ period = '12m', now = new Date() } = {}) {
   const { months } = periods.find((p) => p.value === period) ?? periods[2];
@@ -77,7 +80,7 @@ export function createMockReport({ period = '12m', now = new Date() } = {}) {
       totalSchools: { value: schools.length, newInPeriod: schoolsInPeriod.length, trend },
       totalOwners: { value: owners.length, newInPeriod: ownersInPeriod.length, trend },
       activeSchools: { value: schoolStatus.active },
-      pendingSchools: { value: schoolStatus.pending },
+      suspendedSchools: { value: schoolStatus.suspended },
     },
     schoolGrowth,
     registrations,
@@ -109,14 +112,14 @@ export function createMockReport({ period = '12m', now = new Date() } = {}) {
 /** Same shape with nothing in it — used to preview the empty state. */
 export function createEmptyMockReport({ period = '12m', now = new Date() } = {}) {
   const report = createMockReport({ period, now });
-  const none = { active: 0, pending: 0, suspended: 0 };
+  const none = { active: 0, suspended: 0 };
   return {
     ...report,
     summary: {
       totalSchools: { value: 0, newInPeriod: 0, trend: [0, 0, 0, 0, 0, 0, 0, 0] },
       totalOwners: { value: 0, newInPeriod: 0, trend: [0, 0, 0, 0, 0, 0, 0, 0] },
       activeSchools: { value: 0 },
-      pendingSchools: { value: 0 },
+      suspendedSchools: { value: 0 },
     },
     schoolGrowth: report.schoolGrowth.map((p) => ({ ...p, total: 0 })),
     registrations: report.registrations.map((p) => ({ ...p, count: 0 })),

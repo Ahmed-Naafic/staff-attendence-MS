@@ -5,8 +5,9 @@
 // excuses are added in later phases, following the hierarchy (School → Branch → Staff) and role
 // scopes in docs/architecture.md.
 //
-// Statuses are stored and displayed only: the rules for changing them (approval, suspension)
-// are not approved yet, so nothing in the API changes them.
+// School statuses follow the approved lifecycle: registered → ACTIVE ⇄ SUSPENDED (no approval,
+// no deletion). Owner accounts are ACTIVE ⇄ SUSPENDED (Super Admin; no approval, no deletion);
+// PENDING stays in AccountStatus for later account types and is never given to owners.
 //
 // Connection strings come from environment variables (see backend/prisma.config.js
 // and backend/src/config/prisma.js). Never hardcode credentials here.
@@ -32,9 +33,9 @@ enum AccountStatus {
   SUSPENDED
 }
 
+/// Registered schools start ACTIVE; Super Admins suspend (with a reason) and reactivate them.
 enum SchoolStatus {
   ACTIVE
-  PENDING
   SUSPENDED
 }
 
@@ -45,18 +46,21 @@ enum AuditResult {
 
 /// Anyone who can sign in. Only ACTIVE accounts with a password can sign in.
 model User {
-  id           String        @id @default(uuid())
-  name         String
+  id               String        @id @default(uuid())
+  name             String
   /// Stored lower-case; the sign-in identifier for web users.
-  email        String?       @unique
-  phone        String?
-  role         Role
-  status       AccountStatus @default(ACTIVE)
+  email            String?       @unique
+  phone            String?
+  role             Role
+  status           AccountStatus @default(ACTIVE)
   /// scrypt hash (see backend/src/features/auth/password.js). Never returned by the API.
-  passwordHash String?
-  lastSignInAt DateTime?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  passwordHash     String?
+  lastSignInAt     DateTime?
+  /// Set while an OWNER account is SUSPENDED (cleared on reactivation); every change is also in the audit log.
+  suspensionReason String?
+  suspendedAt      DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
   /// For OWNER accounts: the one school they own.
   ownedSchool School?      @relation("SchoolOwner")
@@ -67,20 +71,29 @@ model User {
 }
 
 model School {
-  id           String       @id @default(uuid())
-  /// Display code, e.g. SCL-2026-028.
-  code         String       @unique
-  name         String
+  id               String       @id @default(uuid())
+  /// School Code, e.g. JHA-001. Unique; cannot change after registration.
+  code             String       @unique
+  /// Not unique: two schools may share a name.
+  name             String
   /// City.
-  location     String
-  status       SchoolStatus @default(PENDING)
-  description  String?
-  registeredAt DateTime     @default(now())
+  location         String
+  status           SchoolStatus @default(ACTIVE)
+  description      String?
+  /// Required when registering or editing through the API; empty on records created before them.
+  phone            String?
+  address          String?
+  email            String?
+  website          String?
+  /// Set while SUSPENDED (cleared on reactivation); every change is also in the audit log.
+  suspensionReason String?
+  suspendedAt      DateTime?
+  registeredAt     DateTime     @default(now())
   /// One owner per school; an owner owns one school.
-  ownerId      String?      @unique
-  owner        User?        @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
-  createdAt    DateTime     @default(now())
-  updatedAt    DateTime     @updatedAt
+  ownerId          String?      @unique
+  owner            User?        @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   auditEvents AuditEvent[]
 

@@ -7,12 +7,14 @@
  * done: summary shown in the details panel for a successful event.
  */
 export const auditActions = {
-  SCHOOL_REGISTERED: { label: 'Register School', tone: 'success', done: 'School registered successfully.' },
-  SCHOOL_APPROVED: { label: 'Approve School', tone: 'success', done: 'School approval completed successfully.' },
+  SCHOOL_CREATED: { label: 'Register School', tone: 'success', done: 'School registered successfully.' },
   SCHOOL_UPDATED: { label: 'Update School', tone: 'info', done: 'School details updated successfully.' },
-  SCHOOL_SUSPENDED: { label: 'Suspend School', tone: 'error', done: 'School suspension completed successfully.' },
+  SCHOOL_SUSPENDED: { label: 'Suspend School', tone: 'error', done: 'School suspended successfully.' },
+  SCHOOL_REACTIVATED: { label: 'Reactivate School', tone: 'success', done: 'School reactivated successfully.' },
   OWNER_CREATED: { label: 'Create Owner Account', tone: 'success', done: 'Owner account created successfully.' },
   OWNER_UPDATED: { label: 'Update Owner', tone: 'info', done: 'Owner details updated successfully.' },
+  OWNER_SUSPENDED: { label: 'Suspend Owner', tone: 'error', done: 'Owner account suspended successfully.' },
+  OWNER_REACTIVATED: { label: 'Reactivate Owner', tone: 'success', done: 'Owner account reactivated successfully.' },
   SIGN_IN: { label: 'Sign In', tone: 'success', security: true, done: 'Signed in successfully.', failed: 'Sign-in attempt failed.' },
   SIGN_OUT: { label: 'Sign Out', tone: 'info', security: true, done: 'Signed out successfully.' },
   PASSWORD_RESET: { label: 'Reset Password', tone: 'info', security: true, done: 'Password reset completed successfully.' },

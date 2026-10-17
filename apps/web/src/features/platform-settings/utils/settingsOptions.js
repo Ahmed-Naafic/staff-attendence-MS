@@ -64,7 +64,6 @@ export const firstDayOptions = [
 /** Platform Configuration switches, in reference order. */
 export const configurationItems = [
   { key: 'allowSchoolRegistration', label: 'Allow new school registrations', description: 'Allow new schools to register on the platform.' },
-  { key: 'requireSchoolApproval', label: 'Require approval for new schools', description: 'Newly registered schools require approval.' },
   { key: 'allowOwnerCreation', label: 'Enable school owner creation', description: 'Allow creation of school owner accounts.' },
   { key: 'auditLogging', label: 'Enable audit logging', description: 'Log important platform actions.' },
   { key: 'emailNotifications', label: 'Enable email notifications', description: 'Send email notifications for important events.' },

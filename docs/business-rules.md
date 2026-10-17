@@ -80,20 +80,55 @@ CHECK_IN, CHECK_OUT, EXCUSE_SUBMITTED, CORRECTION_REQUESTED.
 - A staff member may get a check-in reminder when they are inside the branch geofence and have not checked in.
 - The reminder is based on actual geofence presence. No repeated notifications until a frequency rule is approved.
 
+## School management (Super Admin)
+
+- **Statuses:** ACTIVE and SUSPENDED only. Lifecycle: register → ACTIVE → SUSPENDED → ACTIVE.
+- **Approval and rejection:** not used. There is no pending or approval step.
+- **Register:** SUPER_ADMIN only. A new school starts ACTIVE.
+  - Required: School name, School code, Phone, Address, City.
+  - Optional: Email, Description, Website.
+- **School code:** required, unique and immutable after registration. The form suggests a code from the name's initials plus the next free number (e.g. Jamhuriya Academy → JA-001), which the admin may change before saving. Format: 3–20 characters, uppercase letters, digits and single hyphens. A code already in use is refused.
+- **School name:** not unique; two schools may share a name.
+- **Edit:** SUPER_ADMIN only. Editable: name, phone, email, address, city, description, website. Not editable: the School code, the id, the registration date and the audit history. Suspended schools can still be edited.
+- **Suspend:** SUPER_ADMIN only, and only an ACTIVE school. Needs confirmation and a reason (3–500 characters). The reason is stored with the school and in the audit log, and no data is deleted.
+- **Reactivate:** SUPER_ADMIN only, and only a SUSPENDED school. Needs confirmation; no reason is required. The stored reason is cleared and kept in the audit log.
+- **Delete:** not available.
+- **Audit:** SCHOOL_CREATED, SCHOOL_UPDATED (the names of the changed fields), SCHOOL_SUSPENDED (with the reason) and SCHOOL_REACTIVATED are recorded only after the change succeeds.
+- **Validation conventions (technical):**
+  - Phone: international format, optional +, 7–15 digits, spaces or hyphens allowed.
+  - Email and website are checked when given; the website must start with http(s)://.
+
+## School owner management (Super Admin)
+
+- **Relationship:** one school ↔ one owner. A school has at most one owner, and an owner belongs to exactly one school. An owner cannot own several schools, and a school cannot have several owner accounts. The database enforces this (unique owner per school).
+- **Statuses:** ACTIVE and SUSPENDED only. Lifecycle: add → ACTIVE → SUSPENDED → ACTIVE. There is no pending, approval or rejection step for owners.
+- **Add Owner:** SUPER_ADMIN only.
+  - Required: Full name, Email, Phone, School, Initial password.
+  - The school must exist and must not already have an owner; an existing owner is never replaced.
+  - The account (role OWNER) is created and assigned to the school in one step: if the assignment fails, no account is created.
+  - Registering a school never creates an owner; adding an owner is a separate action.
+- **Initial password:** set by the Super Admin when adding the owner, at least 12 characters (the technical minimum used for created accounts). Only its hash is stored; it is never shown again, returned by the API, logged or written to the audit log. The Super Admin gives it to the owner outside the app.
+- **Email:** required and unique across all accounts (it is the sign-in identifier); stored lower-case.
+- **Edit Owner:** SUPER_ADMIN only. Editable: full name, email, phone. Not editable: the id, the role, the assigned school, the creation date and the audit history.
+- **Reassignment:** not available through normal owner editing. Changing a school's owner would be a separate workflow that needs its own approval.
+- **Suspend:** SUPER_ADMIN only, and only an ACTIVE owner. Needs confirmation and a reason (3–500 characters), which is stored with the account and in the audit log. The owner cannot sign in, and their existing sessions end at once. The account and the school are kept.
+- **Reactivate:** SUSPENDED owners only; needs confirmation, no reason. The owner can sign in again with their password, but sessions from before the suspension stay ended.
+- **Delete:** not available.
+- **School and owner statuses are separate:** suspending or reactivating a school never changes its owner's status, and suspending or reactivating an owner never changes the school.
+- **Audit:** OWNER_CREATED, OWNER_UPDATED (the names of the changed fields), OWNER_SUSPENDED (with the reason) and OWNER_REACTIVATED are recorded only after the change succeeds.
+- **Validation conventions (technical):** the same phone and email formats as School Management. Full name: 2–120 characters.
+
 ## Schools and owners
 
-- Each school has exactly one owner, and each School Owner account belongs to exactly one school (approved in Phase 9).
-- School statuses (Active, Pending, Suspended) and account statuses (Active, Pending, Suspended) are stored and shown, but nothing changes them yet.
+- Each school has at most one owner, and each School Owner account belongs to exactly one school (approved in Phase 9; see School owner management above). A school may have no owner yet.
 
 ## Not yet decided
 
 Open questions found while building the platform. These are **not rules**: the related actions stay unavailable until they are answered.
 
-- **School registration:** who registers a school (Super Admin, or the owner?), what is required, and whether the owner account is created at the same time.
-- **School approval:** who approves, what is checked, and what "Pending" allows a school or owner to do.
-- **Suspension:** what suspending a school or an owner blocks (sign-in? the school's branches and staff?), who can suspend, and how it is undone.
-- **School and owner edits:** which fields can change, and by whom.
-- **Owner accounts:** how an owner is invited and sets a password (staff use phone OTP; owners are not defined).
+- **Effect of school suspension:** what a suspended school's managers and staff can still do (sign-in, attendance), and what its owner can do in it. Today school suspension only changes the school's status; the owner's account is not affected.
+- **Ownership transfer:** whether and how a school's owner can be replaced (not available).
+- **Owner passwords:** whether owners change their initial password themselves, and how a forgotten owner password is reset (see Account security).
 - **Account security:** password policy, lockout policy, session length, and password reset. Technical defaults are in use (minimum 12 characters for created accounts, 5 failed sign-ins per 15 minutes, 12-hour sessions); they are not approved policy.
 - **Platform settings:** what each setting controls, who may change it, and whether changes are audited (information, localization, and the Platform Configuration switches).
 - **Report definitions:** how a "change versus the previous period" is defined (percentages are not shown until then).

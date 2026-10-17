@@ -7,8 +7,8 @@ const DAY = 24 * 60 * 60 * 1000;
 export const DASHBOARD_RANGES = { '30d': 30, '90d': 90, '12m': 365 };
 
 /**
- * Platform overview for the dashboard. Change percentages are not returned: comparing periods
- * needs an approved definition (and status history, which is not stored).
+ * Platform overview for the dashboard. School statuses are ACTIVE and SUSPENDED only (no approval).
+ * Change percentages are not returned: comparing periods needs an approved definition.
  */
 export async function getDashboard({ range, tz }) {
   const prisma = getPrisma();
@@ -38,7 +38,6 @@ export async function getDashboard({ range, tz }) {
     summary: {
       totalSchools: { value: schoolStatus.total, newInPeriod: figures.newSchools, trend: schoolTotals.slice(-8) },
       activeSchools: { value: schoolStatus.active },
-      pendingSchools: { value: schoolStatus.pending },
       suspendedSchools: { value: schoolStatus.suspended },
       totalOwners: { value: ownerStatus.total, trend: ownerTotals.slice(-8) },
     },

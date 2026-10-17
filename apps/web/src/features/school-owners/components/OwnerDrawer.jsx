@@ -1,15 +1,12 @@
-import { CalendarDays, Landmark, Mail, MapPin, Phone, UserRound } from 'lucide-react';
+import { CalendarDays, Hash, Landmark, LogIn, Mail, MapPin, Phone, UserRound } from 'lucide-react';
 import { Avatar, Button, Drawer, LinkButton } from '../../../components/ui';
 import { formatDate, formatRelative } from '../../../lib/format.js';
+import { SchoolStatusBadge } from '../../schools';
 import { OwnerStatusBadge } from './OwnerStatusBadge.jsx';
 
-export const UNAVAILABLE_REASON = 'Not available yet: waiting for approved business rules.';
-
-// Plain description of each status, without implying rules that are not approved.
 const statusText = {
-  active: 'Account is active.',
-  pending: 'Account is not active yet.',
-  suspended: 'Account is suspended.',
+  active: 'The account is active: the owner can sign in.',
+  suspended: 'The account is suspended: the owner cannot sign in until it is reactivated.',
 };
 
 function Section({ id, title, action, children }) {
@@ -37,11 +34,13 @@ function Detail({ icon: Icon, label, children }) {
 }
 
 /**
- * School owner details side panel (Overview). Access and activity views belong to later
- * phases; management actions are shown but unavailable. "View school" opens the school.
+ * School owner details side panel (Overview). Super Admins edit the owner and suspend or
+ * reactivate the account from here (the actions open their own dialogs). The assigned school is
+ * shown but cannot be changed; "View School" opens it.
  */
-export function OwnerDrawer({ owner, open, onClose }) {
+export function OwnerDrawer({ owner, open, onClose, onEdit, onSuspend, onReactivate }) {
   if (!owner) return <Drawer open={false} onClose={onClose} title="" />;
+  const suspended = owner.status === 'suspended';
 
   return (
     <Drawer
@@ -67,18 +66,19 @@ export function OwnerDrawer({ owner, open, onClose }) {
         </div>
       }
       footer={
-        <div className="flex w-full flex-col gap-3">
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="outline" unavailableReason={UNAVAILABLE_REASON}>
-              Edit Owner
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="outline" onClick={() => onEdit(owner)}>
+            Edit Owner
+          </Button>
+          {suspended ? (
+            <Button variant="secondary" onClick={() => onReactivate(owner)}>
+              Reactivate Owner
             </Button>
-            {owner.status === 'active' && (
-              <Button variant="danger" unavailableReason={UNAVAILABLE_REASON}>
-                Suspend Owner
-              </Button>
-            )}
-          </div>
-          <p className="text-right text-caption text-fg-muted">Editing and suspension open once their rules are approved.</p>
+          ) : (
+            <Button variant="danger" onClick={() => onSuspend(owner)}>
+              Suspend Owner
+            </Button>
+          )}
         </div>
       }
     >
@@ -87,7 +87,7 @@ export function OwnerDrawer({ owner, open, onClose }) {
           id="owner-personal"
           title="Personal Information"
           action={
-            <Button variant="outline" size="sm" unavailableReason={UNAVAILABLE_REASON} aria-label="Edit personal information">
+            <Button variant="outline" size="sm" onClick={() => onEdit(owner)} aria-label="Edit personal information">
               Edit
             </Button>
           }
@@ -100,7 +100,7 @@ export function OwnerDrawer({ owner, open, onClose }) {
               {owner.email}
             </Detail>
             <Detail icon={Phone} label="Phone">
-              <span className="tabular-nums">{owner.phone}</span>
+              {owner.phone ? <span className="tabular-nums">{owner.phone}</span> : <span className="text-fg-muted">Not provided</span>}
             </Detail>
           </dl>
         </Section>
@@ -121,11 +121,14 @@ export function OwnerDrawer({ owner, open, onClose }) {
               <Detail icon={Landmark} label="School name">
                 {owner.school.name}
               </Detail>
+              <Detail icon={Hash} label="School code">
+                {owner.school.code}
+              </Detail>
               <Detail icon={MapPin} label="Location">
                 {owner.school.location}, Somalia
               </Detail>
-              <Detail icon={CalendarDays} label="Registered">
-                <time dateTime={owner.school.registeredAt}>{formatDate(owner.school.registeredAt)}</time>
+              <Detail icon={Landmark} label="School status">
+                <SchoolStatusBadge status={owner.school.status} />
               </Detail>
             </dl>
           ) : (
@@ -135,6 +138,27 @@ export function OwnerDrawer({ owner, open, onClose }) {
 
         <Section id="owner-status" title="Account Status" action={<OwnerStatusBadge status={owner.status} />}>
           <p className="text-small text-fg-secondary">{statusText[owner.status] ?? ''}</p>
+          {suspended && (
+            <div className="rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-small text-warning-fg">
+              <p className="font-semibold">This owner is suspended</p>
+              <p>
+                {owner.suspendedAt && (
+                  <>
+                    Since <time dateTime={owner.suspendedAt}>{formatDate(owner.suspendedAt)}</time>.{' '}
+                  </>
+                )}
+                Reason: {owner.suspensionReason}
+              </p>
+            </div>
+          )}
+          <dl className="flex flex-col gap-3">
+            <Detail icon={CalendarDays} label="Account created">
+              <time dateTime={owner.registeredAt}>{formatDate(owner.registeredAt)}</time>
+            </Detail>
+            <Detail icon={LogIn} label="Last sign-in">
+              {owner.lastSignInAt ? <time dateTime={owner.lastSignInAt}>{formatDate(owner.lastSignInAt)}</time> : 'Not signed in yet'}
+            </Detail>
+          </dl>
         </Section>
       </div>
     </Drawer>

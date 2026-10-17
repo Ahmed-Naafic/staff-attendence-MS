@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router';
-import { CircleOff, Eye, Landmark, Pencil, SearchX, Users } from 'lucide-react';
+import { CircleCheck, CircleOff, Eye, Landmark, Pencil, SearchX, Users } from 'lucide-react';
 import {
   Button,
   Card,
@@ -22,10 +22,10 @@ import { OwnerStatusBadge } from './OwnerStatusBadge.jsx';
 const COLUMNS = 9;
 
 /**
- * School owners table with View/Review (opens the details panel), a ⋮ menu and pagination.
- * Management actions are shown but unavailable until their business rules are approved.
+ * School owners table with View (opens the details panel), a ⋮ menu (details, school, edit,
+ * suspend or reactivate) and pagination.
  */
-export function OwnersTable({ rows, total, page, offset, onPageChange, selectedId, search, isFiltered, onReset }) {
+export function OwnersTable({ rows, total, page, offset, onPageChange, selectedId, search, isFiltered, onReset, onEdit, onSuspend, onReactivate }) {
   const navigate = useNavigate();
   const detailsLink = (id) => ({ pathname: `/school-owners/${id}`, search });
 
@@ -66,11 +66,11 @@ export function OwnersTable({ rows, total, page, offset, onPageChange, selectedI
                   columns={COLUMNS}
                   icon={Users}
                   title="No school owners yet"
-                  description="School owners will appear here once their accounts exist."
+                  description="Add a school owner to give a school its owner account."
                 />
               ))}
             {rows.map((owner, index) => {
-              const isPending = owner.status === 'pending';
+              const suspended = owner.status === 'suspended';
               return (
                 <TableRow key={owner.id} selected={owner.id === selectedId}>
                   <TableCell className="text-fg-muted tabular-nums">{offset + index + 1}</TableCell>
@@ -91,10 +91,10 @@ export function OwnersTable({ rows, total, page, offset, onPageChange, selectedI
                         to={detailsLink(owner.id)}
                         size="sm"
                         variant="outline"
-                        aria-label={`${isPending ? 'Review' : 'View'} ${owner.name}`}
+                        aria-label={`View ${owner.name}`}
                         className="min-w-[4.5rem]"
                       >
-                        {isPending ? 'Review' : 'View'}
+                        View
                       </LinkButton>
                       <DropdownMenu
                         label={`More actions for ${owner.name}`}
@@ -103,12 +103,11 @@ export function OwnersTable({ rows, total, page, offset, onPageChange, selectedI
                           ...(owner.school
                             ? [{ label: 'View school', icon: Landmark, onSelect: () => navigate(`/schools/${owner.school.id}`) }]
                             : []),
+                          { label: 'Edit owner', icon: Pencil, onSelect: () => onEdit(owner) },
                           { type: 'separator' },
-                          { type: 'label', label: 'Not available yet' },
-                          { label: 'Edit owner', icon: Pencil, disabled: true },
-                          ...(owner.status === 'active'
-                            ? [{ label: 'Suspend owner', icon: CircleOff, disabled: true, destructive: true }]
-                            : []),
+                          suspended
+                            ? { label: 'Reactivate owner', icon: CircleCheck, onSelect: () => onReactivate(owner) }
+                            : { label: 'Suspend owner', icon: CircleOff, destructive: true, onSelect: () => onSuspend(owner) },
                         ]}
                       />
                     </TableActions>

@@ -3,12 +3,14 @@ import {
   ChartColumn,
   CircleCheck,
   CircleOff,
-  Clock,
   MapPin,
   PenLine,
   Plus,
   SquarePlus,
+  UserRoundCheck,
+  UserRoundPen,
   UserRoundPlus,
+  UserRoundX,
   Users,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, EmptyState, LinkButton } from '../../../components/ui';
@@ -18,9 +20,12 @@ import { ViewAllLink } from './ViewAllLink.jsx';
 
 // Presentation for platform activity types (the events come from audit data later).
 const activityTypes = {
-  SCHOOL_REGISTERED: { label: 'New school registration', icon: SquarePlus, tile: 'bg-success-soft text-success-fg' },
-  SCHOOL_APPROVED: { label: 'School approved', icon: CircleCheck, tile: 'bg-success-soft text-success-fg' },
+  SCHOOL_CREATED: { label: 'School registered', icon: SquarePlus, tile: 'bg-success-soft text-success-fg' },
+  SCHOOL_REACTIVATED: { label: 'School reactivated', icon: CircleCheck, tile: 'bg-success-soft text-success-fg' },
   OWNER_CREATED: { label: 'Owner account created', icon: UserRoundPlus, tile: 'bg-warning-soft text-warning-fg' },
+  OWNER_UPDATED: { label: 'Owner details updated', icon: UserRoundPen, tile: 'bg-info-soft text-info-fg' },
+  OWNER_SUSPENDED: { label: 'Owner suspended', icon: UserRoundX, tile: 'bg-error-soft text-error-fg' },
+  OWNER_REACTIVATED: { label: 'Owner reactivated', icon: UserRoundCheck, tile: 'bg-success-soft text-success-fg' },
   SCHOOL_SUSPENDED: { label: 'School suspended', icon: CircleOff, tile: 'bg-error-soft text-error-fg' },
   SCHOOL_UPDATED: { label: 'School profile updated', icon: PenLine, tile: 'bg-info-soft text-info-fg' },
 };
@@ -67,7 +72,6 @@ export function RecentActivityCard({ activity }) {
 export function QuickActionsCard() {
   const actions = [
     { to: '/schools', label: 'Register New School', icon: Plus, variant: 'primary' },
-    { to: '/schools', label: 'View Pending Schools', icon: Clock },
     { to: '/school-owners', label: 'Manage School Owners', icon: Users },
     { to: '/platform-reports', label: 'View Platform Reports', icon: ChartColumn },
   ];
