@@ -955,3 +955,30 @@ Scope: Platform Reports only (School Summary, Owner Summary, Schools by City, Sc
 ### Status
 
 Platform Reports is implemented and tested on the dev branch. No migration needed.
+
+## Audit Logging review
+
+Scope: review of audit logging against the approved rules (School and School Owner Management events, Super Admin Audit Logs). No feature or rule changes.
+
+### Confirmed (no code change needed)
+
+- All eight approved events (`SCHOOL_CREATED`, `SCHOOL_UPDATED`, `SCHOOL_SUSPENDED`, `SCHOOL_REACTIVATED`, `OWNER_CREATED`, `OWNER_UPDATED`, `OWNER_SUSPENDED`, `OWNER_REACTIVATED`) are written in the same transaction as the change, after it succeeds. Failed requests (400, 404, 409) record nothing, and a failed audit write rolls the change back (500, never a success without its event).
+- The actor is `req.user` from the server-side session; request bodies with unknown fields (such as `actorId`) are refused. Actor name and role, and target name, are copied at the time of the event. `occurredAt` is set by the database.
+- Updates record the names of the changed fields only (approved rule); status changes record `{ field, from, to }`; suspensions include the reason. No passwords, hashes, session tokens or cookies are stored. The API returns browser and device instead of the raw user agent.
+- `/api/platform/audit-logs` and `/:id` are GET only (SUPER_ADMIN; 401 / 403 otherwise); there is no create, update or delete route. Viewing reports and audit logs records nothing. The web app loads events only from the API (but see Cleanup: the dev seed added fictional events).
+
+### Tests
+
+New `backend/test/audit.test.js` (14) for what the existing tests did not cover: the full event record for all eight actions (actor, target, school, change, server timestamp), actor fields in the request refused, failed requests across both features record nothing, rollback when the audit write fails (register school; suspend owner: status and sessions unchanged), no write methods on the audit API, read access per role, and no credentials or raw user agents in stored events or responses.
+
+### Cleanup (approved after the review)
+
+- **Seeded audit history removed.** The dev seed (`seed-dev.js`) created fictional audit events from `mockAuditLogs.js`, and the dev Audit Logs page showed them as recorded events. The seed now creates no audit events, and `mockAuditLogs.js` is deleted (its event-shape notes moved to `loadAuditLogs.js`). Correction to the review above: the file was used, by the seed, though not by the web app.
+- **Unrecorded action types removed:** `PASSWORD_RESET` and `SETTINGS_UPDATED` are gone from the action filter, the API's accepted filter values, the security-event list and the labels (backend and web). The dev branch's 6 seeded events of these types were deleted (dev only); the other seeded events from earlier seeding remain. Production was not touched.
+- Test added: the action filter refuses these types (400).
+
+### Open points (not changed)
+
+- Sign-in and sign-out events are written after the session change, outside a transaction (authentication behavior, out of scope). If that audit write fails, sign-in returns 500 without a cookie, and sign-out has already ended the session but returns 500.
+- The audit API returns the IP address of each event (shown in the details panel, as designed in Phase 7).
+- The dev branch still holds the other audit events seeded earlier (sample sign-ins, registrations and owner changes). They can be removed on request.

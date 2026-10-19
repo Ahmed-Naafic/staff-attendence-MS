@@ -154,7 +154,7 @@ Platform endpoints are read-only except School Management (register, edit, suspe
 ## Databases and branches
 
 - Neon branch **production**: `backend/.env`, `npm start`; migrations only with `npm run prisma:deploy` (never `migrate dev`). Holds no sample data.
-- Neon branch **dev**: `backend/.env.dev`; `npm run dev`, `npm test`, `npm run prisma:migrate` (`migrate dev`), `npm run seed:dev` (fictional sample schools, owners, audit history, settings and a dev Super Admin; refuses to run on any other branch and never deletes data).
+- Neon branch **dev**: `backend/.env.dev`; `npm run dev`, `npm test`, `npm run prisma:migrate` (`migrate dev`), `npm run seed:dev` (fictional sample schools, owners, settings and a dev Super Admin — no audit events, so the audit log only holds recorded actions; refuses to run on any other branch and never deletes data).
 
 ## Database
 

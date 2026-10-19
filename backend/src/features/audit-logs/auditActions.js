@@ -15,7 +15,7 @@ export const AUDIT_ACTIONS = {
   OWNER_REACTIVATED: 'OWNER_REACTIVATED',
 };
 
-/** Actions the audit filter accepts (the web app also lists types that have no events yet). */
+/** Actions the audit filter accepts: the recorded actions only. */
 export const FILTERABLE_ACTIONS = [
   'SCHOOL_CREATED',
   'SCHOOL_UPDATED',
@@ -27,12 +27,10 @@ export const FILTERABLE_ACTIONS = [
   'OWNER_REACTIVATED',
   'SIGN_IN',
   'SIGN_OUT',
-  'PASSWORD_RESET',
-  'SETTINGS_UPDATED',
 ];
 
-/** Sign-ins, sign-outs and password changes count as security events. */
-export const SECURITY_ACTIONS = ['SIGN_IN', 'SIGN_OUT', 'PASSWORD_RESET'];
+/** Sign-ins and sign-outs count as security events. */
+export const SECURITY_ACTIONS = ['SIGN_IN', 'SIGN_OUT'];
 
 /** Display names (as in the web app), so search can match an action by its name. */
 export const ACTION_LABELS = {
@@ -46,8 +44,6 @@ export const ACTION_LABELS = {
   OWNER_REACTIVATED: 'Reactivate Owner',
   SIGN_IN: 'Sign In',
   SIGN_OUT: 'Sign Out',
-  PASSWORD_RESET: 'Reset Password',
-  SETTINGS_UPDATED: 'Update Platform Settings',
 };
 
 export const ROLE_LABELS = { SUPER_ADMIN: 'Super Admin', OWNER: 'School Owner', MANAGER: 'Manager', STAFF: 'Staff' };

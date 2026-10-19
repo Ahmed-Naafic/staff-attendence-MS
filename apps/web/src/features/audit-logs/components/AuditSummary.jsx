@@ -3,7 +3,7 @@ import { KpiCard } from '../../../components/ui';
 /**
  * Six key figures for the whole log (not affected by search or filters), counted by the server.
  * No change percentages: each card states what it counts instead.
- * Admin / Owner Actions exclude sign-ins, sign-outs and password changes (Security Events).
+ * Admin / Owner Actions exclude sign-ins and sign-outs (Security Events).
  */
 export function AuditSummary({ summary: s }) {
   const cards = [

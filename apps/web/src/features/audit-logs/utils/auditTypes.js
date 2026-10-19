@@ -1,9 +1,9 @@
 // Display mapping for audit events: action names, roles, results and target types.
-// Display only: the events describe history and do not imply the workflows behind them exist yet.
+// Only actions the platform records are listed (they are also the action filter's choices).
 
 /**
  * tone: color of the action name (the name itself carries the meaning).
- * security: counted as a security event (sign-ins and password changes).
+ * security: counted as a security event (sign-ins and sign-outs).
  * done: summary shown in the details panel for a successful event.
  */
 export const auditActions = {
@@ -17,8 +17,6 @@ export const auditActions = {
   OWNER_REACTIVATED: { label: 'Reactivate Owner', tone: 'success', done: 'Owner account reactivated successfully.' },
   SIGN_IN: { label: 'Sign In', tone: 'success', security: true, done: 'Signed in successfully.', failed: 'Sign-in attempt failed.' },
   SIGN_OUT: { label: 'Sign Out', tone: 'info', security: true, done: 'Signed out successfully.' },
-  PASSWORD_RESET: { label: 'Reset Password', tone: 'info', security: true, done: 'Password reset completed successfully.' },
-  SETTINGS_UPDATED: { label: 'Update Platform Settings', tone: 'info', done: 'Platform settings updated successfully.' },
 };
 
 export const actionOf = (code) => auditActions[code] ?? { label: code, tone: 'info', done: 'Action completed.' };

@@ -18,7 +18,16 @@ const iso = (ms) => (ms === null || ms === undefined ? undefined : new Date(ms).
 /**
  * One page of audit events from the API (GET /api/platform/audit-logs), newest first, with the
  * summary figures and the filter choices (users, schools). Date ranges are worked out in the
- * viewer's local time and sent as exact instants. Event shape: see mockAuditLogs.js.
+ * viewer's local time and sent as exact instants.
+ *
+ * Event (newest first):
+ *   id, occurredAt, action, result: 'success' | 'failure',
+ *   actor:  { id, name, role },
+ *   target: { type: 'school' | 'owner' | 'system', id | null, name, code?, location?, schoolName? },
+ *   school: { id, name } | null,     the school the event belongs to (for filtering)
+ *   description,
+ *   change: { field, from, to } | null,  for status changes
+ *   context: { ipAddress, browser, device }
  */
 export async function loadAuditLogs(filters, page, pageSize) {
   // Development only (removed from production builds): preview page states with ?demoState=loading | error | empty
