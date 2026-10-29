@@ -16,7 +16,7 @@ export const UNAVAILABLE = {
   operations: 'Not available yet: platform operations are not implemented.',
 };
 
-/** Settings sections from the reference. Only General has approved content so far. */
+/** Settings sections from the reference. General, Branding, Authentication and Registration (read only) have approved content so far. */
 export const settingsTabs = [
   { value: 'general', label: 'General', icon: Settings },
   { value: 'branding', label: 'Branding', icon: Palette },
@@ -28,25 +28,44 @@ export const settingsTabs = [
   { value: 'data-backup', label: 'Data & Backup', icon: DatabaseBackup },
 ];
 
-export const timezoneOptions = [
-  { value: 'Africa/Mogadishu', label: '(GMT+03:00) Mogadishu, Nairobi, Addis Ababa' },
-  { value: 'UTC', label: '(GMT+00:00) Coordinated Universal Time (UTC)' },
-];
+const offsetName = (timeZone, now) => {
+  try {
+    return new Intl.DateTimeFormat('en', { timeZone, timeZoneName: 'longOffset' }).formatToParts(now).find((p) => p.type === 'timeZoneName')?.value ?? '';
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Time zone choices: IANA identifiers known to this browser (the server checks against its own
+ * list), UTC first, each labelled with its current offset. The identifier is stored, never the offset.
+ */
+export function timezoneOptions(now = new Date()) {
+  let zones = [];
+  try {
+    zones = Intl.supportedValuesOf('timeZone');
+  } catch {
+    zones = ['Africa/Mogadishu'];
+  }
+  return ['UTC', ...zones.filter((z) => z !== 'UTC')].map((value) => {
+    const offset = offsetName(value, now);
+    return { value, label: offset && offset !== 'GMT' ? `${value} (${offset})` : `${value} (GMT+00:00)` };
+  });
+}
 
 export const languageOptions = [{ value: 'en', label: 'English' }];
 
 const pad = (n) => String(n).padStart(2, '0');
-const monthShort = new Intl.DateTimeFormat('en', { month: 'short' });
 
-/** Date formats, each labelled with today's date in that format. */
+/** The approved date formats, each labelled with today's date in that format. */
 export function dateFormatOptions(now = new Date()) {
   const d = pad(now.getDate());
   const m = pad(now.getMonth() + 1);
   const y = now.getFullYear();
   return [
-    { value: 'MMM DD, YYYY', label: `${monthShort.format(now)} ${d}, ${y} (MMM DD, YYYY)` },
-    { value: 'DD/MM/YYYY', label: `${d}/${m}/${y} (DD/MM/YYYY)` },
     { value: 'YYYY-MM-DD', label: `${y}-${m}-${d} (YYYY-MM-DD)` },
+    { value: 'DD/MM/YYYY', label: `${d}/${m}/${y} (DD/MM/YYYY)` },
+    { value: 'MM/DD/YYYY', label: `${m}/${d}/${y} (MM/DD/YYYY)` },
   ];
 }
 
@@ -56,9 +75,8 @@ export const timeFormatOptions = [
 ];
 
 export const firstDayOptions = [
-  { value: 'saturday', label: 'Saturday' },
-  { value: 'sunday', label: 'Sunday' },
   { value: 'monday', label: 'Monday' },
+  { value: 'sunday', label: 'Sunday' },
 ];
 
 /** Platform Configuration switches, in reference order. */

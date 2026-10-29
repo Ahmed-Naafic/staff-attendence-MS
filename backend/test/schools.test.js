@@ -11,6 +11,7 @@ import app from '../src/app.js';
 import { getPrisma } from '../src/config/prisma.js';
 import { hashPassword } from '../src/features/auth/password.js';
 import { resetLimiter } from '../src/features/auth/rateLimit.js';
+import { branchFor, removeTestBranches } from './support/testBranch.js';
 
 if (process.env.EDUTRACK_DB_BRANCH !== 'dev') throw new Error('School tests only run against the Neon dev branch (npm test).');
 
@@ -59,7 +60,7 @@ before(async () => {
   for (const role of ['SUPER_ADMIN', 'OWNER', 'MANAGER', 'STAFF']) {
     const password = randomBytes(12).toString('base64url');
     const email = `test-sm-${role.toLowerCase()}-${tag.toLowerCase()}@test.edutrack.example`;
-    const user = await prisma.user.create({ data: { name: `Test ${role} ${tag}`, email, role, passwordHash: await hashPassword(password) } });
+    const user = await prisma.user.create({ data: { name: `Test ${role} ${tag}`, email, role, ...(await branchFor(role)), passwordHash: await hashPassword(password) } });
     accounts[role] = { id: user.id };
     const response = await fetch(`${base}/api/auth/login`, {
       method: 'POST',
@@ -76,8 +77,10 @@ after(async () => {
   const schoolIds = schools.map((s) => s.id);
   const userIds = Object.values(accounts).map((a) => a.id);
   await prisma.auditEvent.deleteMany({ where: { OR: [{ schoolId: { in: schoolIds } }, { actorId: { in: userIds } }] } });
+  await prisma.suspensionPeriod.deleteMany({ where: { OR: [{ schoolId: { in: schoolIds } }] } });
   await prisma.school.deleteMany({ where: { id: { in: schoolIds } } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+  await removeTestBranches();
   server.close();
   await prisma.$disconnect();
 });

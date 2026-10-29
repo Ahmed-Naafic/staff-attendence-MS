@@ -17,7 +17,8 @@
     "prisma:generate": "npm run prisma:generate --workspace backend",
     "prisma:migrate": "npm run prisma:migrate:dev-branch --workspace backend",
     "prisma:deploy": "npm run prisma:deploy --workspace backend",
-    "test:api": "npm run test --workspace backend"
+    "test:api": "npm run test --workspace backend",
+    "test:web": "npm run test --workspace apps/web"
   },
   "engines": {
     "node": ">=20.19"

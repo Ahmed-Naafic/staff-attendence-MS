@@ -89,7 +89,8 @@ function SidebarContent({ brand, roleLabel, sections, footer, collapsed = false,
         </span>
         {!collapsed && (
           <div className="flex min-w-0 flex-col items-start">
-            <span className="text-section-title text-sidebar-fg-strong">{brand.name}</span>
+            {/* Long names wrap (even a single long word) instead of widening the sidebar. */}
+            <span className="max-w-full text-section-title text-sidebar-fg-strong wrap-anywhere">{brand.name}</span>
             {brand.subtitle && <span className="text-caption text-sidebar-fg-muted">{brand.subtitle}</span>}
             {roleLabel && (
               <span className="mt-1.5 rounded-sm border border-accent/60 px-1.5 py-px text-caption font-medium text-sidebar-active-fg">

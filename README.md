@@ -3,7 +3,7 @@
 A multi-school staff attendance platform: School → Branch → Staff.
 
 - `apps/web` — web app for Super Admin, Owner and Manager (React, Vite, Tailwind CSS, React Router)
-- `apps/mobile` — mobile app for Staff and Manager (React Native, RxDB) — later phase
+- `apps/mobile` — Staff mobile app (Expo SDK 58, React Native, expo-sqlite offline queue); its own package — see `apps/mobile/README.md` for running it on an Android phone
 - `backend` — API (Node.js, Express, Prisma)
 - `prisma` — database schema (Neon PostgreSQL)
 - `docs` — architecture, business rules and design

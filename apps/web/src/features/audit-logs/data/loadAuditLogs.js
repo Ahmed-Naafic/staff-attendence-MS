@@ -1,4 +1,5 @@
 import { apiRequest, previewDelay, previewState } from '../../../lib/api.js';
+import { platformDayStart } from '../../../lib/format.js';
 import { dateBounds } from '../utils/filterAuditLogs.js';
 
 const EMPTY = {
@@ -17,8 +18,8 @@ const iso = (ms) => (ms === null || ms === undefined ? undefined : new Date(ms).
 
 /**
  * One page of audit events from the API (GET /api/platform/audit-logs), newest first, with the
- * summary figures and the filter choices (users, schools). Date ranges are worked out in the
- * viewer's local time and sent as exact instants.
+ * summary figures and the filter choices (users, schools). Date ranges and "today" are worked out
+ * in the platform time zone and sent as exact instants.
  *
  * Event (newest first):
  *   id, occurredAt, action, result: 'success' | 'failure',
@@ -26,7 +27,7 @@ const iso = (ms) => (ms === null || ms === undefined ? undefined : new Date(ms).
  *   target: { type: 'school' | 'owner' | 'system', id | null, name, code?, location?, schoolName? },
  *   school: { id, name } | null,     the school the event belongs to (for filtering)
  *   description,
- *   change: { field, from, to } | null,  for status changes
+ *   change: { field, from, to } | { fields: [{ field, from, to }] } | null,  status or settings changes
  *   context: { ipAddress, browser, device }
  */
 export async function loadAuditLogs(filters, page, pageSize) {
@@ -40,8 +41,6 @@ export async function loadAuditLogs(filters, page, pageSize) {
   }
 
   const { since, until, invalid } = dateBounds(filters);
-  const midnight = new Date();
-  midnight.setHours(0, 0, 0, 0);
   return apiRequest('/platform/audit-logs', {
     query: {
       q: filters.query,
@@ -51,7 +50,7 @@ export async function loadAuditLogs(filters, page, pageSize) {
       status: filters.status,
       since: invalid ? undefined : iso(since),
       until: invalid ? undefined : iso(until),
-      dayStart: midnight.toISOString(),
+      dayStart: new Date(platformDayStart()).toISOString(),
       page,
       pageSize,
     },

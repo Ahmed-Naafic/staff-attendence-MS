@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { onUnauthorized } from '../../lib/api.js';
-import { fetchSession, signIn as apiSignIn, signOut as apiSignOut } from './authApi.js';
+import { changePassword as apiChangePassword, fetchSession, signIn as apiSignIn, signOut as apiSignOut } from './authApi.js';
 
 // Single source of "who is signed in" for the web app: the API session (an httpOnly cookie the
 // browser sends with every /api request). The browser never sees the session token itself.
@@ -48,16 +48,23 @@ export function SessionProvider({ children }) {
     }
   }, []);
 
+  // Replaces a temporary password; the signed-in user no longer has to change it.
+  const changePassword = useCallback(async (currentPassword, newPassword) => {
+    const user = await apiChangePassword(currentPassword, newPassword);
+    setState({ status: 'signed-in', user, ended: false });
+    return user;
+  }, []);
+
   const retry = useCallback(() => {
     setState({ status: 'checking', user: null, ended: false });
     setAttempt((n) => n + 1);
   }, []);
 
-  const value = useMemo(() => ({ ...state, signIn, signOut, retry }), [state, signIn, signOut, retry]);
+  const value = useMemo(() => ({ ...state, signIn, signOut, changePassword, retry }), [state, signIn, signOut, changePassword, retry]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
-/** { status, user: { id, name, role } | null, ended, signIn, signOut, retry }. */
+/** { status, user: { id, name, role, mustChangePassword } | null, ended, signIn, signOut, changePassword, retry }. */
 export function useSession() {
   const session = useContext(SessionContext);
   if (!session) throw new Error('useSession must be used inside <SessionProvider>.');

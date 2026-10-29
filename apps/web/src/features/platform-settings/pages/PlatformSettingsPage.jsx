@@ -1,7 +1,12 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { PageContainer, PageHeader } from '../../../components/layout';
-import { Badge, Card, EmptyState, ErrorState, TabPanel, Tabs } from '../../../components/ui';
+import { useDisplaySettings } from '../../../app/providers/DisplaySettingsProvider.jsx';
+import { Alert, Badge, Card, EmptyState, ErrorState, TabPanel, Tabs } from '../../../components/ui';
+import { useBranding } from '../../branding';
+import { InactivityTimeoutCard, SessionLifetimeCard, SignInSecurityCard } from '../components/AuthenticationCards.jsx';
+import { BrandingCard } from '../components/BrandingCard.jsx';
 import { GeneralLayout } from '../components/GeneralLayout.jsx';
+import { RegistrationCard } from '../components/RegistrationCard.jsx';
 import { SaveBar } from '../components/SaveBar.jsx';
 import { ConfigurationCard, LocalizationCard, PlatformInfoCard, PlatformLogoCard } from '../components/SettingsCards.jsx';
 import { SettingsSkeleton } from '../components/SettingsSkeleton.jsx';
@@ -11,18 +16,60 @@ import { useSettingsForm } from '../hooks/useSettingsForm.js';
 import { useSettingsTab } from '../hooks/useSettingsTab.js';
 import { settingsTabs } from '../utils/settingsOptions.js';
 
+// Field names for the saved-value warning.
+const FIELD_LABELS = {
+  description: 'Platform description',
+  supportEmail: 'Support email',
+  supportPhone: 'Support phone',
+  websiteUrl: 'Website URL',
+  timezone: 'Default timezone',
+  language: 'Default language',
+  dateFormat: 'Date format',
+  timeFormat: 'Time format',
+  firstDayOfWeek: 'First day of week',
+};
+
 /**
- * Super Admin Platform Settings. Only the General section has approved content: platform
- * information and localization can be edited in the page (nothing is saved yet); platform
- * switches, uploads, operations and dangerous actions are shown but unavailable.
- * The active section lives in the URL (?tab=).
+ * Super Admin Platform Settings. General saves platform information and localization (the
+ * platform name is shown read-only and changed in Branding); Branding saves the platform name;
+ * Authentication saves the absolute session lifetime and the inactivity timeout and shows the
+ * other sign-in protection the server enforces (read only). Registration shows how schools and
+ * accounts are created (read only; there is no public registration). On General, the platform
+ * switches, uploads, operations and dangerous actions are shown but unavailable. The other
+ * sections are not available yet. The active section lives in the URL (?tab=).
  */
 export default function PlatformSettingsPage() {
   const tabsId = useId();
   const { tab, setTab } = useSettingsTab();
   const { status, data, retry } = usePlatformSettings();
-  const form = useSettingsForm(data?.settings);
+  const { applyDisplaySettings } = useDisplaySettings();
+
+  // The latest saved General settings: loaded with the settings, replaced when General is saved.
+  const [general, setGeneral] = useState(null);
+  useEffect(() => {
+    if (!data) return setGeneral(null);
+    const { information, localization, conflicts, display } = data.settings;
+    setGeneral({ information, localization, conflicts: conflicts ?? {}, display });
+  }, [data]);
+  const form = useSettingsForm(general, (saved) => {
+    setGeneral(saved);
+    applyDisplaySettings(saved.display);
+  });
+  const conflictFields = general ? Object.keys(general.conflicts).map((key) => FIELD_LABELS[key] ?? key) : [];
   const current = settingsTabs.find((t) => t.value === tab);
+  const { setPlatformName } = useBranding();
+
+  // The stored platform name ('' when not set): loaded with the settings, replaced when Branding saves.
+  const [platformName, setSavedName] = useState('');
+  useEffect(() => setSavedName(data?.settings.information.platformName ?? ''), [data]);
+  const onBrandingSaved = (name) => {
+    setSavedName(name);
+    setPlatformName(name);
+  };
+
+  // Authentication Settings as enforced by the server: loaded with the settings, replaced when saved.
+  const [authentication, setAuthentication] = useState(null);
+  useEffect(() => setAuthentication(data?.settings.authentication ?? null), [data]);
 
   // On narrow screens the tab strip scrolls: keep the selected section's tab in view (e.g. after a deep link).
   const tabsRef = useRef(null);
@@ -36,6 +83,14 @@ export default function PlatformSettingsPage() {
     return () => {
       active = false;
     };
+  }, [tab]);
+
+  // "Change in Branding" leaves with the General section: once Branding is selected, continue from its tab.
+  const focusTabOnChange = useRef(false);
+  useEffect(() => {
+    if (!focusTabOnChange.current) return;
+    focusTabOnChange.current = false;
+    tabsRef.current?.querySelector('[role=tab][aria-selected=true]')?.focus();
   }, [tab]);
 
   return (
@@ -69,27 +124,79 @@ export default function PlatformSettingsPage() {
 
         {status === 'loading' && !data && <SettingsSkeleton />}
 
-        {data && form.draft && status !== 'error' && tab === 'general' && (
+        {data && general && form.draft && status !== 'error' && tab === 'general' && (
           <>
-            <GeneralLayout
-              main={[
-                <PlatformInfoCard key="information" values={form.draft.information} onChange={form.setField} />,
-                <PlatformLogoCard key="logo" />,
-                <LocalizationCard key="localization" values={form.draft.localization} onChange={form.setField} />,
-                <ConfigurationCard key="configuration" values={data.settings.configuration} />,
-              ]}
-              rail={[
-                <PlatformStatusCard key="status" />,
-                <SystemInfoCard key="system" system={data.system} />,
-                <QuickActionsCard key="actions" />,
-                <DangerZoneCard key="danger" />,
-              ]}
-            />
-            <SaveBar isDirty={form.isDirty} changedCount={form.changedCount} notice={form.notice} onDiscard={form.discard} />
+            {conflictFields.length > 0 && (
+              <Alert variant="warning" title="Some saved values do not meet the current rules">
+                {conflictFields.join(', ')}. They are kept as saved until you change them; each field explains what is needed.
+              </Alert>
+            )}
+            <form
+              id="general-settings"
+              noValidate
+              onSubmit={(event) => {
+                event.preventDefault();
+                form.save();
+              }}
+            >
+              <GeneralLayout
+                main={[
+                  <PlatformInfoCard
+                    key="information"
+                    values={form.draft}
+                    errors={form.errors}
+                    conflicts={general.conflicts}
+                    onChange={form.setField}
+                    disabled={form.saving}
+                    platformName={platformName}
+                    onEditName={() => {
+                      focusTabOnChange.current = true;
+                      setTab('branding');
+                    }}
+                  />,
+                  <PlatformLogoCard key="logo" />,
+                  <LocalizationCard
+                    key="localization"
+                    values={form.draft}
+                    savedValues={general.localization}
+                    errors={form.errors}
+                    conflicts={general.conflicts}
+                    onChange={form.setField}
+                    disabled={form.saving}
+                  />,
+                  <ConfigurationCard key="configuration" values={data.settings.configuration} />,
+                ]}
+                rail={[
+                  <PlatformStatusCard key="status" />,
+                  <SystemInfoCard key="system" system={data.system} />,
+                  <QuickActionsCard key="actions" />,
+                  <DangerZoneCard key="danger" />,
+                ]}
+              />
+            </form>
+            <SaveBar form={form} />
           </>
         )}
 
-        {data && status !== 'error' && tab !== 'general' && (
+        {data && status !== 'error' && tab === 'branding' && <BrandingCard savedName={platformName} onSaved={onBrandingSaved} />}
+
+        {data && status !== 'error' && tab === 'authentication' && authentication && (
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+            <div className="flex flex-col gap-6">
+              <SessionLifetimeCard settings={authentication} onSaved={setAuthentication} />
+              <InactivityTimeoutCard settings={authentication} onSaved={setAuthentication} />
+            </div>
+            <SignInSecurityCard settings={authentication} />
+          </div>
+        )}
+
+        {data && status !== 'error' && tab === 'registration' && authentication && (
+          <div className="grid grid-cols-1 items-start gap-6 xl:grid-cols-2">
+            <RegistrationCard minPasswordLength={authentication.minPasswordLength} />
+          </div>
+        )}
+
+        {data && status !== 'error' && !['general', 'branding', 'authentication', 'registration'].includes(tab) && (
           <Card as="section" aria-label={`${current.label} settings`}>
             <EmptyState
               icon={current.icon}

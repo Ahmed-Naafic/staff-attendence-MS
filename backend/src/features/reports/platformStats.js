@@ -4,8 +4,8 @@ import { OWNER_STATUSES, SCHOOL_STATUSES, statusSummary } from '../../common/lis
 /*
  * Platform aggregates for the dashboard, and the calendar helpers it shares with Platform Reports.
  * Every figure is a direct count of stored records (schools, school-owner accounts, their statuses,
- * cities and registration dates). Days and months are calendar days and months in the viewer's
- * time zone.
+ * cities and registration dates). Days and months are calendar days and months in the platform
+ * time zone (Platform Settings → General; UTC when not set).
  */
 
 /** 'YYYY-MM' of `date` in time zone `tz`. */
@@ -66,7 +66,7 @@ export function dayStart(key, tz) {
 /** Registrations per month for schools or owner accounts: Map('YYYY-MM' → count). */
 async function monthlyCounts(kind, tz) {
   const prisma = getPrisma();
-  // Timestamps are stored in UTC without a zone: convert to UTC, then to the viewer's zone.
+  // Timestamps are stored in UTC without a zone: convert to UTC, then to the platform time zone.
   const rows =
     kind === 'schools'
       ? await prisma.$queryRaw`

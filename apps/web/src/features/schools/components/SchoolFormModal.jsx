@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Input, Modal, Textarea } from '../../../components/ui';
+import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { registerSchool, suggestSchoolCode, updateSchool } from '../data/schoolActions.js';
 import { cleanSchoolValues, validateSchool } from '../utils/schoolValidation.js';
 
@@ -33,6 +34,8 @@ export function SchoolFormModal({ mode, school, open, onClose, onSaved, cities =
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  // One save at a time: Enter or a click during a save sends nothing more.
+  const [saveOnce] = useState(createSingleFlight);
   const [codeTouched, setCodeTouched] = useState(false);
 
   // Fresh form each time it opens.
@@ -68,8 +71,12 @@ export function SchoolFormModal({ mode, school, open, onClose, onSaved, cities =
     if (first) document.getElementById(`${formId}-${first}`)?.focus();
   }
 
-  async function submit(event) {
+  function submit(event) {
     event.preventDefault();
+    return saveOnce(save);
+  }
+
+  async function save() {
     setFormError('');
     const cleaned = cleanSchoolValues(values, fields);
     const problems = validateSchool(cleaned, fields);
@@ -119,7 +126,7 @@ export function SchoolFormModal({ mode, school, open, onClose, onSaved, cities =
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form={formId}>
+          <Button type="submit" form={formId} loading={saving}>
             {isCreate ? 'Register School' : 'Save Changes'}
           </Button>
         </>

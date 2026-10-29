@@ -112,7 +112,16 @@ export function AuditEventDrawer({ event, open, onClose }) {
               <AuditAction event={event} />
             </Detail>
             <Detail label="Description">{event.description}</Detail>
-            {change && (
+            {/* Settings and branch changes list each changed field; status and name changes have one. */}
+            {change?.fields?.map((item) => (
+              <Detail key={item.field} label={item.field}>
+                <span className="wrap-anywhere whitespace-pre-line">
+                  {item.from ?? 'None (new record)'} <span aria-hidden="true">→</span>
+                  <span className="sr-only">changed to</span> {item.to}
+                </span>
+              </Detail>
+            ))}
+            {change?.field && (
               <>
                 <Detail label={`Previous ${change.field.toLowerCase()}`}>{change.from ?? 'None (new record)'}</Detail>
                 <Detail label={`New ${change.field.toLowerCase()}`}>{change.to}</Detail>

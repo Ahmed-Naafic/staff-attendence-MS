@@ -11,6 +11,7 @@ import app from '../src/app.js';
 import { getPrisma } from '../src/config/prisma.js';
 import { hashPassword } from '../src/features/auth/password.js';
 import { resetLimiter } from '../src/features/auth/rateLimit.js';
+import { branchFor, removeTestBranches } from './support/testBranch.js';
 
 if (process.env.EDUTRACK_DB_BRANCH !== 'dev') throw new Error('API tests only run against the Neon dev branch (npm test).');
 
@@ -57,7 +58,7 @@ before(async () => {
   for (const role of ['SUPER_ADMIN', 'OWNER', 'MANAGER', 'STAFF']) {
     const password = randomBytes(12).toString('base64url');
     const email = `test-${role.toLowerCase()}-${tag}@test.edutrack.example`;
-    const user = await prisma.user.create({ data: { name: `Test ${role} ${tag}`, email, role, passwordHash: await hashPassword(password) } });
+    const user = await prisma.user.create({ data: { name: `Test ${role} ${tag}`, email, role, ...(await branchFor(role)), passwordHash: await hashPassword(password) } });
     accounts[role] = { id: user.id, email, password };
   }
   const suspended = `test-suspended-${tag}@test.edutrack.example`;
@@ -72,6 +73,7 @@ after(async () => {
   // Failed sign-ins for unknown accounts made by these tests (no actor is stored for them).
   await prisma.auditEvent.deleteMany({ where: { actorId: null, action: 'SIGN_IN', result: 'FAILURE', occurredAt: { gte: startedAt } } });
   await prisma.user.deleteMany({ where: { id: { in: ids } } }); // sessions cascade
+  await removeTestBranches();
   server.close();
   await prisma.$disconnect();
 });
@@ -82,7 +84,8 @@ describe('authentication', () => {
     const { email, password } = accounts.SUPER_ADMIN;
     const res = await call('/api/auth/login', { method: 'POST', body: { email: email.toUpperCase(), password } });
     assert.equal(res.status, 200);
-    assert.deepEqual(Object.keys(res.body.user).sort(), ['id', 'name', 'role']);
+    assert.deepEqual(Object.keys(res.body.user).sort(), ['id', 'mustChangePassword', 'name', 'role']);
+    assert.equal(res.body.user.mustChangePassword, false);
     const cookie = res.headers.get('set-cookie');
     assert.match(cookie, /^edutrack_session=[\w-]{40,};/);
     assert.match(cookie, /HttpOnly/i);
@@ -287,7 +290,7 @@ describe('platform data (Super Admin)', () => {
   test('dashboard and reports agree with the school and owner lists', async () => {
     const schools = (await get('/api/platform/schools')).body.summary;
     const owners = (await get('/api/platform/owners')).body.summary;
-    const dashboard = (await get('/api/platform/dashboard?range=12m&tz=Africa/Mogadishu')).body;
+    const dashboard = (await get('/api/platform/dashboard?range=12m')).body;
     assert.equal(dashboard.summary.totalSchools.value, schools.total);
     assert.equal(dashboard.summary.activeSchools.value, schools.active);
     assert.equal(dashboard.summary.totalOwners.value, owners.total);
@@ -295,7 +298,7 @@ describe('platform data (Super Admin)', () => {
     assert.equal(dashboard.schoolsGrowth.at(-1).total, schools.total);
     assert.equal(dashboard.schoolsByLocation.reduce((n, l) => n + l.count, 0), schools.total);
     assert.ok(!('changePercent' in dashboard.summary.totalSchools), 'no undefined change percentages');
-    const report = (await get('/api/platform/reports?period=6m&tz=Africa/Mogadishu')).body;
+    const report = (await get('/api/platform/reports?period=6m')).body;
     assert.equal(report.schools.trend.length, 6);
     assert.equal(report.owners.trend.length, 6);
     assert.deepEqual(report.schools.summary, schools);
@@ -343,7 +346,6 @@ describe('platform data (Super Admin)', () => {
       '/api/platform/owners?status=pending',
       '/api/platform/schools?owner=some',
       '/api/platform/dashboard?range=1y',
-      '/api/platform/dashboard?tz=Mars/Base',
       '/api/platform/reports?period=2y',
       '/api/platform/audit-logs?action=DROP_TABLE',
       '/api/platform/audit-logs?user=not-an-id',

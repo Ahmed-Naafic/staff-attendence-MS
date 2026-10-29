@@ -1,7 +1,8 @@
 // EduTrack Staff Attendance Management System — Prisma schema
 //
 // Phase 9: platform foundation for the Super Admin web app — users and roles, schools and their
-// owners, sign-in sessions, audit events and platform settings. Branches, staff, attendance and
+// owners, sign-in sessions, audit events and platform settings. Branches and their location
+// history follow the Branch Management decisions (docs/business-rules.md). Staff, attendance and
 // excuses are added in later phases, following the hierarchy (School → Branch → Staff) and role
 // scopes in docs/architecture.md.
 //
@@ -39,6 +40,35 @@ enum SchoolStatus {
   SUSPENDED
 }
 
+/// Branches have their own status, separate from their school's; a branch operates only when both are ACTIVE.
+enum BranchStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+  SAT
+  SUN
+}
+
+/// Attendance statuses (approved): PRESENT and LATE are set at check-in; ABSENT and EXCUSED later.
+enum AttendanceStatus {
+  PRESENT
+  LATE
+  ABSENT
+  EXCUSED
+}
+
+enum AttendanceEventType {
+  CHECK_IN
+  CHECK_OUT
+}
+
 enum AuditResult {
   SUCCESS
   FAILURE
@@ -46,28 +76,46 @@ enum AuditResult {
 
 /// Anyone who can sign in. Only ACTIVE accounts with a password can sign in.
 model User {
-  id               String        @id @default(uuid())
-  name             String
+  id                 String        @id @default(uuid())
+  name               String
   /// Stored lower-case; the sign-in identifier for web users.
-  email            String?       @unique
-  phone            String?
-  role             Role
-  status           AccountStatus @default(ACTIVE)
+  email              String?       @unique
+  phone              String?
+  role               Role
+  status             AccountStatus @default(ACTIVE)
   /// scrypt hash (see backend/src/features/auth/password.js). Never returned by the API.
-  passwordHash     String?
-  lastSignInAt     DateTime?
+  passwordHash       String?
+  lastSignInAt       DateTime?
   /// Set while an OWNER account is SUSPENDED (cleared on reactivation); every change is also in the audit log.
-  suspensionReason String?
-  suspendedAt      DateTime?
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  suspensionReason   String?
+  suspendedAt        DateTime?
+  /// Set for a new MANAGER and after their owner gives them a new temporary password: until the
+  /// password is changed the API refuses everything except the password change (requireAuth).
+  mustChangePassword Boolean       @default(false)
+  /// For MANAGER and STAFF accounts only (required for them; a database check enforces it): their
+  /// branch. The school is that branch's school. Manager assignment history is in ManagerAssignment.
+  branchId           String?
+  branch             Branch?       @relation("BranchManagers", fields: [branchId], references: [id], onDelete: Restrict)
+  /// STAFF only (required for them): generated Staff ID, e.g. CIT-001-B001-ST001. Unique; never changed or reused.
+  staffId            String?       @unique
+  /// STAFF only: job title (the staff record's "Role"; not a system role).
+  jobTitle           String?
+  /// STAFF only (required for them): the phone's digits with a leading + kept; the staff sign-in
+  /// identifier, unique among STAFF (partial unique index in the migration).
+  phoneKey           String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   /// For OWNER accounts: the one school they own.
-  ownedSchool School?      @relation("SchoolOwner")
-  sessions    Session[]
-  auditEvents AuditEvent[] @relation("AuditActor")
+  ownedSchool        School?             @relation("SchoolOwner")
+  sessions           Session[]
+  auditEvents        AuditEvent[]        @relation("AuditActor")
+  managerAssignments ManagerAssignment[]
+  staffAssignments   StaffAssignment[]
+  attendanceEvents   AttendanceEvent[]
 
   @@index([role, status])
+  @@index([branchId])
 }
 
 model School {
@@ -92,14 +140,225 @@ model School {
   /// One owner per school; an owner owns one school.
   ownerId          String?      @unique
   owner            User?        @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  /// The last branch number given in this school. Raised only by the update that creates a branch
+  /// (which locks this row), so branch codes are never repeated or reused.
+  branchSequence   Int          @default(0)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  auditEvents AuditEvent[]
+  auditEvents       AuditEvent[]
+  branches          Branch[]
+  suspensionPeriods SuspensionPeriod[]
 
   @@index([status])
   @@index([location])
   @@index([registeredAt])
+}
+
+/// A branch of one school (never moved to another school, never deleted). Managed by the School Owner.
+model Branch {
+  id               String       @id @default(uuid())
+  schoolId         String
+  school           School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  /// Branch number within the school (1, 2, …), from School.branchSequence.
+  number           Int
+  /// Generated: school code + "-B" + number (at least three digits), e.g. JHA-001-B001. Immutable.
+  code             String
+  name             String
+  /// The name compared for uniqueness: NFKC + locale-independent case folding (computed by the API).
+  nameKey          String
+  address          String
+  city             String
+  phone            String?
+  status           BranchStatus @default(ACTIVE)
+  /// Set while SUSPENDED (cleared on reactivation); every change is also in the audit log.
+  suspensionReason String?
+  suspendedAt      DateTime?
+  /// The last staff number given in this branch (Staff IDs); raised only by the update that creates a
+  /// staff account (which locks this row), so Staff IDs are never repeated or reused.
+  staffSequence    Int          @default(0)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  locations          BranchLocation[]
+  managers           User[]              @relation("BranchManagers")
+  managerAssignments ManagerAssignment[]
+  schedules          BranchSchedule[]
+  staffAssignments   StaffAssignment[]
+  suspensionPeriods  SuspensionPeriod[]
+  attendanceEvents   AttendanceEvent[]
+
+  @@unique([schoolId, number])
+  @@unique([schoolId, code])
+  @@unique([schoolId, nameKey])
+  @@index([schoolId, status])
+}
+
+/// A branch GPS location and the time it takes effect. Each applies until the next one starts.
+/// Never edited or deleted; a scheduled (future) location that was replaced or cancelled before it
+/// took effect has cancelledAt set and never applies.
+model BranchLocation {
+  id               String            @id @default(uuid())
+  branchId         String
+  branch           Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  latitude         Float
+  longitude        Float
+  /// Accuracy reported by the device when captured, in metres (at most 50).
+  accuracyMeters   Float
+  effectiveFrom    DateTime
+  recordedAt       DateTime          @default(now())
+  cancelledAt      DateTime?
+  attendanceEvents AttendanceEvent[]
+
+  @@index([branchId, effectiveFrom])
+}
+
+/// A Manager's assignment to a branch, from startedAt until endedAt (null: the current one). A
+/// transfer ends the current assignment and starts a new one; rows are never edited otherwise or
+/// deleted. At most one open assignment per Manager (partial unique index in the migration).
+model ManagerAssignment {
+  id        String    @id @default(uuid())
+  managerId String
+  manager   User      @relation(fields: [managerId], references: [id], onDelete: Restrict)
+  branchId  String
+  branch    Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  @@index([managerId, startedAt])
+  @@index([branchId])
+}
+
+/// A version of a branch's schedule (Manager): applies from effectiveFrom (a date in timeZone, from
+/// 00:00) until the next version starts. Never edited or deleted; a scheduled (future) version that
+/// was replaced or cancelled before it started has cancelledAt set and never applies. One
+/// non-cancelled version per branch and date (partial unique index in the migration).
+model BranchSchedule {
+  id               String            @id @default(uuid())
+  branchId         String
+  branch           Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  effectiveFrom    DateTime          @db.Date
+  /// The platform time zone when the version was saved; its times are wall-clock times in this zone.
+  timeZone         String
+  checkOutEnabled  Boolean
+  recordedAt       DateTime          @default(now())
+  cancelledAt      DateTime?
+  shifts           BranchShift[]
+  attendanceEvents AttendanceEvent[]
+
+  @@index([branchId, effectiveFrom])
+}
+
+/// A shift of one schedule version. Same-day only: startMinute < endMinute, minutes after midnight
+/// (0–1439). Shifts of a version that share a day do not overlap (checked by the API).
+model BranchShift {
+  id                   String         @id @default(uuid())
+  scheduleId           String
+  schedule             BranchSchedule @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  /// The shift's identity across schedule versions (kept when a change edits it; new for a new shift).
+  shiftKey             String
+  name                 String
+  days                 Weekday[]
+  startMinute          Int
+  endMinute            Int
+  /// A check-in after start + grace is late.
+  graceMinutes         Int
+  /// No check-in by start + cutoff (and no approved excuse) is absent.
+  absenceCutoffMinutes Int
+
+  @@unique([scheduleId, shiftKey])
+  @@index([scheduleId])
+}
+
+/// A staff member's shift assignments from effectiveFrom (a date in timeZone) until the next set
+/// starts. Never edited or deleted; a scheduled set that was replaced or cancelled has cancelledAt.
+/// One non-cancelled set per staff member and date (partial unique index in the migration).
+model StaffAssignment {
+  id               String                 @id @default(uuid())
+  staffUserId      String
+  staff            User                   @relation(fields: [staffUserId], references: [id], onDelete: Restrict)
+  branchId         String
+  branch           Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  effectiveFrom    DateTime               @db.Date
+  timeZone         String
+  recordedAt       DateTime               @default(now())
+  cancelledAt      DateTime?
+  shifts           StaffAssignmentShift[]
+  attendanceEvents AttendanceEvent[]
+
+  @@index([staffUserId, effectiveFrom])
+  @@index([branchId])
+}
+
+/// One assigned shift (by its shiftKey) and the days the staff member works it.
+model StaffAssignmentShift {
+  id           String          @id @default(uuid())
+  assignmentId String
+  assignment   StaffAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  shiftKey     String
+  days         Weekday[]
+
+  @@unique([assignmentId, shiftKey])
+}
+
+/// A suspension of a school or a branch (exactly one of them): from startedAt until endedAt (null
+/// while it lasts). Written with each suspension and reactivation; never edited otherwise or
+/// deleted. At most one open period per school and per branch (partial unique indexes).
+model SuspensionPeriod {
+  id          String    @id @default(uuid())
+  schoolId    String?
+  school      School?   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId    String?
+  branch      Branch?   @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  startedAt   DateTime
+  endedAt     DateTime?
+  reason      String
+  /// Who suspended and who reactivated (account ids; names are in the audit log).
+  startedById String?
+  endedById   String?
+
+  @@index([schoolId, startedAt])
+  @@index([branchId, startedAt])
+}
+
+/// A recorded check-in or check-out (Staff mobile app). Never edited or deleted. occurredAt is the
+/// event time claimed by the device, sentAt the device clock when it was sent, receivedAt the
+/// server's time. A check-out points to the check-in it closes.
+model AttendanceEvent {
+  id             String              @id @default(uuid())
+  staffUserId    String
+  staff          User                @relation(fields: [staffUserId], references: [id], onDelete: Restrict)
+  branchId       String
+  branch         Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  type           AttendanceEventType
+  /// The app's unique id for the event (idempotency key), unique per staff member.
+  clientEventId  String
+  occurredAt     DateTime
+  sentAt         DateTime
+  receivedAt     DateTime
+  /// The branch-local day the event belongs to (the shift's day).
+  workDate       DateTime            @db.Date
+  shiftKey       String
+  scheduleId     String
+  schedule       BranchSchedule      @relation(fields: [scheduleId], references: [id], onDelete: Restrict)
+  assignmentId   String
+  assignment     StaffAssignment     @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  locationId     String
+  location       BranchLocation      @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  latitude       Float
+  longitude      Float
+  accuracyMeters Float
+  distanceMeters Float
+  /// CHECK_IN only: PRESENT or LATE.
+  status         AttendanceStatus?
+  /// CHECK_OUT only: the check-in it closes (one check-out per check-in).
+  checkInEventId String?             @unique
+  checkIn        AttendanceEvent?    @relation("CheckOut", fields: [checkInEventId], references: [id], onDelete: Restrict)
+  checkOut       AttendanceEvent?    @relation("CheckOut")
+
+  @@unique([staffUserId, clientEventId])
+  @@index([staffUserId, workDate])
+  @@index([branchId, workDate])
 }
 
 /// A signed-in browser. The cookie holds a random token; only its SHA-256 hash is stored.
@@ -130,7 +389,7 @@ model AuditEvent {
   actor       User?       @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
   actorName   String?
   actorRole   Role?
-  /// 'school' | 'owner' | 'system' | 'user'
+  /// 'school' | 'owner' | 'branch' | 'manager' | 'system' | 'user'
   targetType  String
   targetId    String?
   targetName  String?
@@ -149,18 +408,23 @@ model AuditEvent {
 }
 
 /// Platform-wide settings: a single row (id = 'platform'). Only the fields whose meaning is clear
-/// are stored; none are editable through the API yet (persistence rules not approved).
+/// are stored. A Super Admin can change the platform name (Branding) and the session lifetime and
+/// inactivity timeout (Authentication); the other fields are read-only.
 model PlatformSettings {
-  id             String   @id @default("platform")
-  platformName   String?
-  description    String?
-  supportEmail   String?
-  supportPhone   String?
-  websiteUrl     String?
-  timezone       String?
-  language       String?
-  dateFormat     String?
-  timeFormat     String?
-  firstDayOfWeek String?
-  updatedAt      DateTime @updatedAt
+  id                       String   @id @default("platform")
+  platformName             String?
+  description              String?
+  supportEmail             String?
+  supportPhone             String?
+  websiteUrl               String?
+  timezone                 String?
+  language                 String?
+  dateFormat               String?
+  timeFormat               String?
+  firstDayOfWeek           String?
+  /// Absolute session lifetime in hours for new sign-ins (1–72). Null or invalid: SESSION_HOURS, then 12.
+  sessionLifetimeHours     Int?
+  /// Inactivity timeout in minutes for every session (5, 10, 15, 30, 60, 120, 240 or 480). Null or any other value: disabled.
+  inactivityTimeoutMinutes Int?
+  updatedAt                DateTime @updatedAt
 }

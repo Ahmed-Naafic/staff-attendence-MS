@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Modal, Textarea } from '../../../components/ui';
+import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { reactivateSchool, suspendSchool } from '../data/schoolActions.js';
 import { validateReason } from '../utils/schoolValidation.js';
 
@@ -17,6 +18,8 @@ export function SuspendSchoolModal({ school, open, onClose, onDone }) {
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  // One save at a time: Enter or a click during a save sends nothing more.
+  const [saveOnce] = useState(createSingleFlight);
 
   useEffect(() => {
     if (!open) return;
@@ -26,8 +29,12 @@ export function SuspendSchoolModal({ school, open, onClose, onDone }) {
     setSaving(false);
   }, [open]);
 
-  async function submit(event) {
+  function submit(event) {
     event.preventDefault();
+    return saveOnce(save);
+  }
+
+  async function save() {
     setFormError('');
     const problem = validateReason(reason);
     setError(problem ?? '');
@@ -61,7 +68,7 @@ export function SuspendSchoolModal({ school, open, onClose, onDone }) {
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form={formId} variant="danger">
+          <Button type="submit" form={formId} variant="danger" loading={saving}>
             Suspend School
           </Button>
         </>
@@ -93,6 +100,8 @@ export function SuspendSchoolModal({ school, open, onClose, onDone }) {
 export function ReactivateSchoolModal({ school, open, onClose, onDone }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // One save at a time: Enter or a click during a save sends nothing more.
+  const [saveOnce] = useState(createSingleFlight);
 
   useEffect(() => {
     if (!open) return;
@@ -100,7 +109,11 @@ export function ReactivateSchoolModal({ school, open, onClose, onDone }) {
     setSaving(false);
   }, [open]);
 
-  async function confirm() {
+  function confirm() {
+    return saveOnce(runConfirm);
+  }
+
+  async function runConfirm() {
     setError('');
     setSaving(true);
     try {
@@ -128,7 +141,7 @@ export function ReactivateSchoolModal({ school, open, onClose, onDone }) {
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button variant="secondary" onClick={confirm}>
+          <Button variant="secondary" onClick={confirm} loading={saving}>
             Reactivate School
           </Button>
         </>

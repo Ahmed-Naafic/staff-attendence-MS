@@ -1,12 +1,21 @@
 import { Router } from 'express';
 import { OWNER_STATUSES, readListQuery, SCHOOL_STATUSES } from '../common/listQuery.js';
-import { isUuid, jsonBody, optionalDate, optionalEnum, optionalInt, optionalString, optionalTimeZone } from '../common/validate.js';
+import { isUuid, jsonBody, optionalDate, optionalEnum, optionalInt, optionalString } from '../common/validate.js';
 import { badRequest } from '../common/httpError.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { FILTERABLE_ACTIONS } from '../features/audit-logs/auditActions.js';
 import { getAuditEvent, listAuditEvents } from '../features/audit-logs/auditQuery.service.js';
 import { DASHBOARD_RANGES, getDashboard } from '../features/dashboard/dashboard.service.js';
-import { getSettings } from '../features/platform-settings/settings.service.js';
+import { readAuthentication } from '../features/platform-settings/authenticationInput.js';
+import { readBranding } from '../features/platform-settings/brandingInput.js';
+import { readGeneral } from '../features/platform-settings/generalInput.js';
+import {
+  getSettings,
+  platformTimeZone,
+  updateAuthentication,
+  updateBranding,
+  updateGeneral,
+} from '../features/platform-settings/settings.service.js';
 import { getReport, REPORT_PERIODS } from '../features/reports/reports.service.js';
 import { readOwnerCreation, readOwnerSuspension, readOwnerUpdate } from '../features/school-owners/ownerInput.js';
 import { createOwner, getOwner, listOwners, reactivateOwner, suspendOwner, updateOwner } from '../features/school-owners/owners.service.js';
@@ -17,8 +26,11 @@ import { getSchool, listSchools, reactivateSchool, registerSchool, suggestCode, 
  * Super Admin platform API (/api/platform). Every route requires a signed-in SUPER_ADMIN:
  * PLATFORM scope, so no school or branch restriction applies — and no branch, staff or
  * attendance operations are exposed here. Writes exist only for School Management (register,
- * edit, suspend, reactivate) and School Owner Management (add, edit, suspend, reactivate);
- * there is no approval, rejection, transfer or deletion.
+ * edit, suspend, reactivate), School Owner Management (add, edit, suspend, reactivate),
+ * Branding (the platform name), General settings (platform information and localization) and
+ * Authentication (the session lifetime and inactivity timeout); there is no approval, rejection,
+ * transfer or deletion. Calendar days and months (Dashboard, Reports) use the platform time zone
+ * (Platform Settings → General); a `tz` query parameter is ignored.
  */
 export const platformRouter = Router();
 platformRouter.use(requireAuth, requireRole('SUPER_ADMIN'));
@@ -31,7 +43,7 @@ const optionalId = (query, name) => {
 
 platformRouter.get('/dashboard', async (req, res) => {
   const range = optionalEnum(req.query, 'range', Object.keys(DASHBOARD_RANGES)) ?? '30d';
-  res.json(await getDashboard({ range, tz: optionalTimeZone(req.query, 'tz') }));
+  res.json(await getDashboard({ range, tz: await platformTimeZone() }));
 });
 
 platformRouter.get('/schools', async (req, res) => {
@@ -89,7 +101,7 @@ platformRouter.get('/reports', async (req, res) => {
       period: optionalEnum(req.query, 'period', Object.keys(REPORT_PERIODS)) ?? '12m',
       status: optionalEnum(req.query, 'status', SCHOOL_STATUSES),
       city: optionalString(req.query, 'city', { max: 100 }),
-      tz: optionalTimeZone(req.query, 'tz'),
+      tz: await platformTimeZone(),
     }),
   );
 });
@@ -120,4 +132,16 @@ platformRouter.get('/audit-logs/:id', async (req, res) => {
 
 platformRouter.get('/settings', async (req, res) => {
   res.json(await getSettings());
+});
+// General: platform information and localization (not the platform name, which is Branding).
+platformRouter.put('/settings/general', async (req, res) => {
+  res.json({ general: await updateGeneral(readGeneral(jsonBody(req)), req.user, req) });
+});
+// Branding: the platform name only.
+platformRouter.put('/settings/branding', async (req, res) => {
+  res.json({ branding: await updateBranding(readBranding(jsonBody(req)), req.user, req) });
+});
+// Authentication: the session lifetime and inactivity timeout only. The other authentication values are fixed.
+platformRouter.put('/settings/authentication', async (req, res) => {
+  res.json({ authentication: await updateAuthentication(readAuthentication(jsonBody(req)), req.user, req) });
 });

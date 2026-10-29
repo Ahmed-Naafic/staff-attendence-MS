@@ -5,8 +5,8 @@ import { tooManyRequests } from '../../common/httpError.js';
  * the same account and network address within WINDOW_MS, further attempts are refused until the
  * window passes. A technical safeguard against password guessing, not an approved lockout policy.
  */
-const MAX_FAILURES = 5;
-const WINDOW_MS = 15 * 60 * 1000;
+export const MAX_FAILURES = 5;
+export const WINDOW_MS = 15 * 60 * 1000;
 const failures = new Map();
 
 const keyOf = (email, ip) => `${email}|${ip}`;

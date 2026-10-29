@@ -19,6 +19,12 @@ export function isValidPhone(value) {
   return PHONE_PATTERN.test(value) && digits >= 7 && digits <= 15;
 }
 
+/**
+ * How phone numbers are compared (the staff sign-in identifier): the digits, with a leading + kept.
+ * "+252 61 234-5678" and "+252612345678" match; "0612345678" does not (no country rules).
+ */
+export const phoneKey = (value) => `${value.trim().startsWith('+') ? '+' : ''}${value.replace(/\D/g, '')}`;
+
 const FIELDS = {
   name: { label: 'School name', required: true, max: 120 },
   code: { label: 'School code', required: true, min: 3, max: 20 },

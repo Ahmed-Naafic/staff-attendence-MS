@@ -4,14 +4,17 @@ import { BookOpen } from 'lucide-react';
 import { ThemeToggle } from '../../components/layout';
 import { Alert, Button, Card, Input } from '../../components/ui';
 import { getRoleProfile } from '../../app/config/navigation.js';
+import { cn } from '../../lib/cn.js';
+import { useBranding } from '../branding';
 import { useSession } from './SessionProvider.jsx';
 
 // Only same-app paths are followed after sign-in (no "//host" or absolute URLs).
 const safeNext = (value) => (value && value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/login') ? value : null);
 
-/** Sign-in page for web users (email and password). */
+/** Sign-in page: email (or, for staff, phone number) and password. */
 export default function LoginPage() {
   const { status, user, ended, signIn } = useSession();
+  const { platformName, loaded } = useBranding();
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
@@ -21,8 +24,8 @@ export default function LoginPage() {
   const next = safeNext(params.get('next'));
 
   useEffect(() => {
-    document.title = 'Sign in · EduTrack';
-  }, []);
+    if (loaded) document.title = `Sign in · ${platformName}`;
+  }, [loaded, platformName]);
 
   if (status === 'signed-in' && !submitting) {
     return <Navigate to={next ?? getRoleProfile(user.role)?.home ?? '/'} replace />;
@@ -32,7 +35,7 @@ export default function LoginPage() {
     event.preventDefault();
     setError('');
     if (!email.trim() || !password) {
-      setError('Enter your email and password.');
+      setError('Enter your email or phone number, and your password.');
       return;
     }
     setSubmitting(true);
@@ -63,7 +66,8 @@ export default function LoginPage() {
             </span>
             <div className="flex flex-col gap-1">
               <h1 className="text-page-title text-fg">Sign in</h1>
-              <p className="text-small text-fg-muted">EduTrack — staff attendance for schools</p>
+              {/* The saved platform name (EduTrack when unavailable); invisible for the moment it loads. */}
+              <p className={cn('text-small text-fg-muted wrap-anywhere', !loaded && 'invisible')}>{platformName} — staff attendance for schools</p>
             </div>
           </div>
 
@@ -72,9 +76,11 @@ export default function LoginPage() {
 
           <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
             <Input
-              label="Email"
-              type="email"
+              label="Email or phone number"
+              type="text"
+              inputMode="email"
               autoComplete="username"
+              hint="Staff sign in with their phone number."
               value={email}
               onChange={(event) => setEmail(event.target.value)}
             />

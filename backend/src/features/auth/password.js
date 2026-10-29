@@ -37,3 +37,16 @@ export const verifyAgainstDummy = async (password) => verifyPassword(password, a
 
 /** Password rule for accounts created by the CLI script (a technical minimum, not a policy). */
 export const MIN_PASSWORD_LENGTH = 12;
+export const MAX_PASSWORD_LENGTH = 128;
+
+/**
+ * The problem with a new password (temporary passwords and password changes), or null. Never
+ * trimmed or changed: the password is used exactly as typed.
+ */
+export function passwordProblem(password) {
+  if (typeof password !== 'string' || !password) return 'Enter a password.';
+  if (!password.trim()) return 'The password cannot be only spaces.';
+  if (password.length < MIN_PASSWORD_LENGTH) return `Use at least ${MIN_PASSWORD_LENGTH} characters.`;
+  if (password.length > MAX_PASSWORD_LENGTH) return `Use at most ${MAX_PASSWORD_LENGTH} characters.`;
+  return null;
+}

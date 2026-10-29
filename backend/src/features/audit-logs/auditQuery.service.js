@@ -29,7 +29,7 @@ const eventSelect = {
 export function toEvent(e) {
   const target = { type: e.targetType, id: e.targetId, name: e.targetName ?? '' };
   if (e.targetType === 'school' && e.school) Object.assign(target, { code: e.school.code, location: e.school.location });
-  if (e.targetType === 'owner' && e.school) target.schoolName = e.school.name;
+  if (['owner', 'branch', 'manager', 'staff'].includes(e.targetType) && e.school) target.schoolName = e.school.name;
   return {
     id: e.id,
     occurredAt: e.occurredAt.toISOString(),

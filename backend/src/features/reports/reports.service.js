@@ -10,7 +10,7 @@ import { dayStart, lastDays, lastMonths, monthStart } from './platformStats.js';
  * - Schools: School records. Owners: OWNER accounts assigned to a school (other roles never count).
  * - Statuses are ACTIVE and SUSPENDED only.
  * - Creation trends count schools by registration date (`registeredAt`) and owners by account
- *   creation date (`User.createdAt`), per calendar day or month in the viewer's time zone. Every
+ *   creation date (`User.createdAt`), per calendar day or month in the platform time zone (General settings). Every
  *   day or month of the period is listed, with 0 when nothing was created.
  * - The school status and city filters apply to every school figure; owner figures are not filtered.
  */
@@ -70,7 +70,7 @@ export async function getReport({ period, status, city, tz }) {
     prisma.$queryRaw`
       SELECT CASE WHEN btrim("location") = '' THEN NULL ELSE "location" END AS city, count(*)::int AS count
       FROM "School" WHERE TRUE ${schoolSqlFilter(filters)} GROUP BY 1`,
-    // Timestamps are stored in UTC without a zone: convert to UTC, then to the viewer's zone.
+    // Timestamps are stored in UTC without a zone: convert to UTC, then to the platform time zone.
     prisma.$queryRaw`
       SELECT to_char(("registeredAt" AT TIME ZONE 'UTC') AT TIME ZONE ${tz}, ${keyFormat}) AS key, count(*)::int AS count
       FROM "School"

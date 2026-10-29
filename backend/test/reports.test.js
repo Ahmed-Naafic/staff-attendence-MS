@@ -1,11 +1,13 @@
 /*
  * Platform Reports tests (approved definitions): school and owner summaries, schools by city,
- * creation trends for every period (grouping, zero-filled buckets, creation dates, time zone),
+ * creation trends for every period (grouping, zero-filled buckets, creation dates, the platform
+ * time zone and its precedence over a request time zone),
  * status distribution, filters, validation, SUPER_ADMIN-only access, and that viewing a report
  * writes nothing. Runs on the Neon dev branch (`npm test`). Fixture schools use cities unique to
  * this run, so filtered figures are exact; platform-wide figures are checked against direct
  * database counts and against a baseline taken before the fixtures were added. Everything created
- * here is removed afterwards.
+ * here is removed afterwards; the platform time zone is set for the run and the settings row is
+ * restored exactly.
  */
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -14,6 +16,7 @@ import app from '../src/app.js';
 import { getPrisma } from '../src/config/prisma.js';
 import { hashPassword } from '../src/features/auth/password.js';
 import { resetLimiter } from '../src/features/auth/rateLimit.js';
+import { branchFor, removeTestBranches } from './support/testBranch.js';
 
 if (process.env.EDUTRACK_DB_BRANCH !== 'dev') throw new Error('Report tests only run against the Neon dev branch (npm test).');
 
@@ -27,6 +30,11 @@ const accounts = {};
 let server;
 let base;
 let baseline;
+let originalSettings;
+
+// The platform time zone (Platform Settings → General) decides report days and months.
+const setPlatformTimeZone = (timezone) =>
+  prisma.platformSettings.upsert({ where: { id: 'platform' }, create: { id: 'platform', timezone }, update: { timezone } });
 
 const city = (key) => `Rpt-${key} ${tag}`;
 const now = Date.now();
@@ -51,7 +59,7 @@ async function call(path, { cookie } = {}) {
   return { status: response.status, body: text ? JSON.parse(text) : null };
 }
 const report = async (query = '') => {
-  const res = await call(`/api/platform/reports?tz=${TZ}${query ? `&${query}` : ''}`, { cookie: cookies.SUPER_ADMIN });
+  const res = await call(`/api/platform/reports${query ? `?${query}` : ''}`, { cookie: cookies.SUPER_ADMIN });
   assert.equal(res.status, 200, query);
   return res.body;
 };
@@ -91,11 +99,13 @@ before(async () => {
   await new Promise((resolve) => server.once('listening', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
   resetLimiter();
+  originalSettings = await prisma.platformSettings.findUnique({ where: { id: 'platform' } });
+  await setPlatformTimeZone(TZ);
   for (const role of ['SUPER_ADMIN', 'OWNER', 'MANAGER', 'STAFF']) {
     const password = randomBytes(12).toString('base64url');
     const email = `test-rpt-${role.toLowerCase()}-${lower}@test.edutrack.example`;
     // The OWNER here has no school: it must never count as a School Owner.
-    const user = await prisma.user.create({ data: { name: `Test ${role} ${tag}`, email, role, passwordHash: await hashPassword(password) } });
+    const user = await prisma.user.create({ data: { name: `Test ${role} ${tag}`, email, role, ...(await branchFor(role)), passwordHash: await hashPassword(password) } });
     accounts[role] = user;
     const res = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email, password }) });
     assert.equal(res.status, 200, `${role} sign-in`);
@@ -130,6 +140,14 @@ after(async () => {
   await prisma.school.updateMany({ where: { id: { in: schoolIds } }, data: { ownerId: null } });
   await prisma.school.deleteMany({ where: { id: { in: schoolIds } } });
   await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+  await removeTestBranches();
+  if (originalSettings) {
+    const { id, updatedAt, ...values } = originalSettings;
+    await prisma.platformSettings.update({ where: { id }, data: values });
+    await prisma.$executeRaw`UPDATE "PlatformSettings" SET "updatedAt" = ${updatedAt} WHERE "id" = ${id}`;
+  } else {
+    await prisma.platformSettings.deleteMany({ where: { id: 'platform' } });
+  }
   server.close();
   await prisma.$disconnect();
 });
@@ -282,17 +300,44 @@ describe('creation trends', () => {
     assert.equal(active.reduce((n, p) => n + p.count, 0), 1, 'a1 only');
   });
 
-  test('days follow the viewer time zone', async () => {
+  test('days follow the platform time zone; a request time zone is ignored', async () => {
     const midnightUtc = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00Z`);
     const late = new Date(midnightUtc.getTime() - 90 * 60 * 1000); // 22:30 UTC yesterday = 01:30 today in Mogadishu
-    const s = await prisma.school.create({ data: { code: `R${tag}-TZ`, name: `Report Test tz ${tag}`, location: city('T'), registeredAt: late } });
-    const path = (tz) => `/api/platform/reports?period=7d&city=${encodeURIComponent(city('T'))}&tz=${tz}`;
-    const utc = (await call(path('UTC'), { cookie: cookies.SUPER_ADMIN })).body.schools.trend;
-    const mog = (await call(path(TZ), { cookie: cookies.SUPER_ADMIN })).body.schools.trend;
-    assert.equal(countAt(utc, dayOf(late, 'UTC')), 1);
-    assert.equal(countAt(mog, dayOf(late, TZ)), 1);
     assert.notEqual(dayOf(late, 'UTC'), dayOf(late, TZ));
-    await prisma.school.delete({ where: { id: s.id } });
+    const s = await prisma.school.create({ data: { code: `R${tag}-TZ`, name: `Report Test tz ${tag}`, location: city('T'), registeredAt: late } });
+    const path = (tz) => `/api/platform/reports?period=7d&city=${encodeURIComponent(city('T'))}${tz ? `&tz=${tz}` : ''}`;
+    const get = async (tz) => (await call(path(tz), { cookie: cookies.SUPER_ADMIN })).body;
+    try {
+      await setPlatformTimeZone('UTC');
+      for (const tz of [undefined, TZ, 'Pacific/Kiritimati', 'Mars/Base']) {
+        const r = await get(tz);
+        assert.equal(r.timeZone, 'UTC', `platform UTC, request tz ${tz}`);
+        assert.equal(countAt(r.schools.trend, dayOf(late, 'UTC')), 1, `UTC day, request tz ${tz}`);
+        assert.deepEqual(r.schools.trend.map((p) => p.key), expectedKeys('day', 7, 'UTC'));
+      }
+      await setPlatformTimeZone(TZ);
+      for (const tz of [undefined, 'UTC']) {
+        const r = await get(tz);
+        assert.equal(r.timeZone, TZ);
+        assert.equal(countAt(r.schools.trend, dayOf(late, TZ)), 1, `Mogadishu day, request tz ${tz}`);
+      }
+    } finally {
+      await setPlatformTimeZone(TZ);
+      await prisma.school.delete({ where: { id: s.id } });
+    }
+  });
+
+  test('platform time zone not set or not valid → UTC (never the viewer time zone)', async () => {
+    try {
+      for (const stored of [null, 'Mars/Base', '+03:00']) {
+        await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timezone: stored } });
+        const r = (await call(`/api/platform/reports?period=7d&tz=${TZ}`, { cookie: cookies.SUPER_ADMIN })).body;
+        assert.equal(r.timeZone, 'UTC', String(stored));
+        assert.deepEqual(r.schools.trend.map((p) => p.key), expectedKeys('day', 7, 'UTC'));
+      }
+    } finally {
+      await setPlatformTimeZone(TZ);
+    }
   });
 });
 
@@ -331,7 +376,6 @@ describe('filters and validation', () => {
       'status=ACTIVE',
       `city=${'x'.repeat(101)}`,
       'city=a&city=b',
-      'tz=Mars/Base',
     ]) {
       const res = await call(`/api/platform/reports?${query}`, { cookie: cookies.SUPER_ADMIN });
       assert.equal(res.status, 400, query);

@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Modal, Textarea } from '../../../components/ui';
+import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { reactivateOwner, suspendOwner } from '../data/ownerActions.js';
 import { validateOwnerReason } from '../utils/ownerValidation.js';
 
@@ -15,6 +16,8 @@ export function SuspendOwnerModal({ owner, open, onClose, onDone }) {
   const [error, setError] = useState('');
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  // One save at a time: Enter or a click during a save sends nothing more.
+  const [saveOnce] = useState(createSingleFlight);
 
   useEffect(() => {
     if (!open) return;
@@ -24,8 +27,12 @@ export function SuspendOwnerModal({ owner, open, onClose, onDone }) {
     setSaving(false);
   }, [open]);
 
-  async function submit(event) {
+  function submit(event) {
     event.preventDefault();
+    return saveOnce(save);
+  }
+
+  async function save() {
     setFormError('');
     const problem = validateOwnerReason(reason);
     setError(problem ?? '');
@@ -59,7 +66,7 @@ export function SuspendOwnerModal({ owner, open, onClose, onDone }) {
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form={formId} variant="danger">
+          <Button type="submit" form={formId} variant="danger" loading={saving}>
             Suspend Owner
           </Button>
         </>
@@ -97,6 +104,8 @@ export function SuspendOwnerModal({ owner, open, onClose, onDone }) {
 export function ReactivateOwnerModal({ owner, open, onClose, onDone }) {
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  // One save at a time: Enter or a click during a save sends nothing more.
+  const [saveOnce] = useState(createSingleFlight);
 
   useEffect(() => {
     if (!open) return;
@@ -104,7 +113,11 @@ export function ReactivateOwnerModal({ owner, open, onClose, onDone }) {
     setSaving(false);
   }, [open]);
 
-  async function confirm() {
+  function confirm() {
+    return saveOnce(runConfirm);
+  }
+
+  async function runConfirm() {
     setError('');
     setSaving(true);
     try {
@@ -132,7 +145,7 @@ export function ReactivateOwnerModal({ owner, open, onClose, onDone }) {
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button variant="secondary" onClick={confirm}>
+          <Button variant="secondary" onClick={confirm} loading={saving}>
             Reactivate Owner
           </Button>
         </>

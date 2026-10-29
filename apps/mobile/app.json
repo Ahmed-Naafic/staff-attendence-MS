@@ -1,0 +1,58 @@
+{
+  "expo": {
+    "name": "EduTrack Staff",
+    "slug": "edutrack-staff",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.edutrack.staff"
+    },
+    "android": {
+      "package": "com.edutrack.staff",
+      "adaptiveIcon": {
+        "backgroundColor": "#001D31",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "ACCESS_BACKGROUND_LOCATION"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#001D31",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 192,
+          "resizeMode": "contain",
+          "dark": {
+            "backgroundColor": "#001D31",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "EduTrack uses your location only when you check in or out, to verify that you are at your branch."
+        }
+      ],
+      "expo-font",
+      "expo-asset"
+    ]
+  }
+}

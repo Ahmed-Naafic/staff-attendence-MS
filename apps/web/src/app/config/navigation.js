@@ -1,11 +1,11 @@
-import { ChartColumn, House, School, ScrollText, Settings, Users } from 'lucide-react';
+import { Building2, CalendarClock, ChartColumn, ClipboardCheck, House, School, ScrollText, Settings, UserCog, Users } from 'lucide-react';
 
 /*
  * Role-aware navigation. Each role gets its own identity and sidebar sections;
  * roles never share or mix navigation.
  *
- * Only SUPER_ADMIN is defined in Phase 2. OWNER and MANAGER are added in their own
- * phases by adding entries here (and their routes) — the shell needs no changes.
+ * SUPER_ADMIN (Phase 2), OWNER (Branch Management, Manager accounts) and MANAGER (their branch)
+ * are defined. STAFF use the mobile app. New sections only need entries here (and routes).
  */
 
 /** How the shell presents each role. `home` is where "/" redirects. */
@@ -14,6 +14,16 @@ export const roleProfiles = {
     label: 'Super Admin',
     subtitle: 'Platform Administrator',
     home: '/dashboard',
+  },
+  OWNER: {
+    label: 'School Owner',
+    subtitle: 'School Administration',
+    home: '/branches',
+  },
+  MANAGER: {
+    label: 'Manager',
+    subtitle: 'Branch Management',
+    home: '/my-branch',
   },
 };
 
@@ -34,6 +44,27 @@ export const navigationByRole = {
         { to: '/platform-reports', label: 'Platform Reports', icon: ChartColumn },
         { to: '/audit-logs', label: 'Audit Logs', icon: ScrollText },
         { to: '/platform-settings', label: 'Platform Settings', icon: Settings },
+      ],
+    },
+  ],
+  // School scope: their own school only. Attendance: read-only reports for every branch of the school.
+  OWNER: [
+    {
+      items: [
+        { to: '/branches', label: 'Branches', icon: Building2 },
+        { to: '/managers', label: 'Managers', icon: UserCog },
+        { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
+      ],
+    },
+  ],
+  // Branch scope: their own branch only. Attendance: read-only reports for that branch.
+  MANAGER: [
+    {
+      items: [
+        { to: '/my-branch', label: 'My Branch', icon: Building2 },
+        { to: '/schedule', label: 'Schedule', icon: CalendarClock },
+        { to: '/staff', label: 'Staff', icon: Users },
+        { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
       ],
     },
   ],

@@ -3,7 +3,9 @@
 
 /**
  * tone: color of the action name (the name itself carries the meaning).
- * security: counted as a security event (sign-ins and sign-outs).
+ * security: counted as a security event (sign-ins, sign-outs, Authentication Settings changes, Super
+ *   Admin password resets, Manager and staff password resets and temporary password changes), as
+ *   SECURITY_ACTIONS in backend/src/features/audit-logs/auditActions.js.
  * done: summary shown in the details panel for a successful event.
  */
 export const auditActions = {
@@ -15,6 +17,32 @@ export const auditActions = {
   OWNER_UPDATED: { label: 'Update Owner', tone: 'info', done: 'Owner details updated successfully.' },
   OWNER_SUSPENDED: { label: 'Suspend Owner', tone: 'error', done: 'Owner account suspended successfully.' },
   OWNER_REACTIVATED: { label: 'Reactivate Owner', tone: 'success', done: 'Owner account reactivated successfully.' },
+  BRANCH_CREATED: { label: 'Create Branch', tone: 'success', done: 'Branch created successfully.' },
+  BRANCH_UPDATED: { label: 'Update Branch', tone: 'info', done: 'Branch details updated successfully.' },
+  BRANCH_SUSPENDED: { label: 'Suspend Branch', tone: 'error', done: 'Branch suspended successfully.' },
+  BRANCH_REACTIVATED: { label: 'Reactivate Branch', tone: 'success', done: 'Branch reactivated successfully.' },
+  BRANCH_LOCATION_CHANGED: { label: 'Change Branch Location', tone: 'info', done: 'Branch location changed successfully.' },
+  BRANCH_LOCATION_CHANGE_CANCELLED: { label: 'Cancel Branch Location Change', tone: 'info', done: 'Scheduled branch location change cancelled.' },
+  BRANCH_SCHEDULE_CHANGED: { label: 'Change Branch Schedule', tone: 'info', done: 'Branch schedule changed successfully.' },
+  BRANCH_SCHEDULE_CHANGE_CANCELLED: { label: 'Cancel Branch Schedule Change', tone: 'info', done: 'Scheduled branch schedule change cancelled.' },
+  MANAGER_CREATED: { label: 'Create Manager', tone: 'success', done: 'Manager account created successfully.' },
+  MANAGER_UPDATED: { label: 'Update Manager', tone: 'info', done: 'Manager details updated successfully.' },
+  MANAGER_TRANSFERRED: { label: 'Transfer Manager', tone: 'info', done: 'Manager transferred to another branch.' },
+  MANAGER_SUSPENDED: { label: 'Suspend Manager', tone: 'error', done: 'Manager account suspended successfully.' },
+  MANAGER_REACTIVATED: { label: 'Reactivate Manager', tone: 'success', done: 'Manager account reactivated successfully.' },
+  MANAGER_PASSWORD_RESET: { label: 'Reset Manager Password', tone: 'error', security: true, done: 'New temporary password set for the Manager.' },
+  STAFF_CREATED: { label: 'Create Staff', tone: 'success', done: 'Staff account created and activated.' },
+  STAFF_UPDATED: { label: 'Update Staff', tone: 'info', done: 'Staff details updated successfully.' },
+  STAFF_SUSPENDED: { label: 'Suspend Staff', tone: 'error', done: 'Staff account suspended successfully.' },
+  STAFF_REACTIVATED: { label: 'Reactivate Staff', tone: 'success', done: 'Staff account reactivated successfully.' },
+  STAFF_PASSWORD_RESET: { label: 'Reset Staff Password', tone: 'error', security: true, done: 'New temporary password set for the staff member.' },
+  STAFF_ASSIGNMENT_CHANGED: { label: 'Change Shift Assignments', tone: 'info', done: 'Shift assignments changed successfully.' },
+  STAFF_ASSIGNMENT_CHANGE_CANCELLED: { label: 'Cancel Shift Assignment Change', tone: 'info', done: 'Scheduled shift assignment change cancelled.' },
+  PASSWORD_CHANGED: { label: 'Change Temporary Password', tone: 'info', security: true, done: 'Temporary password replaced by the account holder.' },
+  BRANDING_UPDATED: { label: 'Update Branding', tone: 'info', done: 'Platform name updated successfully.' },
+  GENERAL_SETTINGS_UPDATED: { label: 'Update General Settings', tone: 'info', done: 'General settings updated successfully.' },
+  AUTH_SETTINGS_UPDATED: { label: 'Update Authentication Settings', tone: 'info', security: true, done: 'Authentication settings updated successfully.' },
+  SUPER_ADMIN_PASSWORD_RESET: { label: 'Reset Super Admin Password', tone: 'error', security: true, done: 'Super Admin password reset from the command line.' },
   SIGN_IN: { label: 'Sign In', tone: 'success', security: true, done: 'Signed in successfully.', failed: 'Sign-in attempt failed.' },
   SIGN_OUT: { label: 'Sign Out', tone: 'info', security: true, done: 'Signed out successfully.' },
 };
@@ -42,6 +70,9 @@ export const auditResults = {
 export const targetTypes = {
   school: 'School',
   owner: 'School Owner',
+  branch: 'Branch',
+  manager: 'Manager',
+  staff: 'Staff',
   system: 'System',
   user: 'User',
 };

@@ -5,7 +5,7 @@ import { Alert } from './Alert.jsx';
 import { Spinner } from './Spinner.jsx';
 import { useDialog } from './useDialog.js';
 
-const sizes = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl' };
+const sizes = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-5xl' };
 
 /**
  * Centered modal dialog.

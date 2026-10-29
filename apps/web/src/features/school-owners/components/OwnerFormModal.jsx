@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Input, Modal, Select } from '../../../components/ui';
+import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { addOwner, loadSchoolsWithoutOwner, updateOwner } from '../data/ownerActions.js';
 import { cleanOwnerValues, MIN_PASSWORD_LENGTH, validateOwner } from '../utils/ownerValidation.js';
@@ -61,6 +62,8 @@ export function OwnerFormModal({ mode, owner, open, onClose, onSaved }) {
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
+  // One save at a time: Enter or a click during a save sends nothing more.
+  const [saveOnce] = useState(createSingleFlight);
   const [attempt, setAttempt] = useState(0);
   const choices = useApiData(
     () => (open && isCreate ? loadSchoolsWithoutOwner() : Promise.resolve(null)),
@@ -86,8 +89,12 @@ export function OwnerFormModal({ mode, owner, open, onClose, onSaved }) {
     if (first) document.getElementById(`${formId}-${first}`)?.focus();
   }
 
-  async function submit(event) {
+  function submit(event) {
     event.preventDefault();
+    return saveOnce(save);
+  }
+
+  async function save() {
     setFormError('');
     const cleaned = cleanOwnerValues(values, fields);
     const problems = validateOwner(cleaned, fields);
@@ -147,7 +154,7 @@ export function OwnerFormModal({ mode, owner, open, onClose, onSaved }) {
           <Button variant="outline" onClick={onClose} disabled={saving}>
             Cancel
           </Button>
-          <Button type="submit" form={formId}>
+          <Button type="submit" form={formId} loading={saving}>
             {isCreate ? 'Add Owner' : 'Save Changes'}
           </Button>
         </>

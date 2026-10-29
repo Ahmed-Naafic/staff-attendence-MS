@@ -157,12 +157,15 @@ export async function updateSchool(id, values, user, req) {
 export async function suspendSchool(id, reason, user, req) {
   const school = await getPrisma().$transaction(async (tx) => {
     const current = await findOrFail(tx, id);
+    const now = new Date();
     // Conditional update: two simultaneous requests cannot both suspend.
     const { count } = await tx.school.updateMany({
       where: { id: current.id, status: 'ACTIVE' },
-      data: { status: 'SUSPENDED', suspensionReason: reason, suspendedAt: new Date() },
+      data: { status: 'SUSPENDED', suspensionReason: reason, suspendedAt: now },
     });
     if (count === 0) throw conflict('INVALID_STATUS', 'Only an active school can be suspended. This school is already suspended.');
+    // The exact interval, for attendance (absences are not counted while suspended).
+    await tx.suspensionPeriod.create({ data: { schoolId: current.id, startedAt: now, reason, startedById: user.id } });
     const updated = await findOrFail(tx, current.id);
     await recordAuditEvent({
       client: tx,
@@ -188,6 +191,7 @@ export async function reactivateSchool(id, user, req) {
       data: { status: 'ACTIVE', suspensionReason: null, suspendedAt: null },
     });
     if (count === 0) throw conflict('INVALID_STATUS', 'Only a suspended school can be reactivated. This school is already active.');
+    await tx.suspensionPeriod.updateMany({ where: { schoolId: current.id, endedAt: null }, data: { endedAt: new Date(), endedById: user.id } });
     const updated = await findOrFail(tx, current.id);
     await recordAuditEvent({
       client: tx,

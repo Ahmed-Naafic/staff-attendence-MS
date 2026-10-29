@@ -9,8 +9,9 @@ export const env = {
   databaseUrl: process.env.DATABASE_URL,
   // Origin of the web app. State-changing requests from any other origin are refused.
   webOrigin: process.env.WEB_ORIGIN ?? 'http://localhost:5173',
-  // How long a sign-in lasts (hours). A technical default, not an approved business rule.
-  sessionHours: Number(process.env.SESSION_HOURS ?? 12),
+  // Fallback session lifetime (hours) when Platform Settings has none; used only when it is a
+  // whole number from 1 to 72 (see features/auth/authPolicy.js). Undefined when not set.
+  sessionHours: process.env.SESSION_HOURS === undefined ? undefined : Number(process.env.SESSION_HOURS),
 };
 
 export const isProduction = env.nodeEnv === 'production';

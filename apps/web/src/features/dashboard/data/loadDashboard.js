@@ -1,4 +1,4 @@
-import { apiRequest, previewDelay, previewState, viewerTimeZone } from '../../../lib/api.js';
+import { apiRequest, previewDelay, previewState } from '../../../lib/api.js';
 
 /**
  * Loads the platform dashboard for a time range ('30d' | '90d' | '12m') from the API
@@ -14,5 +14,5 @@ export async function loadDashboard(range) {
     if (preview === 'empty') return { ...(await import('./mockDashboardData.js')).createEmptyMockDashboard({ range }), isDemo: false };
   }
 
-  return apiRequest('/platform/dashboard', { query: { range, tz: viewerTimeZone() } });
+  return apiRequest('/platform/dashboard', { query: { range } });
 }

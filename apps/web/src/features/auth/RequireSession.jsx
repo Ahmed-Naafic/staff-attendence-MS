@@ -1,13 +1,15 @@
 import { Navigate, useLocation } from 'react-router';
 import { ErrorState, LoadingState } from '../../components/ui';
+import ChangePasswordPage from './ChangePasswordPage.jsx';
 import { useSession } from './SessionProvider.jsx';
 
 /**
  * Shows its children only to a signed-in user; otherwise sends them to /login (remembering where
- * they were going). This is for usability: the API enforces access on every request.
+ * they were going). An account with a temporary password sees only the Change Password page until it
+ * is replaced. This is for usability: the API enforces both on every request.
  */
 export function RequireSession({ children }) {
-  const { status, retry } = useSession();
+  const { status, user, retry } = useSession();
   const location = useLocation();
 
   if (status === 'checking') {
@@ -32,5 +34,6 @@ export function RequireSession({ children }) {
     const next = `${location.pathname}${location.search}`;
     return <Navigate to={next === '/' ? '/login' : `/login?next=${encodeURIComponent(next)}`} replace />;
   }
+  if (user.mustChangePassword) return <ChangePasswordPage />;
   return children;
 }

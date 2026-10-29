@@ -15,7 +15,9 @@
     "prisma:deploy": "prisma migrate deploy",
     "seed:dev": "node --env-file=.env.dev scripts/seed-dev.js",
     "create-super-admin": "node scripts/create-super-admin.js",
-    "create-super-admin:dev-branch": "node --env-file=.env.dev scripts/create-super-admin.js"
+    "create-super-admin:dev-branch": "node --env-file=.env.dev scripts/create-super-admin.js",
+    "reset-super-admin-password": "node scripts/reset-super-admin-password.js",
+    "reset-super-admin-password:dev-branch": "node --env-file=.env.dev scripts/reset-super-admin-password.js"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.10.0",

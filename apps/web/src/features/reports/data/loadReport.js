@@ -1,8 +1,9 @@
-import { apiRequest, previewDelay, previewState, viewerTimeZone } from '../../../lib/api.js';
+import { apiRequest, previewDelay, previewState } from '../../../lib/api.js';
 
 /**
  * Loads the platform report (GET /api/platform/reports) for a trend period and optional school
- * filters, in the viewer's time zone. Filtering and counting happen on the server.
+ * filters. Days and months are in the platform time zone (`timeZone`, chosen by the server from
+ * Platform Settings → General). Filtering and counting happen on the server.
  *
  * Response:
  * {
@@ -16,7 +17,7 @@ import { apiRequest, previewDelay, previewState, viewerTimeZone } from '../../..
  * Trend keys are 'YYYY-MM-DD' (day) or 'YYYY-MM' (month). `city: null` means no city ("Unknown").
  */
 export async function loadReport({ period, status, city }) {
-  const request = () => apiRequest('/platform/reports', { query: { period, status, city, tz: viewerTimeZone() } });
+  const request = () => apiRequest('/platform/reports', { query: { period, status, city } });
 
   // Development only (removed from production builds): preview page states with ?demoState=loading | error | empty
   if (import.meta.env.DEV) {

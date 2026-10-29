@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { BookOpen, ImageUp } from 'lucide-react';
 import { Button, Card, CardContent, CardHeader, Input, Select, Switch, Textarea } from '../../../components/ui';
+import { DEFAULT_PLATFORM_NAME } from '../../branding';
+import { DESCRIPTION_MAX, textLength } from '../utils/generalRules.js';
 import {
   configurationItems,
   dateFormatOptions,
@@ -11,21 +13,73 @@ import {
   UNAVAILABLE,
 } from '../utils/settingsOptions.js';
 
-// Shown in a select when no value is stored yet.
+// Shown when no value is stored yet.
 const NOT_SET = 'Not set';
 
-/** Platform name, description and public contact details (editable in the page only). */
-export function PlatformInfoCard({ values, onChange }) {
-  const set = (name) => (event) => onChange('information', name, event.target.value);
+/** Hint for a field whose saved value breaks the approved rules (kept until changed). */
+const conflictHint = (problem) => problem && `The saved value does not meet the current rules: ${problem}`;
+
+/**
+ * Platform name, description and public contact details. The name is saved in Branding and shown
+ * here read-only (`platformName`, '' when not set; `onEditName` opens Branding). The other fields
+ * are edited here and saved with Save Settings. `values`, `errors` and `conflicts` are keyed by
+ * field; `onChange(field, value)`; `disabled` while saving.
+ */
+export function PlatformInfoCard({ values, errors, conflicts, onChange, disabled, platformName, onEditName }) {
+  const field = (name) => ({
+    name,
+    value: values[name],
+    onChange: (event) => onChange(name, event.target.value),
+    error: errors[name],
+    readOnly: disabled,
+    placeholder: NOT_SET,
+  });
+  const descriptionLength = textLength(values.description.trim());
   return (
     <Card as="section" aria-labelledby="settings-information">
       <CardHeader titleAs="h2" title={<span id="settings-information">Platform Information</span>} description="Basic information about the platform." />
       <CardContent className="flex flex-col gap-4">
-        <Input label="Platform name" value={values.platformName} onChange={set('platformName')} autoComplete="off" />
-        <Textarea label="Platform description" rows={3} value={values.description} onChange={set('description')} />
-        <Input label="Support email" type="email" value={values.supportEmail} onChange={set('supportEmail')} autoComplete="off" />
-        <Input label="Support phone" type="tel" value={values.supportPhone} onChange={set('supportPhone')} autoComplete="off" />
-        <Input label="Website URL" type="url" value={values.websiteUrl} onChange={set('websiteUrl')} autoComplete="off" />
+        <div className="flex flex-col gap-2">
+          <Input
+            label="Platform name"
+            value={platformName}
+            placeholder={`Not set: ${DEFAULT_PLATFORM_NAME} is shown`}
+            readOnly
+            hint="Read only here. The platform name is changed in Branding."
+          />
+          <Button variant="outline" size="sm" className="self-start" onClick={onEditName}>
+            Change in Branding
+          </Button>
+        </div>
+        <Textarea
+          label="Platform description"
+          rows={3}
+          {...field('description')}
+          hint={conflictHint(conflicts.description) || `Optional. ${descriptionLength} of ${DESCRIPTION_MAX} characters.`}
+        />
+        <Input
+          label="Support email"
+          type="email"
+          autoComplete="off"
+          {...field('supportEmail')}
+          hint={conflictHint(conflicts.supportEmail) || 'Optional. Saved in lower case.'}
+        />
+        <Input
+          label="Support phone"
+          type="tel"
+          autoComplete="off"
+          {...field('supportPhone')}
+          placeholder="+252612345678"
+          hint={conflictHint(conflicts.supportPhone) || 'Optional. International format: + and up to 15 digits, no spaces.'}
+        />
+        <Input
+          label="Website URL"
+          type="url"
+          autoComplete="off"
+          {...field('websiteUrl')}
+          placeholder="https://www.example.com"
+          hint={conflictHint(conflicts.websiteUrl) || 'Optional. A full https:// address.'}
+        />
       </CardContent>
     </Card>
   );
@@ -92,10 +146,32 @@ export function PlatformLogoCard() {
   );
 }
 
-/** Default timezone, language, date and time formats and first day of the week (editable in the page only). */
-export function LocalizationCard({ values, onChange }) {
-  const set = (name) => (event) => onChange('localization', name, event.target.value);
+// The choices, plus the saved value when it is not one of them (kept until changed, never selectable again).
+function withSaved(options, saved) {
+  if (!saved || options.some((option) => option.value === saved)) return options;
+  return [...options, { value: saved, label: `${saved} (no longer available)`, disabled: true }];
+}
+
+/**
+ * Default timezone, language, date and time formats and first day of the week, saved with Save
+ * Settings. The time zone is stored as its IANA name (e.g. Africa/Mogadishu) and controls the
+ * platform's dates: Reports and Dashboard days and months, and dates and times shown in the app.
+ */
+export function LocalizationCard({ values, savedValues, errors, conflicts, onChange, disabled }) {
   const dateFormats = useMemo(() => dateFormatOptions(), []);
+  const timezones = useMemo(() => timezoneOptions(), []);
+  const field = (name, options, hint) => ({
+    name,
+    options: withSaved(options, savedValues[name]),
+    value: values[name],
+    // A choice cannot be unset once saved; until then "Not set" is shown.
+    placeholder: NOT_SET,
+    required: true,
+    onChange: (event) => onChange(name, event.target.value),
+    error: errors[name],
+    disabled,
+    hint: conflictHint(conflicts[name]) || hint,
+  });
   return (
     <Card as="section" aria-labelledby="settings-localization">
       <CardHeader
@@ -104,19 +180,15 @@ export function LocalizationCard({ values, onChange }) {
         description="Default timezone and formats for the platform."
       />
       <CardContent className="flex flex-col gap-4">
-        <Select label="Default timezone" placeholder={NOT_SET} options={timezoneOptions} value={values.timezone} onChange={set('timezone')} />
         <Select
-          label="Default language"
-          placeholder={NOT_SET}
-          options={languageOptions}
-          value={values.language}
-          onChange={set('language')}
-          hint="English is the only language available."
+          label="Default timezone"
+          {...field('timezone', timezones, 'Used for dates and times across the platform, and for the days and months in Reports and the Dashboard. Not set: UTC.')}
         />
-        <Select label="Date format" placeholder={NOT_SET} options={dateFormats} value={values.dateFormat} onChange={set('dateFormat')} />
+        <Select label="Default language" {...field('language', languageOptions, 'English is the only language available.')} />
+        <Select label="Date format" {...field('dateFormat', dateFormats, 'Used for dates shown in the app. Not set: Jan 12, 2026.')} />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-          <Select label="Time format" placeholder={NOT_SET} options={timeFormatOptions} value={values.timeFormat} onChange={set('timeFormat')} />
-          <Select label="First day of week" placeholder={NOT_SET} options={firstDayOptions} value={values.firstDayOfWeek} onChange={set('firstDayOfWeek')} />
+          <Select label="Time format" {...field('timeFormat', timeFormatOptions, 'Used for times shown in the app. Not set: 24-hour.')} />
+          <Select label="First day of week" {...field('firstDayOfWeek', firstDayOptions, 'Saved for calendars; no calendar uses it yet.')} />
         </div>
       </CardContent>
     </Card>

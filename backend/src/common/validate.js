@@ -55,14 +55,13 @@ export function optionalDate(source, name) {
   return date;
 }
 
-/** Optional IANA time zone name (e.g. Africa/Mogadishu), with a default. */
-export function optionalTimeZone(source, name, fallback = 'UTC') {
-  const value = optionalString(source, name, { max: 64 });
-  if (value === undefined) return fallback;
-  try {
-    new Intl.DateTimeFormat('en', { timeZone: value });
-  } catch {
-    throw badRequest(`"${name}" must be a valid time zone.`);
+/** Optional calendar date 'YYYY-MM-DD' (a real date: 2026-02-30 is refused). */
+export function optionalDay(source, name) {
+  const value = optionalString(source, name, { max: 10 });
+  if (value === undefined) return undefined;
+  const date = new Date(`${value}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    throw badRequest(`"${name}" must be a date (YYYY-MM-DD).`);
   }
   return value;
 }

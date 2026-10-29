@@ -4,8 +4,10 @@ import {
   CircleCheck,
   CircleOff,
   MapPin,
+  Palette,
   PenLine,
   Plus,
+  Settings,
   SquarePlus,
   UserRoundCheck,
   UserRoundPen,
@@ -28,6 +30,8 @@ const activityTypes = {
   OWNER_REACTIVATED: { label: 'Owner reactivated', icon: UserRoundCheck, tile: 'bg-success-soft text-success-fg' },
   SCHOOL_SUSPENDED: { label: 'School suspended', icon: CircleOff, tile: 'bg-error-soft text-error-fg' },
   SCHOOL_UPDATED: { label: 'School profile updated', icon: PenLine, tile: 'bg-info-soft text-info-fg' },
+  BRANDING_UPDATED: { label: 'Platform name changed', icon: Palette, tile: 'bg-info-soft text-info-fg' },
+  GENERAL_SETTINGS_UPDATED: { label: 'General settings changed', icon: Settings, tile: 'bg-info-soft text-info-fg' },
 };
 
 export function RecentActivityCard({ activity }) {
