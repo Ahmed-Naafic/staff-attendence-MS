@@ -3,6 +3,7 @@ import { authRouter } from './features/auth/auth.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { notFound } from './middleware/notFound.js';
 import { sameOrigin } from './middleware/sameOrigin.js';
+import { env } from './config/env.js';
 import { getPublicBranding } from './features/platform-settings/settings.service.js';
 import { platformRouter } from './platform/platform.routes.js';
 import { attendanceRouter } from './attendance/attendance.routes.js';
@@ -12,6 +13,10 @@ import { ownerRouter } from './owner/owner.routes.js';
 const app = express();
 
 app.disable('x-powered-by');
+// On Vercel the request arrives through Vercel's proxy, which sets X-Forwarded-For to the client's
+// address. Trust that one hop so req.ip (sign-in rate limiting, audit IP) is the client, not the
+// proxy. Elsewhere (local development) the header is ignored, so it cannot be spoofed.
+if (env.onVercel) app.set('trust proxy', 1);
 app.use(express.json({ limit: '10kb' }));
 // Responses carry private data: never cache them in shared caches.
 app.use('/api', (req, res, next) => {

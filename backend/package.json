@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node --env-file=.env.dev --watch src/server.js",
     "start": "node src/server.js",
+    "build": "prisma generate",
     "test": "node --env-file=.env.dev --test --test-concurrency=1 \"test/**/*.test.js\"",
     "prisma:validate": "prisma validate",
     "prisma:format": "prisma format",

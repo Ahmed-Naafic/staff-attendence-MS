@@ -12,6 +12,8 @@ export const env = {
   // Fallback session lifetime (hours) when Platform Settings has none; used only when it is a
   // whole number from 1 to 72 (see features/auth/authPolicy.js). Undefined when not set.
   sessionHours: process.env.SESSION_HOURS === undefined ? undefined : Number(process.env.SESSION_HOURS),
+  // Set to "1" by Vercel on its build and function environments (a Vercel system variable).
+  onVercel: process.env.VERCEL === '1',
 };
 
 export const isProduction = env.nodeEnv === 'production';

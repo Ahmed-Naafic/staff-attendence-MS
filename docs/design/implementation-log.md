@@ -1985,6 +1985,13 @@ Found in the dev data for CIT-001-B001. A Manager scheduled a change with a "nig
 - **Not changed:** saved versions and assignment sets are never rewritten. The dev branch's version from 2026-10-28 keeps its separate night shift; that staff member's assignments were re-saved from 2026-10-30 with the current night shift through `saveAssignments` (audit actor "Command-line operator").
 - **Tests:** `backend/test/schedules.test.js`, the shift key test extended: an added shift with an earlier name (any capitalization) gets its key; an added shift whose earlier namesake is kept under another name is new; a never-used name is new; cancelling a scheduled change and typing the shift in again keeps its key. Results: schedules **20 / 20**; staff, attendance, attendance reports and export **89 / 89** (dev branch). A first run was stopped while the dev database was unreachable; its leftover test schools were removed.
 
+## Deployment: Vercel configuration for the web app and the API
+
+- **Web (`apps/web/vercel.json`):** Vite preset, `npm run build`, output `dist`; every path except `/api/…` is served `index.html` (client-side routes survive a refresh).
+- **API (`backend/vercel.json`):** Express preset; Vercel detects `src/app.js` (it default-exports the app), so `server.js` stays the local entry point. `npm run build` (new script) runs `prisma generate` against `../prisma/schema.prisma` via `prisma.config.js`. The generated client uses the WebAssembly query compiler and the `pg` adapter, so no native engine is needed. Migrations are not run on deploy.
+- **Proxy:** when `VERCEL=1` (a Vercel system variable), Express trusts one proxy hop, so `req.ip` (sign-in rate limiting, audit IP) is the client's address. Locally nothing changes.
+- **Results:** `prisma validate` and `prisma generate` pass; the app loads with and without `VERCEL=1` and `/api/health` answers; backend auth tests **31 / 31**, API, branding and audit tests **52 / 52**. Not deployed.
+
 ## Staff form: job title choices
 
 - **Web:** the Add Staff and Edit Staff dialogs (`StaffFormModal.jsx`) show the job title as a list: **Teacher**, **Accountant**, **Other**. Other shows an "Other job title" field (required). The saved value is the chosen title or the typed one; editing a staff member whose title is not in the list (e.g. "Guard") opens with Other and the title filled in. Messages: "Choose a job title." / "Enter the job title."; API errors for `jobTitle` show on the visible field.
