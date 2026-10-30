@@ -6,7 +6,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://backend-seven-weld-6gy2nch4ht.vercel.app/api/:path*"
+      "destination": "https://api.edutrack.colabgroup.study/api/:path*"
     },
     {
       "source": "/((?!api/).*)",

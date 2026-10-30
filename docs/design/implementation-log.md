@@ -1991,6 +1991,7 @@ Found in the dev data for CIT-001-B001. A Manager scheduled a change with a "nig
 - **API (`backend/vercel.json`):** Express preset; Vercel detects `src/app.js` (it default-exports the app), so `server.js` stays the local entry point. `npm run build` (new script) runs `prisma generate` against `../prisma/schema.prisma` via `prisma.config.js`. The generated client uses the WebAssembly query compiler and the `pg` adapter, so no native engine is needed. Migrations are not run on deploy.
 - **Proxy:** when `VERCEL=1` (a Vercel system variable), Express trusts one proxy hop, so `req.ip` (sign-in rate limiting, audit IP) is the client's address. Locally nothing changes.
 - **Results:** `prisma validate` and `prisma generate` pass; the app loads with and without `VERCEL=1` and `/api/health` answers; backend auth tests **31 / 31**, API, branding and audit tests **52 / 52**. Not deployed.
+- **Custom domains:** web `https://edutrack.colabgroup.study`, API `https://api.edutrack.colabgroup.study`. The `*.vercel.app` addresses now answer with a 307 to these domains. The web rewrite forwards `/api/:path*` to `https://api.edutrack.colabgroup.study/api/:path*`, so the browser stays on one origin. The session cookie (no `Domain`, path `/api`, `SameSite=Lax`, `Secure`) belongs to the web domain, and no CORS is needed. The API's `WEB_ORIGIN` must be `https://edutrack.colabgroup.study`.
 
 ## Staff form: job title choices
 
