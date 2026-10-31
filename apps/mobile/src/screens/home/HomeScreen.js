@@ -17,7 +17,7 @@ import { useSession } from '../../auth/SessionProvider';
 import { ShiftCard, STATUS_LABEL, STATUS_TONE, SyncBanner } from '../../components/attendance';
 import { AttendanceStateCard, CheckOutAction, FingerprintControl, LocationStatusCard } from '../../components/fingerprint';
 import { AppText, Badge, Card, Icon, LoadingView, Logo, Notice, Screen } from '../../components/ui';
-import { formatDay, formatTime, greeting } from '../../lib/format';
+import { formatClock, formatDay, formatTime, greeting } from '../../lib/format';
 import { useNow } from '../../lib/useNow';
 import { useTheme } from '../../theme/ThemeProvider';
 import { space } from '../../theme/tokens';
@@ -58,6 +58,7 @@ export default function HomeScreen({ navigation }) {
                 {formatDay(today.date)}
               </AppText>
             ) : null}
+            <LiveClock zone={zone} />
           </View>
           <Icon name={hello === 'Good evening' ? 'moon-outline' : 'sunny-outline'} size={34} color={colors.accent} accessibilityElementsHidden importantForAccessibility="no" />
         </View>
@@ -88,6 +89,25 @@ export default function HomeScreen({ navigation }) {
         </View>
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * The current time, ticking every second, in the same zone as the recorded check-in and check-out
+ * times (the branch time zone from the API), so the clock and the recorded times always agree.
+ * Its own component, so only the clock re-renders each second.
+ */
+function LiveClock({ zone }) {
+  const { colors } = useTheme();
+  const now = useNow(1000);
+  const time = formatClock(now, zone);
+  return (
+    <View style={styles.clockRow} accessible accessibilityLabel={`Current time ${time.slice(0, 5)}`}>
+      <Icon name="time-outline" size={18} color={colors.accent} accessibilityElementsHidden importantForAccessibility="no" />
+      <AppText testID="home-clock" variant="section" style={styles.clock}>
+        {time}
+      </AppText>
+    </View>
   );
 }
 
@@ -189,5 +209,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space(5), paddingVertical: space(3) },
   content: { padding: space(5), paddingTop: space(1), paddingBottom: space(8) },
   helloRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  clockRow: { flexDirection: 'row', alignItems: 'center', marginTop: space(1) },
+  clock: { marginLeft: space(1), fontWeight: '700', fontVariant: ['tabular-nums'] },
   timelineRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: space(2) },
 });

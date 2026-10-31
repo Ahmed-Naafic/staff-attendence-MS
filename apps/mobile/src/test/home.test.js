@@ -193,3 +193,13 @@ test('dark theme: the controls use the dark tokens', async () => {
   await waitFor(() => expect(screen.getByTestId('fingerprint-status-face')).toHaveStyle({ borderColor: themes.dark.success }));
   expect(screen.getByText('Checked In')).toHaveStyle({ color: themes.dark.successFg });
 });
+
+test('Home shows a live clock in the branch time zone, the same zone as the recorded times', async () => {
+  await renderApp(createServer());
+  const clock = await screen.findByTestId('home-clock');
+  expect(clock).toHaveTextContent(/^\d{2}:\d{2}:\d{2}$/);
+  // The branch zone's hour and minute, not the phone's (allowing for a minute rolling over).
+  const shown = clock.props.children.slice(0, 5);
+  const t = Date.now();
+  expect([formatTime(t - 60000, ZONE), formatTime(t, ZONE)]).toContain(shown);
+});

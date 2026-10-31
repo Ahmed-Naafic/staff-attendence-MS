@@ -27,6 +27,12 @@ export function formatTime(instant, timeZone) {
   return `${p.hour}:${p.minute}`;
 }
 
+/** 'HH:MM:SS' (24-hour) of an instant in a zone, for the live clock. */
+export function formatClock(instant, timeZone) {
+  const p = parts(new Date(instant), timeZone, { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+  return `${p.hour}:${p.minute}:${p.second}`;
+}
+
 /** 'YYYY-MM-DD' of an instant in a zone. */
 export function localDate(instant, timeZone) {
   const p = parts(new Date(instant), timeZone, { year: 'numeric', month: '2-digit', day: '2-digit' });

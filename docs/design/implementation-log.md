@@ -1985,6 +1985,13 @@ Found in the dev data for CIT-001-B001. A Manager scheduled a change with a "nig
 - **Not changed:** saved versions and assignment sets are never rewritten. The dev branch's version from 2026-10-28 keeps its separate night shift; that staff member's assignments were re-saved from 2026-10-30 with the current night shift through `saveAssignments` (audit actor "Command-line operator").
 - **Tests:** `backend/test/schedules.test.js`, the shift key test extended: an added shift with an earlier name (any capitalization) gets its key; an added shift whose earlier namesake is kept under another name is new; a never-used name is new; cancelling a scheduled change and typing the shift in again keeps its key. Results: schedules **20 / 20**; staff, attendance, attendance reports and export **89 / 89** (dev branch). A first run was stopped while the dev database was unreachable; its leftover test schools were removed.
 
+## Mobile: live clock on Home, and the APK build
+
+- **Clock:** Home shows the current time (HH:MM:SS, updated every second) under the date, in the branch time zone from the API (`today.timeZone`), the same zone as the recorded check-in and check-out times. `LiveClock` in `HomeScreen.js` (re-renders alone); `formatClock` in `lib/format.js`; test in `home.test.js`.
+- **Reported issue (times 3 hours behind):** not a code fault. The platform Timezone was not set, so it is UTC; schedule versions store the zone in force when saved. Fix by setting Platform Settings → General → Timezone to `Africa/Mogadishu` and saving each branch schedule again (effective tomorrow at the earliest); earlier records keep their stored zone.
+- **APK:** built on EAS (`apps/mobile/eas.json`, profile `preview`, `buildType: apk`, `EXPO_PUBLIC_API_URL=https://edutrack.colabgroup.study`). `app.json`: slug `edutrack-app`, the Expo project ID and owner. A local Windows build fails on the 260-character path limit (React Native C++ codegen).
+- **Results:** mobile tests **49 / 49**; lint clean.
+
 ## Deployment: Vercel configuration for the web app and the API
 
 - **Web (`apps/web/vercel.json`):** Vite preset, `npm run build`, output `dist`; every path except `/api/…` is served `index.html` (client-side routes survive a refresh).

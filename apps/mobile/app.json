@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "EduTrack Staff",
-    "slug": "edutrack-staff",
+    "slug": "edutrack-app",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -53,6 +53,12 @@
       ],
       "expo-font",
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "b8453ef2-60c1-438d-ab43-fac2c9741fa6"
+      }
+    },
+    "owner": "ahmednornafics-team"
   }
 }
