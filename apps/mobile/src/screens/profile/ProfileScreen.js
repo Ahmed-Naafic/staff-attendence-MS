@@ -59,6 +59,17 @@ export default function ProfileScreen({ navigation }) {
             <ListRow icon="id-card-outline" label="Staff ID" value={profile.staffId ?? '—'} />
             <Divider />
             <ListRow icon="office-building" family="mci" label="Branch" value={`${profile.branch.code} · ${profile.branch.name}`} />
+            {profile.upcomingTransfer ? (
+              <>
+                <Divider />
+                <ListRow
+                  testID="upcoming-transfer"
+                  icon="swap-horizontal"
+                  label="Moving to"
+                  value={`${profile.upcomingTransfer.branch.code} · ${profile.upcomingTransfer.branch.name} from ${profile.upcomingTransfer.effectiveFrom}`}
+                />
+              </>
+            ) : null}
             <Divider />
             <ListRow icon="school-outline" label="School" value={profile.school.name} />
             {profile.email ? (

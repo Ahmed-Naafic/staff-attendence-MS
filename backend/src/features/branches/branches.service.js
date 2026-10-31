@@ -5,6 +5,7 @@ import { isUuid } from '../../common/validate.js';
 import { getPrisma } from '../../config/prisma.js';
 import { AUDIT_ACTIONS, BRANCH_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
+import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
 import { nameKey } from './branchInput.js';
 
 /*
@@ -188,6 +189,7 @@ async function lockBranch(tx, school, id) {
  * to be ACTIVE: simultaneous creations wait for each other and never get the same number.
  */
 export async function createBranch(school, { location, ...values }, user, req) {
+  const outbox = [];
   try {
     const branch = await getPrisma().$transaction(async (tx) => {
       const [row] = await tx.$queryRaw`
@@ -202,6 +204,8 @@ export async function createBranch(school, { location, ...values }, user, req) {
         select: branchSelect,
       });
       const first = await tx.branchLocation.create({ data: { branchId: created.id, ...location, effectiveFrom: new Date() } });
+      // A new branch has no Manager yet: the Owner is told (N7).
+      await enqueue(tx, OUTBOX.BRANCH_MANAGER_CHECK, { branchId: created.id }, `manager-check:created:${created.id}`, outbox);
       await recordAuditEvent({
         client: tx,
         action: AUDIT_ACTIONS.BRANCH_CREATED,
@@ -221,6 +225,7 @@ export async function createBranch(school, { location, ...values }, user, req) {
       });
       return created;
     });
+    await dispatch(outbox);
     return getBranch(school, branch.id);
   } catch (error) {
     if (isUniqueViolation(error) && JSON.stringify(error.meta ?? {}).includes('nameKey')) throw NAME_TAKEN();
@@ -259,6 +264,7 @@ export async function updateBranch(school, id, values, user, req) {
 
 /** ACTIVE → SUSPENDED with a reason. Already suspended → 409 INVALID_STATUS. */
 export async function suspendBranch(school, id, reason, user, req) {
+  const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockActiveSchool(tx, school);
     const current = await findOrFail(tx, school, id);
@@ -270,7 +276,9 @@ export async function suspendBranch(school, id, reason, user, req) {
     });
     if (count === 0) throw conflict('INVALID_STATUS', 'Only an active branch can be suspended. This branch is already suspended.');
     // The exact interval, for attendance (absences are not counted while suspended).
-    await tx.suspensionPeriod.create({ data: { branchId: current.id, startedAt: now, reason, startedById: user.id } });
+    const period = await tx.suspensionPeriod.create({ data: { branchId: current.id, startedAt: now, reason, startedById: user.id } });
+    // The branch's Managers and staff are told, without the reason (N11).
+    await enqueue(tx, OUTBOX.BRANCH_STATUS, { branchId: current.id, status: 'SUSPENDED', periodId: period.id }, `branch-status:${period.id}:SUSPENDED`, outbox);
     await recordAuditEvent({
       client: tx,
       action: AUDIT_ACTIONS.BRANCH_SUSPENDED,
@@ -282,11 +290,13 @@ export async function suspendBranch(school, id, reason, user, req) {
       req,
     });
   });
+  await dispatch(outbox);
   return getBranch(school, id);
 }
 
 /** SUSPENDED → ACTIVE. Already active → 409 INVALID_STATUS. */
 export async function reactivateBranch(school, id, user, req) {
+  const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockActiveSchool(tx, school);
     const current = await findOrFail(tx, school, id);
@@ -295,7 +305,10 @@ export async function reactivateBranch(school, id, user, req) {
       data: { status: 'ACTIVE', suspensionReason: null, suspendedAt: null },
     });
     if (count === 0) throw conflict('INVALID_STATUS', 'Only a suspended branch can be reactivated. This branch is already active.');
+    const open = await tx.suspensionPeriod.findFirst({ where: { branchId: current.id, endedAt: null }, select: { id: true } });
     await tx.suspensionPeriod.updateMany({ where: { branchId: current.id, endedAt: null }, data: { endedAt: new Date(), endedById: user.id } });
+    const periodKey = open?.id ?? `${current.id}:${Date.now()}`;
+    await enqueue(tx, OUTBOX.BRANCH_STATUS, { branchId: current.id, status: 'ACTIVE', periodId: periodKey }, `branch-status:${periodKey}:ACTIVE`, outbox);
     await recordAuditEvent({
       client: tx,
       action: AUDIT_ACTIONS.BRANCH_REACTIVATED,
@@ -307,6 +320,7 @@ export async function reactivateBranch(school, id, user, req) {
       req,
     });
   });
+  await dispatch(outbox);
   return getBranch(school, id);
 }
 

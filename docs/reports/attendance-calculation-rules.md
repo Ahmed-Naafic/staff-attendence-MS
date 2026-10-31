@@ -152,7 +152,7 @@ For staff member **S** of branch **B**, work date **D**, the schedule version **
 - **Check-out ON/OFF:** from the check-in's schedule version.
 - **Status:** the stored status.
 - **Work date:** the stored `workDate`, calculated by the server in the schedule version's time zone at check-in.
-- **Branch:** the event's stored `branchId`. Staff are never transferred, so it is also the staff member's branch.
+- **Branch:** the event's stored `branchId`: the branch where it was recorded. Staff can be transferred (docs/staff/staff-transfers.md); records are never moved, so a staff member's records may be at several branches, each reported with its own branch.
 - **Manager scope (D2):** the Manager's **current** branch, read on each request, as approved. Records belong to the branch, not to the Manager.
 - **Absence (phase 3):**
   - for each past date, the schedule version and assignment set in effect on that date (non-cancelled; a cancelled future version never applied);

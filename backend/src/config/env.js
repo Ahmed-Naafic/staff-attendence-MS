@@ -14,6 +14,16 @@ export const env = {
   sessionHours: process.env.SESSION_HOURS === undefined ? undefined : Number(process.env.SESSION_HOURS),
   // Set to "1" by Vercel on its build and function environments (a Vercel system variable).
   onVercel: process.env.VERCEL === '1',
+  // Notifications (docs/notifications/). The scheduled job endpoint answers only requests that send
+  // `Authorization: Bearer <CRON_SECRET>` (Vercel Cron sends it when CRON_SECRET is set); without
+  // a secret the endpoint is disabled.
+  cronSecret: process.env.CRON_SECRET || undefined,
+  // How long one job run may work before it stops and leaves the rest for the next run (ms).
+  jobBudgetMs: Number(process.env.NOTIFICATION_JOB_BUDGET_MS ?? 45_000),
+  // Expo push service (Staff app push notifications). The access token is optional (needed only when
+  // "enhanced push security" is turned on for the Expo project).
+  expoPushUrl: process.env.EXPO_PUSH_URL || 'https://exp.host/--/api/v2/push/send',
+  expoAccessToken: process.env.EXPO_ACCESS_TOKEN || undefined,
 };
 
 export const isProduction = env.nodeEnv === 'production';

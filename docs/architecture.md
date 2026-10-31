@@ -186,6 +186,35 @@ Each feature has a `*.service.js` (Prisma queries, response shapes) and, where i
 
 **Attendance reports** (`features/attendance/attendanceReports.service.js`, `reportInput.js`; approved Phase 1, `docs/reports/`): read only, one shared service for both roles. The scope `{ schoolId, branchId? }` is built by the server: the owner's school (`req.school`) or the Manager's current branch (`req.branch`, read on every request, so a transfer applies at once); a branch or staff member outside it is 404, a Manager's `branch` parameter 400. A row is one accepted check-in with its check-out (`checkInEventId`); status, shift, scheduled times, time zone and check-out setting come from the event's own stored schedule version and status — nothing is recalculated. Dates are work dates (`workDate`), inclusive, at most 62 days, not after today (platform time zone). Check-out states (`recorded`, `open`, `missing`, `not_required`) use the deadline "end of the work day in the version's zone + 24 h" (`lastClosedWorkDate`), the same rule in the summary (computed per group) and in the records filter (a database condition per time zone). Coordinates are never selected; distance and accuracy are rounded to 0.1 m. The summary uses three grouped queries (check-ins and check-outs by branch, work date and version; staff by branch) plus the versions, so a slow database does not exhaust the connection pool. **Exports** (`attendanceExport.js`, `readExportBatches`, `common/csv.js`, `common/xlsx.js`): the records query and order without paging, counted and read in one REPEATABLE READ transaction (120 s limit). More than 10,000 rows → 400 before anything is sent. Both formats use the 11 standard columns (no Branch for Managers). **CSV:** streamed in batches of 2,000 with backpressure; a mid-file failure aborts the connection; formula-like text gets a leading apostrophe; RFC 4180; UTF-8 BOM. **PDF:** a dependency-free PDF 1.7 writer (`common/pdf.js`: built-in Helvetica fonts, WinAnsi text with measured wrapping, Flate-compressed pages written as each page completes, page footers as a second content stream); A4 landscape (`AttendancePdf`). **Preview:** `exportPreview` (database counts + the first 50 rows in one snapshot), formatted by `previewExport`; not reused by downloads. **Excel:** a dependency-free `.xlsx` writer (ZIP via Node's zlib, inline strings only — never formulas, named styles, frozen header, autofilter), built in memory and sent complete. File names come from server values only (`[A-Za-z0-9-]`). Not audited (D21 open). No absence, rates or scheduled totals; no new tables or indexes (`AttendanceEvent(branchId, workDate)` and `(staffUserId, workDate)` cover the filters).
 
+**Notifications** (`features/notifications/`; approved N1–N24, `docs/notifications/`). The full design is in `docs/notifications/notification-architecture.md`.
+
+| Part | Design |
+|---|---|
+| Outbox | Business transactions write a `NotificationEvent` with their change; `dispatch()` after the commit (and the scheduled job for retries) turns it into per-recipient `Notification` rows with unique dedupe keys, resolving recipients from current roles and assignments |
+| Announcements | Stored once with their audience and resolved at read time |
+| Visibility | Enforced in SQL on every request (own notifications; a Manager's current branch only; announcements for the role and school) |
+| Push | Expo push service, generic text, Staff app only; queued as `PushMessage` and sent with retries |
+| Background jobs | Missing check-outs, branches without schedule, digests, announcement pushes, retries and 90-day retention run from `GET /api/internal/jobs/notifications` (Bearer `CRON_SECRET`; Vercel Cron daily in `backend/vercel.json`) |
+| Staff app | Phone reminders with expo-notifications; OS geofencing (expo-location + expo-task-manager) for check-in reminders, with consent |
+
+| Routes | Access | Purpose |
+|---|---|---|
+| `/api/notifications` (list, unread count, details, read, read all, preferences, devices) | OWNER, MANAGER, STAFF | Notification centre |
+| `/api/manager/notification-settings` | MANAGER | Branch reminder settings |
+| `/api/platform/settings/notifications`, `/api/platform/announcements` | SUPER_ADMIN | Notification settings and announcements |
+
+**Staff transfers** (`features/staff/transfers.service.js`; approved T1–T12; design in `docs/staff/staff-transfers.md`):
+
+- **Who:** the School Owner schedules a transfer to another operating branch of the school, from tomorrow at the earliest.
+- **Transaction:** the destination assignment set, the cancellation of later scheduled sets, the `StaffTransfer` row, the outbox event and the audit event are written in one transaction, under a staff row lock and a partial unique index (one scheduled transfer per staff member).
+- **Branch history:** `StaffTransfer` rows are the staff member's branch history. `staffBranchAt(staff, instant)` gives the branch of any instant, and `recordEvent` validates each attendance event against it.
+- **Current branch:** `User.branchId` is switched when the transfer takes effect, by `settleIfDue` in the staff, Manager, Owner and notification request paths and by the notification job.
+
+| Routes | Access |
+|---|---|
+| `GET /api/owner/staff`, `GET /api/owner/staff/:id`, `GET /api/owner/branches/:id/shifts?date` | OWNER |
+| `POST /api/owner/staff/:id/transfer`, `DELETE /api/owner/staff/:id/transfer/scheduled` | OWNER |
+
 **Dates in the web app:** `lib/format.js` shows absolute dates and times in the platform display settings (`settings.display`: time zone, date format, time format). `app/providers/DisplaySettingsProvider.jsx` loads them for a Super Admin before the signed-in pages render (other roles, and a failed load, use the standard display in UTC — never the viewer's own zone; attendance reports are the exception: their times come from the API already in each event's branch time zone, labelled, D3) and replaces them after General is saved. The Audit Logs date filter and its "today" figures use the same platform day.
 
 Platform endpoints are read-only except School Management (register, edit, suspend, reactivate), School Owner Management (add, edit, suspend, reactivate), Branding (the platform name), General settings (platform information and localization) and the Authentication session lifetime and inactivity timeout; there is no deletion, approval, rejection or ownership transfer. Each change and its audit event are written in one transaction (adding an owner also assigns the school in the same transaction), and invalid status changes are refused (409 `INVALID_STATUS`), using a conditional update so two simultaneous requests cannot both succeed. No API versioning yet (none existed); `/api/platform` groups the Super Admin scope. Errors are `{ error, code, details? }` with codes `VALIDATION_ERROR` (400), `UNAUTHENTICATED` (401), `FORBIDDEN` (403), `NOT_FOUND` (404), `CODE_TAKEN` / `EMAIL_TAKEN` / `SCHOOL_HAS_OWNER` / `INVALID_STATUS` / `NAME_TAKEN` / `SCHOOL_SUSPENDED` (409), `BRANCH_NOT_OPERATING` (409), `PASSWORD_CHANGE_REQUIRED` (403), `TOO_MANY_REQUESTS` (429) and `INTERNAL_ERROR` (500).
@@ -246,6 +275,8 @@ Real values go in `backend/.env` (git-ignored). Placeholders are in `.env.exampl
 | `WEB_ORIGIN` | API | Origin allowed to send state-changing requests (default `http://localhost:5173`) |
 | `SESSION_HOURS` | API | Fallback session lifetime in hours while Platform Settings has none (used only when a whole number from 1 to 72; otherwise 12) |
 | `EDUTRACK_DB_BRANCH`, `DEV_ADMIN_PASSWORD` | `backend/.env.dev` only | Seed guard; dev Super Admin password |
+| `CRON_SECRET` | API | Enables and protects the scheduled notification job (`/api/internal/jobs/notifications`); Vercel Cron sends it |
+| `NOTIFICATION_JOB_BUDGET_MS`, `EXPO_ACCESS_TOKEN`, `EXPO_PUSH_URL` | API (optional) | Job time budget; Expo push access token (only with enhanced push security); push service address |
 | `VITE_API_URL` | Web (`apps/web/.env`) | API base path, `/api` (same origin). Only `VITE_` values reach the browser; never put secrets there. |
 
 ## Major decisions
@@ -256,7 +287,8 @@ Real values go in `backend/.env` (git-ignored). Placeholders are in `.env.exampl
 - One web app for SUPER_ADMIN, OWNER and MANAGER; one mobile app for STAFF and MANAGER.
 - Super Admin operates at platform scope only.
 - Attendance is event-oriented (CHECK_IN, CHECK_OUT, EXCUSE_SUBMITTED, CORRECTION_REQUESTED) with idempotency keys for offline sync.
-- Minimal documentation: this file, `business-rules.md`, `design/design-system.md`, `design/implementation-log.md`.
+- Minimal documentation: this file, `business-rules.md`, `design/design-system.md`, `design/implementation-log.md`, and a folder per larger feature (`reports/`, `notifications/`).
+- Notifications use a transactional outbox, per-recipient personal notifications and audience-based announcements; no resident worker (serverless), scheduled work runs from a protected endpoint (approved N19, N20).
 - Web authentication uses database sessions in an httpOnly cookie, not JWTs (Phase 9, approved): revocable sign-out, no token readable by scripts, no extra packages.
 - One owner per school, one school per owner (Phase 9, approved).
 - Development and tests use a seeded Neon `dev` branch; production holds no sample data (Phase 9, approved).

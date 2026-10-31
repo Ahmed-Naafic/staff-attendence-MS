@@ -52,6 +52,26 @@ export const recordedEvent = (body, extra = {}) => ({
   ...extra,
 });
 
+/** The staff member's notification preferences as the server computes them (reminders within the limits). */
+export const preferencesBody = (extra = {}) => ({
+  categories: [
+    { key: 'MISSING_CHECK_OUT', mandatory: false, enabled: true },
+    { key: 'ASSIGNMENT', mandatory: false, enabled: true },
+    { key: 'SCHEDULE', mandatory: false, enabled: true },
+    { key: 'STATUS', mandatory: true, enabled: true },
+    { key: 'ANNOUNCEMENT', mandatory: true, enabled: true },
+  ],
+  push: { available: true, enabled: true },
+  reminders: {
+    checkIn: { available: true, enabled: true, leadMinutes: 15, min: 0, max: 30, adjustable: true, consented: false },
+    checkOut: { available: true, enabled: true, leadMinutes: 10, min: 0, max: 60, adjustable: true },
+    upload: { available: true, enabled: true },
+  },
+  branchOperating: true,
+  locationConsentAt: null,
+  ...extra,
+});
+
 /**
  * A fake API. `routes` maps 'METHOD /path' (no query) to handler({ body, headers, url }) →
  * [status, body] or throws (network failure). Requests are recorded in `server.calls`.
@@ -66,6 +86,11 @@ export function createServer(routes = {}) {
       'GET /api/attendance/profile': () => [200, profileBody()],
       'GET /api/attendance/history': () => [200, { from: '2026-10-26', to: '2026-10-27', events: [] }],
       'POST /api/attendance/events': ({ body }) => [201, { event: recordedEvent(body) }],
+      'GET /api/notifications/unread-count': () => [200, { unreadCount: 0 }],
+      'GET /api/notifications/preferences': () => [200, preferencesBody()],
+      'GET /api/notifications': () => [200, { items: [], total: 0, page: 1, pageSize: 30, pageCount: 1, unreadCount: 0 }],
+      'POST /api/notifications/devices': () => [201, { registered: true }],
+      'DELETE /api/notifications/devices/current': () => [204],
       ...routes,
     },
   };

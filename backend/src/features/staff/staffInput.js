@@ -114,6 +114,13 @@ export function readStaffPassword(body) {
  * Shifts may be empty (no assigned shifts from that date). Whether each shift and day exists in the
  * branch schedule on that date is checked by the service.
  */
+/** Transfer (School Owner): { branchId, effectiveFrom, shifts } — the destination, its date and the destination shifts (may be empty). */
+export function readTransfer(body) {
+  const { branchId, ...change } = body;
+  if (!isUuid(branchId)) throw badRequest('Check the highlighted fields.', { branchId: 'Choose the destination branch.' });
+  return { branchId, ...readAssignmentChange(change) };
+}
+
 export function readAssignmentChange(body) {
   refuse(body, ['effectiveFrom', 'shifts'], { branchId: FIXED.branchId, staffId: 'The staff member is the one in the address.' });
   const errors = {};

@@ -17,6 +17,10 @@ import SignInScreen from '../screens/auth/SignInScreen';
 import SplashScreen from '../screens/auth/SplashScreen';
 import HistoryScreen from '../screens/history/HistoryScreen';
 import HomeScreen from '../screens/home/HomeScreen';
+import NotificationDetailScreen from '../screens/notifications/NotificationDetailScreen';
+import NotificationsScreen from '../screens/notifications/NotificationsScreen';
+import ReminderSettingsScreen from '../screens/notifications/ReminderSettingsScreen';
+import { NotificationsProvider } from '../notifications/NotificationsProvider';
 import AboutScreen from '../screens/profile/AboutScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import SettingsScreen from '../screens/profile/SettingsScreen';
@@ -64,14 +68,19 @@ function SignedIn() {
   const { colors } = useTheme();
   return (
     <AttendanceProvider>
-      <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }}>
-        <Stack.Screen name="Tabs" component={MainTabs} />
-        <Stack.Screen name="Attendance" component={AttendanceScreen} />
-        <Stack.Screen name="AttendanceResult" component={AttendanceResultScreen} options={{ gestureEnabled: false }} />
-        <Stack.Screen name="Sync" component={SyncScreen} />
-        <Stack.Screen name="Settings" component={SettingsScreen} />
-        <Stack.Screen name="About" component={AboutScreen} />
-      </Stack.Navigator>
+      <NotificationsProvider>
+        <Stack.Navigator screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.page } }}>
+          <Stack.Screen name="Tabs" component={MainTabs} />
+          <Stack.Screen name="Attendance" component={AttendanceScreen} />
+          <Stack.Screen name="AttendanceResult" component={AttendanceResultScreen} options={{ gestureEnabled: false }} />
+          <Stack.Screen name="Sync" component={SyncScreen} />
+          <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="About" component={AboutScreen} />
+          <Stack.Screen name="Notifications" component={NotificationsScreen} />
+          <Stack.Screen name="NotificationDetail" component={NotificationDetailScreen} />
+          <Stack.Screen name="ReminderSettings" component={ReminderSettingsScreen} />
+        </Stack.Navigator>
+      </NotificationsProvider>
     </AttendanceProvider>
   );
 }

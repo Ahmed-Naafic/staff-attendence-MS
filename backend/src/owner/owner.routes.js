@@ -1,9 +1,12 @@
 import { Router } from 'express';
 import { readListQuery } from '../common/listQuery.js';
 import { badRequest } from '../common/httpError.js';
-import { isUuid, jsonBody, optionalInt, optionalString } from '../common/validate.js';
+import { isUuid, jsonBody, optionalDay, optionalInt, optionalString } from '../common/validate.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { requireOwnerSchool } from '../middleware/requireOwnerSchool.js';
+import { readTransfer } from '../features/staff/staffInput.js';
+import { STAFF_STATUSES } from '../features/staff/staff.service.js';
+import { branchShiftsOn, cancelTransfer, getSchoolStaff, listSchoolStaff, scheduleTransfer } from '../features/staff/transfers.service.js';
 import { readBranchCreation, readBranchSuspension, readBranchUpdate, readLocationChange } from '../features/branches/branchInput.js';
 import {
   BRANCH_STATUSES,
@@ -118,6 +121,28 @@ ownerRouter.post('/managers/:id/reactivate', async (req, res) => {
 });
 ownerRouter.post('/managers/:id/password', async (req, res) => {
   res.json({ manager: await resetManagerPassword(req.school, req.params.id, readTemporaryPassword(jsonBody(req)), req.user, req) });
+});
+
+// ---- Staff transfers between the school's branches (T1: School Owner only) ----
+// The staff list here is for transfers: name, Staff ID, job title, status, branch; no contact data.
+ownerRouter.get('/staff', async (req, res) => {
+  const { q, status, page, pageSize } = readListQuery(req.query, { statuses: STAFF_STATUSES, defaultPageSize: 10 });
+  res.json(await listSchoolStaff(req.school, { q, status, page, pageSize, branch: optionalId(req.query, 'branch') }));
+});
+ownerRouter.get('/staff/:id', async (req, res) => {
+  res.json({ staff: await getSchoolStaff(req.school, req.params.id) });
+});
+ownerRouter.post('/staff/:id/transfer', async (req, res) => {
+  res.status(201).json({ transfer: await scheduleTransfer(req.school, req.params.id, readTransfer(jsonBody(req)), req.user, req) });
+});
+ownerRouter.delete('/staff/:id/transfer/scheduled', async (req, res) => {
+  res.json({ staff: await cancelTransfer(req.school, req.params.id, req.user, req) });
+});
+// The shifts of a branch's schedule in effect on a date (to choose the destination shifts of a transfer).
+ownerRouter.get('/branches/:id/shifts', async (req, res) => {
+  const date = optionalDay(req.query, 'date');
+  if (!date) throw badRequest('"date" is required (YYYY-MM-DD).');
+  res.json(await branchShiftsOn(req.school, req.params.id, date));
 });
 
 // Branch audit events of this school only, or (with `manager`) one Manager's events.

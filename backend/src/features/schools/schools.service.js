@@ -5,6 +5,7 @@ import { isUuid } from '../../common/validate.js';
 import { getPrisma } from '../../config/prisma.js';
 import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
+import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
 import { codePrefix } from './schoolInput.js';
 
 const schoolSelect = {
@@ -155,6 +156,7 @@ export async function updateSchool(id, values, user, req) {
 
 /** ACTIVE → SUSPENDED with a reason. Already suspended → 409 INVALID_STATUS. */
 export async function suspendSchool(id, reason, user, req) {
+  const outbox = [];
   const school = await getPrisma().$transaction(async (tx) => {
     const current = await findOrFail(tx, id);
     const now = new Date();
@@ -165,7 +167,9 @@ export async function suspendSchool(id, reason, user, req) {
     });
     if (count === 0) throw conflict('INVALID_STATUS', 'Only an active school can be suspended. This school is already suspended.');
     // The exact interval, for attendance (absences are not counted while suspended).
-    await tx.suspensionPeriod.create({ data: { schoolId: current.id, startedAt: now, reason, startedById: user.id } });
+    const period = await tx.suspensionPeriod.create({ data: { schoolId: current.id, startedAt: now, reason, startedById: user.id } });
+    // The Owner (with the reason) and every Manager and staff member of the school (without it) are told (N11).
+    await enqueue(tx, OUTBOX.SCHOOL_STATUS, { schoolId: current.id, status: 'SUSPENDED', periodId: period.id }, `school-status:${period.id}:SUSPENDED`, outbox);
     const updated = await findOrFail(tx, current.id);
     await recordAuditEvent({
       client: tx,
@@ -179,11 +183,13 @@ export async function suspendSchool(id, reason, user, req) {
     });
     return updated;
   });
+  await dispatch(outbox);
   return toSchool(school);
 }
 
 /** SUSPENDED → ACTIVE. Already active → 409 INVALID_STATUS. */
 export async function reactivateSchool(id, user, req) {
+  const outbox = [];
   const school = await getPrisma().$transaction(async (tx) => {
     const current = await findOrFail(tx, id);
     const { count } = await tx.school.updateMany({
@@ -191,7 +197,10 @@ export async function reactivateSchool(id, user, req) {
       data: { status: 'ACTIVE', suspensionReason: null, suspendedAt: null },
     });
     if (count === 0) throw conflict('INVALID_STATUS', 'Only a suspended school can be reactivated. This school is already active.');
+    const open = await tx.suspensionPeriod.findFirst({ where: { schoolId: current.id, endedAt: null }, select: { id: true } });
     await tx.suspensionPeriod.updateMany({ where: { schoolId: current.id, endedAt: null }, data: { endedAt: new Date(), endedById: user.id } });
+    const periodKey = open?.id ?? `${current.id}:${Date.now()}`;
+    await enqueue(tx, OUTBOX.SCHOOL_STATUS, { schoolId: current.id, status: 'ACTIVE', periodId: periodKey }, `school-status:${periodKey}:ACTIVE`, outbox);
     const updated = await findOrFail(tx, current.id);
     await recordAuditEvent({
       client: tx,
@@ -205,5 +214,6 @@ export async function reactivateSchool(id, user, req) {
     });
     return updated;
   });
+  await dispatch(outbox);
   return toSchool(school);
 }

@@ -8,7 +8,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.edutrack.staff"
+      "bundleIdentifier": "com.edutrack.staff",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "EduTrack uses your location when you check in or out, to verify that you are at your branch.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "If you turn on check-in reminders, your phone tells EduTrack when you arrive at your branch so it can remind you to check in. EduTrack does not track or store your location history."
+      }
     },
     "android": {
       "package": "com.edutrack.staff",
@@ -20,10 +24,9 @@
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
-      ],
-      "blockedPermissions": [
-        "ACCESS_BACKGROUND_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "POST_NOTIFICATIONS"
       ]
     },
     "web": {
@@ -48,11 +51,24 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "EduTrack uses your location only when you check in or out, to verify that you are at your branch."
+          "locationWhenInUsePermission": "EduTrack uses your location when you check in or out, to verify that you are at your branch.",
+          "locationAlwaysAndWhenInUsePermission": "If you turn on check-in reminders, your phone tells EduTrack when you arrive at your branch so it can remind you to check in. EduTrack does not track or store your location history.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": false,
+          "isIosBackgroundLocationEnabled": false
         }
       ],
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/android-icon-monochrome.png",
+          "color": "#001D31",
+          "defaultChannel": "default"
+        }
+      ],
+      "expo-task-manager"
     ],
     "extra": {
       "eas": {

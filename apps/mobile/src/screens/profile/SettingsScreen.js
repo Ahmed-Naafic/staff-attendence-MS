@@ -1,7 +1,7 @@
 /*
- * 13. Settings: appearance (system, light, dark; saved on this phone), location access, about
- * and sign out. Notifications, help, privacy and terms pages from the reference image are not
- * approved or written yet, so they are not shown.
+ * 13. Settings: appearance (system, light, dark; saved on this phone), notifications and reminders,
+ * location access, about and sign out. Help, privacy and terms pages from the reference image are
+ * not approved or written yet, so they are not shown.
  */
 import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
@@ -51,6 +51,13 @@ export default function SettingsScreen({ navigation }) {
               </View>
             );
           })}
+        </Card>
+
+        <AppText variant="label" color={colors.fgSecondary} style={styles.groupLabel}>
+          Notifications
+        </AppText>
+        <Card style={styles.list}>
+          <ListRow testID="settings-notifications" icon="notifications-outline" label="Notifications and reminders" onPress={() => navigation.navigate('ReminderSettings')} />
         </Card>
 
         <AppText variant="label" color={colors.fgSecondary} style={styles.groupLabel}>

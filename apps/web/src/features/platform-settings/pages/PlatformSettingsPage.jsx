@@ -6,6 +6,7 @@ import { useBranding } from '../../branding';
 import { InactivityTimeoutCard, SessionLifetimeCard, SignInSecurityCard } from '../components/AuthenticationCards.jsx';
 import { BrandingCard } from '../components/BrandingCard.jsx';
 import { GeneralLayout } from '../components/GeneralLayout.jsx';
+import { NotificationSettingsCard } from '../components/NotificationSettingsCard.jsx';
 import { RegistrationCard } from '../components/RegistrationCard.jsx';
 import { SaveBar } from '../components/SaveBar.jsx';
 import { ConfigurationCard, LocalizationCard, PlatformInfoCard, PlatformLogoCard } from '../components/SettingsCards.jsx';
@@ -34,7 +35,8 @@ const FIELD_LABELS = {
  * platform name is shown read-only and changed in Branding); Branding saves the platform name;
  * Authentication saves the absolute session lifetime and the inactivity timeout and shows the
  * other sign-in protection the server enforces (read only). Registration shows how schools and
- * accounts are created (read only; there is no public registration). On General, the platform
+ * accounts are created (read only; there is no public registration). Notifications saves push,
+ * reminder defaults and limits, and the digest hour (docs/notifications/). On General, the platform
  * switches, uploads, operations and dangerous actions are shown but unavailable. The other
  * sections are not available yet. The active section lives in the URL (?tab=).
  */
@@ -196,7 +198,9 @@ export default function PlatformSettingsPage() {
           </div>
         )}
 
-        {data && status !== 'error' && !['general', 'branding', 'authentication', 'registration'].includes(tab) && (
+        {data && status !== 'error' && tab === 'notifications' && <NotificationSettingsCard />}
+
+        {data && status !== 'error' && !['general', 'branding', 'authentication', 'registration', 'notifications'].includes(tab) && (
           <Card as="section" aria-label={`${current.label} settings`}>
             <EmptyState
               icon={current.icon}

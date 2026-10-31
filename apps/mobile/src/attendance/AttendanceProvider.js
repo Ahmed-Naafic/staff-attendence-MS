@@ -106,6 +106,17 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
+  // A new day (e.g. a branch transfer that starts at midnight, or the next day's shifts): reload the
+  // day when the date in the branch time zone is no longer the loaded one.
+  useEffect(() => {
+    if (!userId) return undefined;
+    const timer = setInterval(() => {
+      const day = todayRef.current;
+      if (day && AppState.currentState === 'active' && localDate(clock(), day.timeZone) !== day.date) refresh().catch(() => {});
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [userId, refresh, clock]);
+
   // Connection returns or the app comes back: upload and refresh.
   useEffect(() => {
     if (!userId) return undefined;

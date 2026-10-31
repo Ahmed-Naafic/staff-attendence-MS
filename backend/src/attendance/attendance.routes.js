@@ -5,6 +5,7 @@ import { getPrisma } from '../config/prisma.js';
 import { readAttendanceEvent } from '../features/attendance/attendanceInput.js';
 import { history, profile, recordEvent, today } from '../features/attendance/attendance.service.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
+import { settleIfDue } from '../features/staff/transfers.service.js';
 
 /**
  * Staff attendance API (/api/attendance), used by the Staff mobile app (bearer token) — the web app
@@ -14,6 +15,8 @@ import { requireAuth, requireRole } from '../middleware/requireAuth.js';
  */
 export const attendanceRouter = Router();
 attendanceRouter.use(requireAuth, requireRole('STAFF'), async (req, res, next) => {
+  // A transfer that has taken effect changes the current branch first.
+  await settleIfDue();
   const staff = await getPrisma().user.findFirst({ where: { id: req.user.id, role: 'STAFF' }, select: { id: true, branchId: true } });
   if (!staff?.branchId) return next(forbidden('No branch is assigned to your account.'));
   req.staff = staff;

@@ -5,6 +5,7 @@ import { AppShell, Sidebar, Topbar, UserMenu } from '../../components/layout';
 import { Button, EmptyState } from '../../components/ui';
 import { useSession } from '../../features/auth/SessionProvider.jsx';
 import { useBranding } from '../../features/branding';
+import { NotificationBell } from '../../features/notifications';
 import { getNavigationForRole, getRoleProfile } from '../config/navigation.js';
 import { DisplaySettingsProvider } from '../providers/DisplaySettingsProvider.jsx';
 import NotFoundPage from '../router/NotFoundPage.jsx';
@@ -63,6 +64,8 @@ export default function RoleLayout() {
           // The page header shows the title on wide screens; the topbar repeats it on
           // smaller screens where the header scrolls away.
           context={title && <span className="lg:hidden">{title}</span>}
+          // School Owners and Managers have a notification centre; Super Admins publish announcements instead (N16, N17).
+          actions={user.role === 'OWNER' || user.role === 'MANAGER' ? <NotificationBell role={user.role} /> : null}
           user={
             <UserMenu
               name={user.name}

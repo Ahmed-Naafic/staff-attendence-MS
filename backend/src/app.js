@@ -9,6 +9,7 @@ import { platformRouter } from './platform/platform.routes.js';
 import { attendanceRouter } from './attendance/attendance.routes.js';
 import { managerRouter } from './manager/manager.routes.js';
 import { ownerRouter } from './owner/owner.routes.js';
+import { notificationJobHandler, notificationsRouter } from './features/notifications/notifications.routes.js';
 
 const app = express();
 
@@ -39,6 +40,10 @@ app.use('/api/platform', platformRouter);
 app.use('/api/owner', ownerRouter);
 app.use('/api/manager', managerRouter);
 app.use('/api/attendance', attendanceRouter);
+app.use('/api/notifications', notificationsRouter);
+// Scheduled notification job (Vercel Cron or another scheduler; Bearer CRON_SECRET).
+app.get('/api/internal/jobs/notifications', notificationJobHandler);
+app.post('/api/internal/jobs/notifications', notificationJobHandler);
 
 app.use(notFound);
 app.use(errorHandler);

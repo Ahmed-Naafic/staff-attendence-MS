@@ -9,6 +9,7 @@ import { previewExport, sendCsvExport, sendPdfExport, sendXlsxExport } from '../
 import { readExportQuery, readOptionsQuery, readRecordsQuery, readSummaryQuery } from '../features/attendance/reportInput.js';
 import { operatingState } from '../features/branches/branches.service.js';
 import { readScheduleChange } from '../features/schedules/scheduleInput.js';
+import { getBranchReminderSettings, updateBranchReminderSettings } from '../features/notifications/notificationSettings.service.js';
 import { cancelScheduledSchedule, getSchedule, listVersions, saveSchedule } from '../features/schedules/schedules.service.js';
 import { readAssignmentChange, readStaffCreation, readStaffPassword, readStaffSuspension, readStaffUpdate } from '../features/staff/staffInput.js';
 import {
@@ -56,6 +57,14 @@ managerRouter.post('/schedule', async (req, res) => {
 });
 managerRouter.delete('/schedule/scheduled', async (req, res) => {
   res.json(await cancelScheduledSchedule(req.branch, req.user, req));
+});
+
+// ---- Reminder settings for the branch's staff (within the platform limits, N5) ----
+managerRouter.get('/notification-settings', async (req, res) => {
+  res.json(await getBranchReminderSettings(req.branch));
+});
+managerRouter.put('/notification-settings', async (req, res) => {
+  res.json(await updateBranchReminderSettings(req.branch, jsonBody(req), req.user, req));
 });
 
 // ---- Staff of the Manager's branch (read only while the branch or school is suspended) ----

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { HttpError } from '../../common/httpError.js';
 import { getPrisma } from '../../config/prisma.js';
@@ -6,6 +7,8 @@ import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { WEEKDAYS, toTime } from '../schedules/scheduleInput.js';
 import { localDate, scheduleOn } from '../schedules/schedules.service.js';
 import { assignmentOn } from '../staff/staff.service.js';
+import { staffBranchAt, upcomingTransfer } from '../staff/transfers.service.js';
+import { dispatch, OUTBOX } from '../notifications/outbox.js';
 import { judgePosition } from './geofence.js';
 import { suspendedAt } from './suspensions.js';
 
@@ -141,7 +144,10 @@ export async function recordEvent(staff, event, receivedAt = new Date()) {
     throw refuse('EVENT_TOO_OLD', 'This event was recorded more than 24 hours ago and can no longer be accepted.');
   }
 
-  const branch = await prisma.branch.findUnique({ where: { id: staff.branchId }, select: { id: true, schoolId: true } });
+  // The branch of the event's own time (T5): an event saved before a transfer and uploaded after it
+  // is judged against the branch the staff member belonged to then, never the new one.
+  const branchId = await staffBranchAt(staff.id, event.occurredAt, prisma);
+  const branch = await prisma.branch.findUnique({ where: { id: branchId ?? staff.branchId }, select: { id: true, schoolId: true } });
   const { moment, schedule } = await dayContext(branch.id, event.occurredAt, prisma);
   if (!schedule) throw refuse('NO_SHIFT', 'Your branch has no schedule on this day.');
   const assignment = await assignmentOn(staff.id, moment.date, prisma);
@@ -195,28 +201,37 @@ export async function recordEvent(staff, event, receivedAt = new Date()) {
   }
 
   try {
-    const created = await prisma.attendanceEvent.create({
-      data: {
-        staffUserId: staff.id,
-        branchId: branch.id,
-        type: event.type,
-        clientEventId: event.clientEventId,
-        occurredAt: event.occurredAt,
-        sentAt: event.sentAt,
-        receivedAt,
-        workDate: asDbDate(moment.date),
-        shiftKey: shift.shiftKey,
-        scheduleId: event.type === 'CHECK_OUT' ? checkIn.scheduleId : schedule.id,
-        assignmentId: event.type === 'CHECK_OUT' ? checkIn.assignmentId : assignment.id,
-        locationId: location.id,
-        latitude: event.position.latitude,
-        longitude: event.position.longitude,
-        accuracyMeters: event.position.accuracy,
-        distanceMeters: judged.distanceMeters,
-        status,
-        checkInEventId: checkIn?.id ?? null,
-      },
-    });
+    // A late check-in also writes its notification event (outbox) in the same transaction (N6);
+    // notifications are created after the commit and can never undo the check-in.
+    const id = randomUUID();
+    const outbox = status === 'LATE' ? [prisma.notificationEvent.create({ data: { type: OUTBOX.LATE_CHECK_IN, payload: { eventId: id }, dedupeKey: `late-check-in:${id}` } })] : [];
+    const [created, ...queued] = await prisma.$transaction([
+      prisma.attendanceEvent.create({
+        data: {
+          id,
+          staffUserId: staff.id,
+          branchId: branch.id,
+          type: event.type,
+          clientEventId: event.clientEventId,
+          occurredAt: event.occurredAt,
+          sentAt: event.sentAt,
+          receivedAt,
+          workDate: asDbDate(moment.date),
+          shiftKey: shift.shiftKey,
+          scheduleId: event.type === 'CHECK_OUT' ? checkIn.scheduleId : schedule.id,
+          assignmentId: event.type === 'CHECK_OUT' ? checkIn.assignmentId : assignment.id,
+          locationId: location.id,
+          latitude: event.position.latitude,
+          longitude: event.position.longitude,
+          accuracyMeters: event.position.accuracy,
+          distanceMeters: judged.distanceMeters,
+          status,
+          checkInEventId: checkIn?.id ?? null,
+        },
+      }),
+      ...outbox,
+    ]);
+    await dispatch(queued.map((q) => q.id));
     return { created: true, event: await toEvent(created, prisma) };
   } catch (error) {
     if (!isUniqueViolation(error)) throw error;
@@ -278,6 +293,8 @@ export async function profile(staff) {
     email: user.email ?? null,
     branch: { code: user.branch.code, name: user.branch.name },
     school: { code: user.branch.school.code, name: user.branch.school.name },
+    // A scheduled move to another branch of the school (T3), or null.
+    upcomingTransfer: await upcomingTransfer(staff.id),
   };
 }
 

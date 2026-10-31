@@ -1,5 +1,6 @@
 import { forbidden } from '../common/httpError.js';
 import { getPrisma } from '../config/prisma.js';
+import { settleIfDue } from '../features/staff/transfers.service.js';
 
 /**
  * For MANAGER routes (use after requireAuth and requireRole('MANAGER')): sets req.branch to the
@@ -8,6 +9,8 @@ import { getPrisma } from '../config/prisma.js';
  * so a transfer applies to the next request. No branch → 403.
  */
 export async function requireManagerBranch(req, res, next) {
+  // Staff transfers that have taken effect change which staff belong to the branch.
+  await settleIfDue();
   const manager = await getPrisma().user.findFirst({
     where: { id: req.user.id, role: 'MANAGER' },
     select: {

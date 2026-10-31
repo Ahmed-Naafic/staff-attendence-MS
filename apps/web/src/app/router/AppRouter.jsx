@@ -6,8 +6,11 @@ import { LoginPage, RequireSession, useSession } from '../../features/auth';
 import { DashboardPage } from '../../features/dashboard';
 import { ManagersPage } from '../../features/managers';
 import { MyBranchPage } from '../../features/my-branch';
+import { NotificationsPage } from '../../features/notifications';
+import { AnnouncementsPage } from '../../features/announcements';
 import { SchedulePage } from '../../features/schedules';
 import { StaffPage } from '../../features/staff';
+import { OwnerStaffPage } from '../../features/staff-transfers';
 import { PlatformSettingsPage } from '../../features/platform-settings';
 import { PlatformReportsPage } from '../../features/reports';
 import { SchoolOwnersPage } from '../../features/school-owners';
@@ -15,6 +18,12 @@ import { SchoolsPage } from '../../features/schools';
 import { getRoleProfile } from '../config/navigation.js';
 import RoleLayout from '../layouts/RoleLayout.jsx';
 import NotFoundPage from './NotFoundPage.jsx';
+
+// /staff: the Manager manages their branch's staff; the Owner sees the school's staff and transfers them.
+function StaffRoute() {
+  const { user } = useSession();
+  return user.role === 'OWNER' ? <OwnerStaffPage /> : <StaffPage />;
+}
 
 // "/" sends the user to their role's start page.
 function RoleHome() {
@@ -67,6 +76,7 @@ const routes = [
         children: [{ path: ':logId', element: <></> }],
       },
       { path: 'platform-settings', element: <PlatformSettingsPage />, handle: { title: 'Platform Settings', roles: SUPER_ADMIN } },
+      { path: 'announcements', element: <AnnouncementsPage />, handle: { title: 'Announcements', roles: SUPER_ADMIN } },
 
       // OWNER — school scope
       {
@@ -89,14 +99,16 @@ const routes = [
       { path: 'schedule', element: <SchedulePage />, handle: { title: 'Schedule', roles: MANAGER } },
       {
         path: 'staff',
-        element: <StaffPage />,
-        handle: { title: 'Staff', roles: MANAGER },
-        // /staff/:staffId opens the staff details panel over the list (rendered by the page).
+        element: <StaffRoute />,
+        handle: { title: 'Staff', roles: OWNER_OR_MANAGER },
+        // /staff/:staffId opens the staff details panel over the list (rendered by the Manager's page).
         children: [{ path: ':staffId', element: <></> }],
       },
 
       // OWNER and MANAGER — attendance reports (read only; each role sees its own scope, decided by the API)
       { path: 'attendance', element: <AttendanceReportsPage />, handle: { title: 'Attendance', roles: OWNER_OR_MANAGER } },
+      // OWNER and MANAGER — notification centre (each sees only their own notifications, decided by the API)
+      { path: 'notifications', element: <NotificationsPage />, handle: { title: 'Notifications', roles: OWNER_OR_MANAGER } },
 
       { path: '*', element: <NotFoundPage />, handle: { title: 'Page not found' } },
     ],

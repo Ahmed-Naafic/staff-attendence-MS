@@ -45,7 +45,13 @@ Offline test: check in with the phone's Wi-Fi and mobile data off (the event is 
 ### Notes
 
 - **HTTP on the local network** works in Expo Go. A standalone build (APK/AAB via EAS) should use **HTTPS**; plain HTTP would need an explicit cleartext setting, which is not configured.
-- Location permission is *while using the app* only; background location is blocked in `app.json`.
+- **Location:**
+  - Check-in and check-out use location *while using the app*.
+  - **Background location** ("Allow all the time") is requested only when the staff member turns on **check-in reminders** and agrees in the app. It is used only for the operating system's geofence of their branch (docs/notifications/).
+- **Notifications:** the notification centre works everywhere. These need a **development or production build** (EAS), not Expo Go:
+  - **phone reminders**;
+  - **background geofencing**;
+  - **remote push**: uses the Expo project in `app.json` (`extra.eas.projectId`), and Android also needs the project's FCM credentials (`eas credentials`).
 - **Branding:** the icon, adaptive icon, splash and in-app logo come from `docs/design/references/staff-app/EduTrack School Attendance Icon.png` (see *Branding assets*). **Expo Go shows its own icon and splash**, not these: they appear only in a native build of this app (below).
 
 ## Branding assets

@@ -1,5 +1,5 @@
 import { getPrisma } from '../../config/prisma.js';
-import { BRANCH_ACTIONS, MANAGER_ACTIONS, SECURITY_ACTIONS, STAFF_ACTIONS } from '../audit-logs/auditActions.js';
+import { BRANCH_ACTIONS, MANAGER_ACTIONS, PREFERENCE_ACTIONS, SECURITY_ACTIONS, STAFF_ACTIONS } from '../audit-logs/auditActions.js';
 import { toSchool } from '../schools/schools.service.js';
 import { platformFigures, withoutTotal } from '../reports/platformStats.js';
 
@@ -24,7 +24,7 @@ export async function getDashboard({ range, tz }) {
     // Platform actions only: sign-ins and sign-outs belong to the audit log, not this summary, and
     // branch events are school activity (School Owners), not platform activity.
     prisma.auditEvent.findMany({
-      where: { action: { notIn: [...SECURITY_ACTIONS, ...BRANCH_ACTIONS, ...MANAGER_ACTIONS, ...STAFF_ACTIONS] }, result: 'SUCCESS' },
+      where: { action: { notIn: [...SECURITY_ACTIONS, ...BRANCH_ACTIONS, ...MANAGER_ACTIONS, ...STAFF_ACTIONS, ...PREFERENCE_ACTIONS] }, result: 'SUCCESS' },
       orderBy: { occurredAt: 'desc' },
       take: 5,
       select: { id: true, action: true, targetName: true, occurredAt: true },

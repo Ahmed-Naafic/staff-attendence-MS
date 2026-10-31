@@ -5,11 +5,13 @@ import { isUuid } from '../../common/validate.js';
 import { getPrisma } from '../../config/prisma.js';
 import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
+import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
 import { hashPassword } from '../auth/password.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, toTime } from '../schedules/scheduleInput.js';
 import { addDays, BRANCH_TX, localDate, lockOperatingBranch, MAX_AHEAD_DAYS, scheduleOn } from '../schedules/schedules.service.js';
 import { phoneKey } from '../schools/schoolInput.js';
+import { transferSummary } from './transfers.service.js';
 
 /*
  * Staff accounts and shift assignments (approved rules: docs/business-rules.md → Staff accounts and
@@ -109,9 +111,10 @@ export function assignmentOn(staffUserId, date, client = getPrisma()) {
   });
 }
 
-function assignmentAfter(staffUserId, date, client) {
+/** The scheduled (future) set of the staff member in a branch (a transfer's destination set belongs to the destination). */
+function assignmentAfter(staffUserId, date, client, branchId) {
   return client.staffAssignment.findFirst({
-    where: { staffUserId, cancelledAt: null, effectiveFrom: { gt: asDbDate(date) } },
+    where: { staffUserId, cancelledAt: null, effectiveFrom: { gt: asDbDate(date) }, ...(branchId && { branchId }) },
     orderBy: [{ effectiveFrom: 'asc' }, { recordedAt: 'asc' }],
     include: assignmentInclude,
   });
@@ -150,7 +153,7 @@ export async function getStaff(branch, id, client = getPrisma()) {
   const today = localDate(timeZone);
   const [current, scheduled, scheduleNow, scheduleNext] = await Promise.all([
     assignmentOn(staff.id, today, client),
-    assignmentAfter(staff.id, today, client),
+    assignmentAfter(staff.id, today, client, branch.id),
     scheduleOn(branch.id, today, client),
     client.branchSchedule.findFirst({
       where: { branchId: branch.id, cancelledAt: null, effectiveFrom: { gt: asDbDate(today) } },
@@ -168,6 +171,7 @@ export async function getStaff(branch, id, client = getPrisma()) {
       current: await toAssignment(current, client),
       scheduled: await toAssignment(scheduled, client),
     },
+    transfer: await transferSummary(branch, staff.id, client),
     branchShifts: {
       current: scheduleNow ? { effectiveFrom: fromDbDate(scheduleNow.effectiveFrom), shifts: shiftOptions(scheduleNow) } : null,
       scheduled: scheduleNext ? { effectiveFrom: fromDbDate(scheduleNext.effectiveFrom), shifts: shiftOptions(scheduleNext) } : null,
@@ -181,7 +185,8 @@ export async function listAssignments(branch, id) {
   const staff = await findOrFail(prisma, branch, id);
   const today = localDate(await platformTimeZone());
   const rows = await prisma.staffAssignment.findMany({
-    where: { staffUserId: staff.id },
+    // This branch's sets only: a transferred staff member's sets at another branch are not this Manager's.
+    where: { staffUserId: staff.id, branchId: branch.id },
     include: assignmentInclude,
     orderBy: [{ effectiveFrom: 'desc' }, { recordedAt: 'desc' }],
   });
@@ -358,11 +363,43 @@ export async function resetStaffPassword(branch, id, password, user, req) {
 
 // ---- assignments --------------------------------------------------------------------------
 
+/**
+ * Field errors for an assignment set against the branch schedule in effect on its effective date:
+ * each shift must be in that schedule and work the chosen days; assigned shifts sharing a day may
+ * not overlap. Shared by the Manager's assignment changes and the Owner's transfers.
+ */
+export function assignedShiftErrors(schedule, shifts, effectiveFrom, whose = 'your branch') {
+  const errors = {};
+  const byKey = new Map((schedule?.shifts ?? []).map((s) => [s.shiftKey, s]));
+  shifts.forEach((a, i) => {
+    const shift = byKey.get(a.shiftKey);
+    if (!shift) errors[`shifts.${i}.shiftKey`] = `This shift is not in ${whose}'s schedule on ${effectiveFrom}.`;
+    else {
+      const off = a.days.filter((d) => !shift.days.includes(d));
+      if (off.length) errors[`shifts.${i}.days`] = `"${shift.name}" does not work on ${dayList(off)} in the schedule from ${fromDbDate(schedule.effectiveFrom)}.`;
+    }
+  });
+  shifts.forEach((b, j) => {
+    const sb = byKey.get(b.shiftKey);
+    if (!sb || errors[`shifts.${j}.days`]) return;
+    for (let i = 0; i < j; i += 1) {
+      const sa = byKey.get(shifts[i].shiftKey);
+      const shared = shifts[i].days.filter((d) => b.days.includes(d));
+      if (sa && shared.length && sa.startMinute < sb.endMinute && sb.startMinute < sa.endMinute) {
+        errors[`shifts.${j}.shiftKey`] = `Overlaps "${sa.name}" on ${dayList(shared)}.`;
+        break;
+      }
+    }
+  });
+  return errors;
+}
+
 const canonical = (shifts) => JSON.stringify([...shifts].map((s) => [s.shiftKey, s.days.join(',')]).sort((a, b) => a[0].localeCompare(b[0])));
 const summary = (items, named) => (items.length ? items.map((a) => `${named.get(a.shiftKey)?.name ?? 'Removed shift'}: ${dayList(a.days)}`).join('; ') : 'No shifts');
 
-async function cancelSet(tx, branch, staff, set, user, req, reason) {
+async function cancelSet(tx, branch, staff, set, user, req, reason, outbox) {
   await tx.staffAssignment.updateMany({ where: { id: set.id, cancelledAt: null }, data: { cancelledAt: new Date() } });
+  await enqueue(tx, OUTBOX.ASSIGNMENT_CANCELLED, { assignmentId: set.id }, `assignment-cancelled:${set.id}`, outbox);
   await recordAuditEvent({
     client: tx,
     action: AUDIT_ACTIONS.STAFF_ASSIGNMENT_CHANGE_CANCELLED,
@@ -384,14 +421,25 @@ async function cancelSet(tx, branch, staff, set, user, req, reason) {
  */
 export async function saveAssignments(branch, id, { effectiveFrom, shifts }, user, req) {
   const timeZone = await platformTimeZone();
+  const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockOperatingBranch(tx, branch);
     const staff = await lockStaff(tx, branch, id);
     const today = localDate(timeZone);
-    const [current, scheduled] = await Promise.all([assignmentOn(staff.id, today, tx), assignmentAfter(staff.id, today, tx)]);
+    const [current, scheduled, transfer] = await Promise.all([
+      assignmentOn(staff.id, today, tx),
+      assignmentAfter(staff.id, today, tx, branch.id),
+      tx.staffTransfer.findFirst({ where: { staffUserId: staff.id, status: 'SCHEDULED' }, select: { effectiveFrom: true } }),
+    ]);
     const earliest = current ? addDays(today, 1) : today;
     const latest = addDays(today, MAX_AHEAD_DAYS);
     const errors = {};
+    // After a scheduled transfer the destination branch's assignments apply (set by the School Owner).
+    if (transfer && effectiveFrom >= fromDbDate(transfer.effectiveFrom)) {
+      throw badRequest('Check the highlighted fields.', {
+        effectiveFrom: `This staff member moves to another branch on ${fromDbDate(transfer.effectiveFrom)}. Assignments in your branch must start before that date.`,
+      });
+    }
     if (effectiveFrom < earliest) {
       errors.effectiveFrom = current
         ? `A change can start tomorrow (${earliest}) at the earliest, so today's assignments do not change during the day.`
@@ -403,32 +451,13 @@ export async function saveAssignments(branch, id, { effectiveFrom, shifts }, use
     if (shifts.length && !schedule) {
       throw badRequest('Check the highlighted fields.', { effectiveFrom: `Your branch has no schedule in effect on ${effectiveFrom}. Set the schedule first.` });
     }
-    const byKey = new Map((schedule?.shifts ?? []).map((s) => [s.shiftKey, s]));
-    shifts.forEach((a, i) => {
-      const shift = byKey.get(a.shiftKey);
-      if (!shift) errors[`shifts.${i}.shiftKey`] = `This shift is not in your branch's schedule on ${effectiveFrom}.`;
-      else {
-        const off = a.days.filter((d) => !shift.days.includes(d));
-        if (off.length) errors[`shifts.${i}.days`] = `"${shift.name}" does not work on ${dayList(off)} in the schedule from ${fromDbDate(schedule.effectiveFrom)}.`;
-      }
-    });
-    shifts.forEach((b, j) => {
-      const sb = byKey.get(b.shiftKey);
-      if (!sb || errors[`shifts.${j}.days`]) return;
-      for (let i = 0; i < j; i += 1) {
-        const sa = byKey.get(shifts[i].shiftKey);
-        const shared = shifts[i].days.filter((d) => b.days.includes(d));
-        if (sa && shared.length && sa.startMinute < sb.endMinute && sb.startMinute < sa.endMinute) {
-          errors[`shifts.${j}.shiftKey`] = `Overlaps "${sa.name}" on ${dayList(shared)}.`;
-          break;
-        }
-      }
-    });
+    Object.assign(errors, assignedShiftErrors(schedule, shifts, effectiveFrom));
     if (Object.keys(errors).length) throw badRequest('Check the highlighted fields.', errors);
+    const byKey = new Map((schedule?.shifts ?? []).map((s) => [s.shiftKey, s]));
 
     const named = new Map([...byKey].map(([k, s]) => [k, s]));
     if (current && canonical(current.shifts) === canonical(shifts)) {
-      if (scheduled) await cancelSet(tx, branch, staff, scheduled, user, req, 'The assignments saved are the ones already in effect.');
+      if (scheduled) await cancelSet(tx, branch, staff, scheduled, user, req, 'The assignments saved are the ones already in effect.', outbox);
       return;
     }
     const fields = [];
@@ -436,9 +465,11 @@ export async function saveAssignments(branch, id, { effectiveFrom, shifts }, use
       await tx.staffAssignment.updateMany({ where: { id: scheduled.id, cancelledAt: null }, data: { cancelledAt: new Date() } });
       fields.push({ field: 'Scheduled change', from: `From ${fromDbDate(scheduled.effectiveFrom)}`, to: 'Replaced' });
     }
-    await tx.staffAssignment.create({
+    const created = await tx.staffAssignment.create({
       data: { staffUserId: staff.id, branchId: branch.id, effectiveFrom: asDbDate(effectiveFrom), timeZone, shifts: { create: shifts } },
     });
+    // The staff member is told about their new shifts (a replaced scheduled set is covered by this notice).
+    await enqueue(tx, OUTBOX.ASSIGNMENT_CHANGED, { assignmentId: created.id }, `assignment:${created.id}`, outbox);
     const previousSchedule = current ? await scheduleOn(branch.id, today, tx) : null;
     const previousNames = new Map((previousSchedule?.shifts ?? []).map((s) => [s.shiftKey, s]));
     fields.push(
@@ -456,18 +487,21 @@ export async function saveAssignments(branch, id, { effectiveFrom, shifts }, use
       req,
     });
   }, BRANCH_TX);
+  await dispatch(outbox);
   return getStaff(branch, id);
 }
 
 /** Cancels the scheduled assignment set (404 when there is none). */
 export async function cancelScheduledAssignments(branch, id, user, req) {
   const timeZone = await platformTimeZone();
+  const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockOperatingBranch(tx, branch);
     const staff = await lockStaff(tx, branch, id);
-    const scheduled = await assignmentAfter(staff.id, localDate(timeZone), tx);
+    const scheduled = await assignmentAfter(staff.id, localDate(timeZone), tx, branch.id);
     if (!scheduled) throw notFound('There is no scheduled assignment change.');
-    await cancelSet(tx, branch, staff, scheduled, user, req);
+    await cancelSet(tx, branch, staff, scheduled, user, req, undefined, outbox);
   }, BRANCH_TX);
+  await dispatch(outbox);
   return getStaff(branch, id);
 }

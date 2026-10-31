@@ -2042,3 +2042,74 @@ Found in the dev data for CIT-001-B001. A Manager scheduled a change with a "nig
 - **Browser (headless Chrome, temporary fixture removed afterwards):**
   - The dialog, the format cards, the PDF / Excel / CSV previews and a PDF download (valid, 2 pages) all worked.
   - At 390 px the dialog fits, scrolls inside, and the Download button is full width; no page overflow.
+
+## Notifications: in-app centres, reminders, push, geofencing and announcements (N1–N24)
+
+Implements the approved decisions N1–N24 (`docs/notifications/`).
+
+- **Database:** migration `20261030090000_notifications`, new tables only:
+  - Notification, NotificationEvent (outbox), Announcement, AnnouncementSchool, AnnouncementRead;
+  - NotificationSettings, BranchReminderSettings, NotificationPreference;
+  - PushDevice, PushMessage.
+  - Applied to the Neon dev branch with `migrate deploy`; `migrate diff` against the dev database is empty.
+- **Backend** (`features/notifications/`):
+  - the outbox and its handlers;
+  - Somali templates;
+  - the feed (UNION of personal notifications and announcements, visibility in SQL);
+  - settings and preferences (audited);
+  - announcements (audited);
+  - push through the Expo push service (claims with SKIP LOCKED, retries, dead tokens removed);
+  - scheduled jobs (digests, missing check-outs, branches without schedule, announcement push, retention) behind `CRON_SECRET`, with a daily Vercel Cron.
+  - Hooks were added to the attendance, schedule, staff assignment, Manager, branch and school transactions; each enqueues inside the transaction and dispatches after it.
+- **Audit:** eight new actions, added to the audit log labels. The branch reminder change is a branch event; preference changes are left out of the dashboard's recent activity.
+- **Web:**
+  - the bell and the `/notifications` page for Owners and Managers (list, filters, details, digest view with branch rows, mark read or all, preferences, Manager staff reminders);
+  - Super Admin Announcements page and Platform Settings → Notifications (formerly a placeholder tab);
+  - the topbar `actions` slot now carries the bell.
+- **Mobile:**
+  - the notification centre (bell with badge on Home, list, details, settings);
+  - reminders scheduled on the phone (check-out, upload limit);
+  - push registration per session;
+  - OS geofence check-in reminders with consent.
+  - Added `expo-notifications`, `expo-task-manager` and `expo-constants` with `npx expo install` (SDK 58 versions).
+  - `app.json`: background location (was blocked) and notification permissions, iOS permission texts, plugins.
+  - The user's EAS settings (slug, project id, owner, `eas.json`) were kept.
+- **Changed rules (documented in `business-rules.md`):**
+  - the check-in reminder (frequency: one per shift per day);
+  - the GPS exception for consented geofencing;
+  - the Staff app's notifications and background location;
+  - the reports' "not available" list.
+- **Found and fixed while testing:**
+  - two test assertions (`SCHOOL_DIGEST` matched a `SCHOOL_` prefix filter; S1 legitimately had more than one waiting push);
+  - an overlapping `act()` in a mobile screen test that stopped the next test from rendering;
+  - the test cleanup missed outbox rows whose payload held version, assignment or event ids (seven leftover rows from the first run were removed; the cleanup now collects those ids).
+
+## Staff transfers between branches (T1–T12)
+
+Implements the approved decisions T1–T12 (`docs/staff/staff-transfers.md`).
+
+- **Database:** migration `20261031090000_staff_transfers`:
+  - `StaffTransfer`, which is the staff member's branch history;
+  - `StaffTransferStatus`;
+  - `NotificationCategory.TRANSFER`;
+  - one scheduled transfer per staff member (partial unique index), and checks.
+  - Applied to the Neon dev branch; no drift.
+- **Backend:**
+  - `transfers.service.js` (schedule, cancel, settle, branch at an instant, Owner staff list and details, branch shifts on a date, Manager summary, upcoming transfer for the app) and the Owner routes;
+  - attendance validates events against the branch of their time;
+  - the Manager's assignment views and changes are limited to their branch's sets;
+  - assignment checks are shared with the transfer (`assignedShiftErrors`; the Manager's messages are unchanged);
+  - outbox event `STAFF_TRANSFER` and three Somali templates;
+  - schedule-change notices skip staff who have left;
+  - the job settles transfers first.
+- **Web:**
+  - the Owner's **Staff** page (list, filters, details with transfer history, transfer dialog with destination, date, destination shifts and a review step, cancel);
+  - `/staff` by role;
+  - the Manager's drawer "Branch transfers" section (dates only);
+  - audit labels.
+- **Mobile:** profile "Moving to"; reload of the day when the date changes; preferences reload on branch change (the geofence and reminders follow); transfer category labels.
+- **Found while testing:**
+  - The Staff ID is kept (T2), so it still carries the old branch code in the destination Manager's notice. This is expected, and the test checks for the branch name instead.
+  - The first simulation of a transfer starting mid-day was not realistic (transfers start at 00:00); the test now uses midnight and an offline event from the day before.
+  - React Native Testing Library 14 has no `UNSAFE_getByType`; the mobile test triggers the app's foreground refresh instead.
+

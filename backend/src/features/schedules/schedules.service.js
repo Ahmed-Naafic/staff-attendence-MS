@@ -4,6 +4,7 @@ import { getPrisma } from '../../config/prisma.js';
 import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { operatingState } from '../branches/branches.service.js';
+import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, nameKey, toTime } from './scheduleInput.js';
 
@@ -146,9 +147,11 @@ const shiftSummary = (s) =>
 const actorOf = (user) => ({ id: user.id, name: user.name, role: user.role });
 const auditTarget = (branch) => ({ type: 'branch', id: branch.id, name: `${branch.name} (${branch.code})` });
 
-async function cancelVersion(tx, branch, version, user, req, reason) {
+async function cancelVersion(tx, branch, version, user, req, reason, outbox) {
   const now = new Date();
   await tx.branchSchedule.updateMany({ where: { id: version.id, cancelledAt: null }, data: { cancelledAt: now } });
+  // Staff whose shifts that change would have affected are told it was cancelled (N9).
+  await enqueue(tx, OUTBOX.SCHEDULE_CHANGE_CANCELLED, { versionId: version.id }, `schedule-cancelled:${version.id}`, outbox);
   await recordAuditEvent({
     client: tx,
     action: AUDIT_ACTIONS.BRANCH_SCHEDULE_CHANGE_CANCELLED,
@@ -199,6 +202,7 @@ async function earlierShiftKeys(tx, branch, shifts) {
  */
 export async function saveSchedule(branch, { effectiveFrom, checkOutEnabled, shifts }, user, req) {
   const timeZone = await platformTimeZone();
+  const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockOperatingBranch(tx, branch);
     const today = localDate(timeZone);
@@ -230,17 +234,25 @@ export async function saveSchedule(branch, { effectiveFrom, checkOutEnabled, shi
     const keyed = shifts.map(({ key, ...shift }) => ({ ...shift, shiftKey: key ?? earlier.get(nameKey(shift.name)) ?? randomUUID() }));
     const next = { checkOutEnabled, shifts: keyed };
     if (current && canonical(current) === canonical(next)) {
-      if (scheduled) await cancelVersion(tx, branch, scheduled, user, req, 'The schedule saved is the one already in effect.');
+      if (scheduled) await cancelVersion(tx, branch, scheduled, user, req, 'The schedule saved is the one already in effect.', outbox);
       return;
     }
+    // The version that would apply on the effective date without this change (for the affected staff, N9).
+    const baseline = await scheduleOn(branch.id, effectiveFrom, tx);
     const fields = [];
     if (scheduled) {
       await tx.branchSchedule.updateMany({ where: { id: scheduled.id, cancelledAt: null }, data: { cancelledAt: new Date() } });
       fields.push({ field: 'Scheduled change', from: `From ${fromDbDate(scheduled.effectiveFrom)}`, to: 'Replaced' });
+      // A replaced change that would have started earlier will not happen: tell its affected staff.
+      // (One starting on or after the new date is covered by the new change's notice.)
+      if (fromDbDate(scheduled.effectiveFrom) < effectiveFrom) {
+        await enqueue(tx, OUTBOX.SCHEDULE_CHANGE_CANCELLED, { versionId: scheduled.id }, `schedule-cancelled:${scheduled.id}`, outbox);
+      }
     }
-    await tx.branchSchedule.create({
+    const created = await tx.branchSchedule.create({
       data: { branchId: branch.id, effectiveFrom: asDbDate(effectiveFrom), timeZone, checkOutEnabled, shifts: { create: keyed } },
     });
+    await enqueue(tx, OUTBOX.SCHEDULE_CHANGED, { versionId: created.id, baselineId: baseline?.id ?? null }, `schedule:${created.id}`, outbox);
     fields.push(
       { field: 'Effective from', from: current ? fromDbDate(current.effectiveFrom) : null, to: `${effectiveFrom} (${timeZone})` },
       { field: 'Check-out', from: current ? (current.checkOutEnabled ? 'On' : 'Off') : null, to: checkOutEnabled ? 'On' : 'Off' },
@@ -257,17 +269,20 @@ export async function saveSchedule(branch, { effectiveFrom, checkOutEnabled, shi
       req,
     });
   }, BRANCH_TX);
+  await dispatch(outbox);
   return getSchedule(branch);
 }
 
 /** Cancels the scheduled version (404 when there is none). */
 export async function cancelScheduledSchedule(branch, user, req) {
   const timeZone = await platformTimeZone();
+  const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockOperatingBranch(tx, branch);
     const scheduled = await scheduledAfter(branch.id, localDate(timeZone), tx);
     if (!scheduled) throw notFound('There is no scheduled schedule change.');
-    await cancelVersion(tx, branch, scheduled, user, req);
+    await cancelVersion(tx, branch, scheduled, user, req, undefined, outbox);
   }, BRANCH_TX);
+  await dispatch(outbox);
   return getSchedule(branch);
 }

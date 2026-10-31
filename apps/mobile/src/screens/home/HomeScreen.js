@@ -8,7 +8,7 @@
  */
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { userMessage } from '../../api/errors';
 import { useAttendance } from '../../attendance/AttendanceProvider';
 import { branchLocationAt, checkPosition } from '../../attendance/geo';
@@ -19,8 +19,10 @@ import { AttendanceStateCard, CheckOutAction, FingerprintControl, LocationStatus
 import { AppText, Badge, Card, Icon, LoadingView, Logo, Notice, Screen } from '../../components/ui';
 import { formatClock, formatDay, formatTime, greeting } from '../../lib/format';
 import { useNow } from '../../lib/useNow';
+import { useNotifications } from '../../notifications/NotificationsProvider';
+import { useNotificationTaps } from '../../notifications/useNotificationTaps';
 import { useTheme } from '../../theme/ThemeProvider';
-import { space } from '../../theme/tokens';
+import { radius, space } from '../../theme/tokens';
 
 export default function HomeScreen({ navigation }) {
   const { colors } = useTheme();
@@ -29,6 +31,8 @@ export default function HomeScreen({ navigation }) {
   const zone = today?.timeZone ?? 'UTC';
   const rejectedCount = outstanding.filter((i) => i.state === 'rejected').length;
   const [opening, open] = useOpenAttendance(navigation);
+  const { unreadCount } = useNotifications();
+  useNotificationTaps(navigation);
 
   if (!today && loading) return <LoadingView label="Loading today’s shift…" />;
 
@@ -42,9 +46,26 @@ export default function HomeScreen({ navigation }) {
     <Screen>
       <View style={styles.topBar}>
         <Logo size={30} />
-        <AppText variant="section" style={{ marginLeft: space(2), fontWeight: '700' }}>
+        <AppText variant="section" style={{ marginLeft: space(2), fontWeight: '700', flex: 1 }}>
           EduTrack
         </AppText>
+        <Pressable
+          testID="notifications-bell"
+          accessibilityRole="button"
+          accessibilityLabel={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+          onPress={() => navigation.navigate('Notifications')}
+          hitSlop={8}
+          style={styles.bell}
+        >
+          <Icon name="notifications-outline" size={24} />
+          {unreadCount ? (
+            <View style={[styles.badge, { backgroundColor: colors.error }]} accessibilityElementsHidden importantForAccessibility="no">
+              <AppText variant="caption" color="#FFFFFF" style={{ fontWeight: '700', fontSize: 10, lineHeight: 12 }}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </AppText>
+            </View>
+          ) : null}
+        </Pressable>
       </View>
       <ScrollView contentContainerStyle={styles.content} refreshControl={<RefreshControl refreshing={loading && Boolean(today)} onRefresh={refresh} tintColor={colors.accent} colors={[colors.accent]} />}>
         <View style={styles.helloRow}>
@@ -207,6 +228,8 @@ function AttendanceSection({ day, today, zone, opening, open }) {
 
 const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: space(5), paddingVertical: space(3) },
+  bell: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: radius.pill },
+  badge: { position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   content: { padding: space(5), paddingTop: space(1), paddingBottom: space(8) },
   helloRow: { flexDirection: 'row', alignItems: 'flex-start' },
   clockRow: { flexDirection: 'row', alignItems: 'center', marginTop: space(1) },

@@ -107,12 +107,18 @@ model User {
   updatedAt          DateTime      @updatedAt
 
   /// For OWNER accounts: the one school they own.
-  ownedSchool        School?             @relation("SchoolOwner")
-  sessions           Session[]
-  auditEvents        AuditEvent[]        @relation("AuditActor")
-  managerAssignments ManagerAssignment[]
-  staffAssignments   StaffAssignment[]
-  attendanceEvents   AttendanceEvent[]
+  ownedSchool            School?                 @relation("SchoolOwner")
+  sessions               Session[]
+  auditEvents            AuditEvent[]            @relation("AuditActor")
+  managerAssignments     ManagerAssignment[]
+  staffAssignments       StaffAssignment[]
+  attendanceEvents       AttendanceEvent[]
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  pushDevices            PushDevice[]
+  pushMessages           PushMessage[]
+  announcementReads      AnnouncementRead[]
+  staffTransfers         StaffTransfer[]
 
   @@index([role, status])
   @@index([branchId])
@@ -149,6 +155,9 @@ model School {
   auditEvents       AuditEvent[]
   branches          Branch[]
   suspensionPeriods SuspensionPeriod[]
+  notifications     Notification[]
+  announcements     AnnouncementSchool[]
+  staffTransfers    StaffTransfer[]
 
   @@index([status])
   @@index([location])
@@ -181,12 +190,16 @@ model Branch {
   updatedAt        DateTime     @updatedAt
 
   locations          BranchLocation[]
-  managers           User[]              @relation("BranchManagers")
+  managers           User[]                  @relation("BranchManagers")
   managerAssignments ManagerAssignment[]
   schedules          BranchSchedule[]
   staffAssignments   StaffAssignment[]
   suspensionPeriods  SuspensionPeriod[]
   attendanceEvents   AttendanceEvent[]
+  notifications      Notification[]
+  reminderSettings   BranchReminderSettings?
+  transfersOut       StaffTransfer[]         @relation("TransferFrom")
+  transfersIn        StaffTransfer[]         @relation("TransferTo")
 
   @@unique([schoolId, number])
   @@unique([schoolId, code])
@@ -363,15 +376,16 @@ model AttendanceEvent {
 
 /// A signed-in browser. The cookie holds a random token; only its SHA-256 hash is stored.
 model Session {
-  id         String   @id @default(uuid())
-  tokenHash  String   @unique
+  id         String      @id @default(uuid())
+  tokenHash  String      @unique
   userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime    @default(now())
   expiresAt  DateTime
-  lastUsedAt DateTime @default(now())
+  lastUsedAt DateTime    @default(now())
   ipAddress  String?
   userAgent  String?
+  pushDevice PushDevice?
 
   @@index([userId])
   @@index([expiresAt])
@@ -427,4 +441,278 @@ model PlatformSettings {
   /// Inactivity timeout in minutes for every session (5, 10, 15, 30, 60, 120, 240 or 480). Null or any other value: disabled.
   inactivityTimeoutMinutes Int?
   updatedAt                DateTime @updatedAt
+}
+
+// ---- Notifications (docs/notifications/) -------------------------------------------------------
+// Personal notifications are stored once per recipient (read state per row); platform
+// announcements are stored once with their audience and resolved when a user reads (N19).
+// Business changes write a NotificationEvent (outbox) in their own transaction; notifications are
+// created from it after the commit, so a failure there never undoes the change and a retry never
+// duplicates (unique dedupe keys). Texts are rendered from `type` + `params` in the notification's
+// language (Somali only today, N24).
+
+/// Users may turn off the optional categories; STATUS, MANAGER_ASSIGNMENT and ANNOUNCEMENT are mandatory (N12).
+enum NotificationCategory {
+  ATTENDANCE // late check-ins (Managers)
+  MISSING_CHECK_OUT // a check-out never recorded (staff)
+  DIGEST // daily attendance digests (Managers, Owners)
+  ASSIGNMENT // the staff member's shift assignments
+  SCHEDULE // branch schedule changes affecting the staff member's shifts
+  BRANCH_SETUP // a branch with no schedule or no active Manager
+  MANAGER_ASSIGNMENT // the Manager's own transfer (mandatory)
+  STATUS // school and branch suspension and reactivation (mandatory)
+  ANNOUNCEMENT // platform announcements (mandatory)
+  TRANSFER // a staff member's own branch transfer, and staff joining a Manager's branch (mandatory)
+}
+
+/// DRAFT (not visible), PUBLISHED (visible from publishAt until expiresAt; "scheduled" while
+/// publishAt is in the future) and WITHDRAWN (never visible again).
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  WITHDRAWN
+}
+
+enum OutboxStatus {
+  PENDING
+  DONE
+  FAILED
+}
+
+/// SKIPPED: not sent on purpose (account suspended, push turned off, notification expired, no device).
+enum PushStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// One notification for one recipient. Never edited except readAt; removed by the retention job
+/// after expiresAt (90 days, N18). branchId is the branch it is about: a Manager sees it only while
+/// assigned to that branch (N10); null = not tied to a branch (school notices, the transfer notice).
+model Notification {
+  id          String               @id @default(uuid())
+  /// e.g. LATE_CHECK_IN (backend/src/features/notifications/notificationTypes.js)
+  type        String
+  category    NotificationCategory
+  language    String               @default("so")
+  recipientId String
+  recipient   User                 @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  schoolId    String?
+  school      School?              @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  branchId    String?
+  branch      Branch?              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  /// What it is about (e.g. 'attendanceEvent' + id), for links; never used for authorization.
+  subjectType String?
+  subjectId   String?
+  /// Template values only (names, dates, times, counts). Never coordinates, secrets, or a suspension reason for anyone but the Owner.
+  params      Json
+  /// Unique per business event and recipient: processing the same event again creates nothing.
+  dedupeKey   String               @unique
+  createdAt   DateTime             @default(now())
+  expiresAt   DateTime
+  readAt      DateTime?
+
+  @@index([recipientId, createdAt])
+  @@index([recipientId, readAt])
+  @@index([expiresAt])
+}
+
+/// Transactional outbox: written in the same transaction as the business change, turned into
+/// notifications after the commit (and by the scheduled job when that failed), with retries.
+model NotificationEvent {
+  id            String       @id @default(uuid())
+  type          String
+  payload       Json
+  dedupeKey     String       @unique
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  nextAttemptAt DateTime     @default(now())
+  lastError     String?
+  createdAt     DateTime     @default(now())
+  processedAt   DateTime?
+
+  @@index([status, nextAttemptAt])
+}
+
+/// A platform announcement (Super Admin, N17), stored once with its audience (N19): users whose
+/// role is in `roles` and whose school is targeted (all schools, or the listed ones).
+model Announcement {
+  id           String               @id @default(uuid())
+  /// FEATURE | SEASONAL | GUIDE | UPDATE | MAINTENANCE
+  kind         String
+  title        String
+  body         String
+  language     String               @default("so")
+  imageUrl     String?
+  linkUrl      String?
+  roles        Role[]
+  allSchools   Boolean              @default(true)
+  status       AnnouncementStatus   @default(DRAFT)
+  publishAt    DateTime?
+  expiresAt    DateTime
+  publishedAt  DateTime?
+  withdrawnAt  DateTime?
+  /// Set when push messages for staff in the audience were queued (once it is visible).
+  pushQueuedAt DateTime?
+  createdById  String?
+  updatedById  String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  schools      AnnouncementSchool[]
+  reads        AnnouncementRead[]
+
+  @@index([status, publishAt])
+  @@index([expiresAt])
+}
+
+model AnnouncementSchool {
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, schoolId])
+  @@index([schoolId])
+}
+
+/// Read state of an announcement per user (no row = unread).
+model AnnouncementRead {
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  readAt         DateTime     @default(now())
+
+  @@id([announcementId, userId])
+  @@index([userId])
+}
+
+/// Platform notification settings (single row, id = 'platform'; Super Admin, N5): reminder
+/// defaults and limits, push on/off and the digest hour. Hard limits are database checks.
+model NotificationSettings {
+  id                      String   @id @default("platform")
+  pushEnabled             Boolean  @default(true)
+  checkInReminderEnabled  Boolean  @default(true)
+  checkOutReminderEnabled Boolean  @default(true)
+  uploadReminderEnabled   Boolean  @default(true)
+  checkInLeadDefault      Int      @default(15)
+  checkInLeadMin          Int      @default(0)
+  checkInLeadMax          Int      @default(30)
+  checkOutLeadDefault     Int      @default(10)
+  checkOutLeadMin         Int      @default(0)
+  checkOutLeadMax         Int      @default(60)
+  staffCanAdjustTiming    Boolean  @default(true)
+  /// Hour (platform time zone) from which the daily digest of the previous day is created.
+  digestHour              Int      @default(6)
+  updatedAt               DateTime @updatedAt
+}
+
+/// Branch reminder settings (the branch's Manager, within the platform limits). Null minutes = platform default.
+model BranchReminderSettings {
+  branchId                String   @id
+  branch                  Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  checkInReminderEnabled  Boolean  @default(true)
+  checkOutReminderEnabled Boolean  @default(true)
+  checkInLeadMinutes      Int?
+  checkOutLeadMinutes     Int?
+  updatedAt               DateTime @updatedAt
+}
+
+/// A user's own preferences (N12). Reminder fields apply to staff. Null minutes = branch or platform value.
+model NotificationPreference {
+  userId              String                 @id
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  disabledCategories  NotificationCategory[] @default([])
+  pushEnabled         Boolean                @default(true)
+  checkInReminder     Boolean                @default(true)
+  checkOutReminder    Boolean                @default(true)
+  uploadReminder      Boolean                @default(true)
+  checkInLeadMinutes  Int?
+  checkOutLeadMinutes Int?
+  /// When the staff member agreed to background location for geofence reminders (N1); null = not agreed or withdrawn.
+  locationConsentAt   DateTime?
+  updatedAt           DateTime               @updatedAt
+}
+
+/// An Expo push token of a signed-in Staff app (N2 phase 3). Tied to the session: it is removed
+/// when the session ends (sign-out, suspension, password reset, expiry cleanup).
+model PushDevice {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId  String   @unique
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  token      String   @unique
+  platform   String
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// A push to send to one user (all their devices) for one notification or announcement. The
+/// message shown is always generic (N21); the details stay in the app.
+model PushMessage {
+  id            String               @id @default(uuid())
+  userId        String
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// notification:<id> | announcement:<id>
+  sourceKey     String
+  category      NotificationCategory
+  status        PushStatus           @default(PENDING)
+  attempts      Int                  @default(0)
+  nextAttemptAt DateTime             @default(now())
+  lastError     String?
+  createdAt     DateTime             @default(now())
+  sentAt        DateTime?
+
+  @@unique([userId, sourceKey])
+  @@index([status, nextAttemptAt])
+}
+
+// ---- Staff transfers between branches (docs/business-rules.md → Staff transfers) ------------
+
+/// SCHEDULED until it takes effect (00:00 of effectiveFrom in its time zone), then COMPLETED (the
+/// staff member's branch changes); CANCELLED before that by the School Owner. Never deleted.
+enum StaffTransferStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+/// A staff member's move to another branch of the same school, decided by the School Owner. The
+/// transfers are the staff member's branch history: the branch at any instant is the destination
+/// of the latest transfer in effect by then (or the origin of the first later one), so attendance
+/// events are always judged against the branch of their own time. At most one SCHEDULED transfer
+/// per staff member (partial unique index).
+model StaffTransfer {
+  id            String              @id @default(uuid())
+  staffUserId   String
+  staff         User                @relation(fields: [staffUserId], references: [id], onDelete: Restrict)
+  schoolId      String
+  school        School              @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  fromBranchId  String
+  fromBranch    Branch              @relation("TransferFrom", fields: [fromBranchId], references: [id], onDelete: Restrict)
+  toBranchId    String
+  toBranch      Branch              @relation("TransferTo", fields: [toBranchId], references: [id], onDelete: Restrict)
+  /// The branch-local date it takes effect, and that day's 00:00 as an instant (in timeZone).
+  effectiveFrom DateTime            @db.Date
+  effectiveAt   DateTime
+  timeZone      String
+  /// The destination shift assignment set created with the transfer (effective the same day).
+  assignmentId  String?
+  status        StaffTransferStatus @default(SCHEDULED)
+  /// Who scheduled and who cancelled it (account ids; names are in the audit log).
+  requestedById String?
+  cancelledById String?
+  createdAt     DateTime            @default(now())
+  completedAt   DateTime?
+  cancelledAt   DateTime?
+
+  @@index([staffUserId, effectiveAt])
+  @@index([status, effectiveAt])
+  @@index([fromBranchId])
+  @@index([toBranchId])
+  @@index([schoolId])
 }

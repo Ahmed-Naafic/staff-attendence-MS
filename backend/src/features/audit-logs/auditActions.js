@@ -38,6 +38,10 @@ export const AUDIT_ACTIONS = {
   STAFF_PASSWORD_RESET: 'STAFF_PASSWORD_RESET', // a new temporary password (security event)
   STAFF_ASSIGNMENT_CHANGED: 'STAFF_ASSIGNMENT_CHANGED',
   STAFF_ASSIGNMENT_CHANGE_CANCELLED: 'STAFF_ASSIGNMENT_CHANGE_CANCELLED',
+  // Staff transfers between branches (School Owner; completion by the system)
+  STAFF_TRANSFER_SCHEDULED: 'STAFF_TRANSFER_SCHEDULED',
+  STAFF_TRANSFER_CANCELLED: 'STAFF_TRANSFER_CANCELLED',
+  STAFF_TRANSFERRED: 'STAFF_TRANSFERRED',
   // The account holder replaces a temporary password (security event)
   PASSWORD_CHANGED: 'PASSWORD_CHANGED',
   // Platform Settings: Branding (Super Admin)
@@ -48,6 +52,16 @@ export const AUDIT_ACTIONS = {
   AUTH_SETTINGS_UPDATED: 'AUTH_SETTINGS_UPDATED',
   // Super Admin recovery (command line only: scripts/reset-super-admin-password.js)
   SUPER_ADMIN_PASSWORD_RESET: 'SUPER_ADMIN_PASSWORD_RESET',
+  // Notifications (docs/notifications/): settings and preferences changes and announcements (N22).
+  // Deliveries, openings and read actions are never audited.
+  NOTIFICATION_SETTINGS_UPDATED: 'NOTIFICATION_SETTINGS_UPDATED', // platform settings (Super Admin)
+  BRANCH_REMINDER_SETTINGS_UPDATED: 'BRANCH_REMINDER_SETTINGS_UPDATED', // branch reminder timing (Manager)
+  NOTIFICATION_PREFERENCES_UPDATED: 'NOTIFICATION_PREFERENCES_UPDATED', // a user's own preferences
+  ANNOUNCEMENT_CREATED: 'ANNOUNCEMENT_CREATED',
+  ANNOUNCEMENT_UPDATED: 'ANNOUNCEMENT_UPDATED',
+  ANNOUNCEMENT_PUBLISHED: 'ANNOUNCEMENT_PUBLISHED',
+  ANNOUNCEMENT_SCHEDULED: 'ANNOUNCEMENT_SCHEDULED',
+  ANNOUNCEMENT_WITHDRAWN: 'ANNOUNCEMENT_WITHDRAWN',
 };
 
 /** Actions the audit filter accepts: the recorded actions only. */
@@ -82,10 +96,21 @@ export const FILTERABLE_ACTIONS = [
   'STAFF_PASSWORD_RESET',
   'STAFF_ASSIGNMENT_CHANGED',
   'STAFF_ASSIGNMENT_CHANGE_CANCELLED',
+  'STAFF_TRANSFER_SCHEDULED',
+  'STAFF_TRANSFER_CANCELLED',
+  'STAFF_TRANSFERRED',
   'BRANDING_UPDATED',
   'GENERAL_SETTINGS_UPDATED',
   'AUTH_SETTINGS_UPDATED',
   'SUPER_ADMIN_PASSWORD_RESET',
+  'NOTIFICATION_SETTINGS_UPDATED',
+  'BRANCH_REMINDER_SETTINGS_UPDATED',
+  'NOTIFICATION_PREFERENCES_UPDATED',
+  'ANNOUNCEMENT_CREATED',
+  'ANNOUNCEMENT_UPDATED',
+  'ANNOUNCEMENT_PUBLISHED',
+  'ANNOUNCEMENT_SCHEDULED',
+  'ANNOUNCEMENT_WITHDRAWN',
   'SIGN_IN',
   'SIGN_OUT',
 ];
@@ -120,6 +145,7 @@ export const BRANCH_ACTIONS = [
   'BRANCH_LOCATION_CHANGE_CANCELLED',
   'BRANCH_SCHEDULE_CHANGED',
   'BRANCH_SCHEDULE_CHANGE_CANCELLED',
+  'BRANCH_REMINDER_SETTINGS_UPDATED',
 ];
 
 /**
@@ -149,7 +175,16 @@ export const STAFF_ACTIONS = [
   'STAFF_PASSWORD_RESET',
   'STAFF_ASSIGNMENT_CHANGED',
   'STAFF_ASSIGNMENT_CHANGE_CANCELLED',
+  'STAFF_TRANSFER_SCHEDULED',
+  'STAFF_TRANSFER_CANCELLED',
+  'STAFF_TRANSFERRED',
 ];
+
+/**
+ * A user's own notification preference changes (any role). Super Admins read them in the audit log;
+ * personal settings, so they are left out of the dashboard's recent platform activity.
+ */
+export const PREFERENCE_ACTIONS = ['NOTIFICATION_PREFERENCES_UPDATED'];
 
 /** Display names (as in the web app), so search can match an action by its name. */
 export const ACTION_LABELS = {
@@ -183,10 +218,21 @@ export const ACTION_LABELS = {
   STAFF_PASSWORD_RESET: 'Reset Staff Password',
   STAFF_ASSIGNMENT_CHANGED: 'Change Shift Assignments',
   STAFF_ASSIGNMENT_CHANGE_CANCELLED: 'Cancel Shift Assignment Change',
+  STAFF_TRANSFER_SCHEDULED: 'Schedule Staff Transfer',
+  STAFF_TRANSFER_CANCELLED: 'Cancel Staff Transfer',
+  STAFF_TRANSFERRED: 'Staff Transfer Took Effect',
   BRANDING_UPDATED: 'Update Branding',
   GENERAL_SETTINGS_UPDATED: 'Update General Settings',
   AUTH_SETTINGS_UPDATED: 'Update Authentication Settings',
   SUPER_ADMIN_PASSWORD_RESET: 'Reset Super Admin Password',
+  NOTIFICATION_SETTINGS_UPDATED: 'Update Notification Settings',
+  BRANCH_REMINDER_SETTINGS_UPDATED: 'Update Branch Reminder Settings',
+  NOTIFICATION_PREFERENCES_UPDATED: 'Update Notification Preferences',
+  ANNOUNCEMENT_CREATED: 'Create Announcement',
+  ANNOUNCEMENT_UPDATED: 'Edit Announcement',
+  ANNOUNCEMENT_PUBLISHED: 'Publish Announcement',
+  ANNOUNCEMENT_SCHEDULED: 'Schedule Announcement',
+  ANNOUNCEMENT_WITHDRAWN: 'Withdraw Announcement',
   SIGN_IN: 'Sign In',
   SIGN_OUT: 'Sign Out',
 };

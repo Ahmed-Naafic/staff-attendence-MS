@@ -17,6 +17,16 @@ import {
   updateGeneral,
 } from '../features/platform-settings/settings.service.js';
 import { getReport, REPORT_PERIODS } from '../features/reports/reports.service.js';
+import {
+  ANNOUNCEMENT_FILTERS,
+  createAnnouncement,
+  getAnnouncement,
+  listAnnouncements,
+  publishAnnouncement,
+  updateAnnouncement,
+  withdrawAnnouncement,
+} from '../features/notifications/announcements.service.js';
+import { platformLimits, platformNotificationSettings, updatePlatformNotificationSettings } from '../features/notifications/notificationSettings.service.js';
 import { readOwnerCreation, readOwnerSuspension, readOwnerUpdate } from '../features/school-owners/ownerInput.js';
 import { createOwner, getOwner, listOwners, reactivateOwner, suspendOwner, updateOwner } from '../features/school-owners/owners.service.js';
 import { readRegistration, readSuspension, readUpdate } from '../features/schools/schoolInput.js';
@@ -144,4 +154,38 @@ platformRouter.put('/settings/branding', async (req, res) => {
 // Authentication: the session lifetime and inactivity timeout only. The other authentication values are fixed.
 platformRouter.put('/settings/authentication', async (req, res) => {
   res.json({ authentication: await updateAuthentication(readAuthentication(jsonBody(req)), req.user, req) });
+});
+// Notifications: reminder defaults and limits, push on/off and the digest hour (N5).
+platformRouter.get('/settings/notifications', async (req, res) => {
+  res.json({ notifications: await platformNotificationSettings(), limits: platformLimits() });
+});
+platformRouter.put('/settings/notifications', async (req, res) => {
+  res.json({ notifications: await updatePlatformNotificationSettings(jsonBody(req), req.user, req), limits: platformLimits() });
+});
+
+// Platform announcements (N17).
+platformRouter.get('/announcements', async (req, res) => {
+  res.json(
+    await listAnnouncements({
+      status: optionalEnum(req.query, 'status', ANNOUNCEMENT_FILTERS),
+      q: optionalString(req.query, 'q', { max: 100 }),
+      page: optionalInt(req.query, 'page', { min: 1, max: 100000, fallback: 1 }),
+      pageSize: optionalInt(req.query, 'pageSize', { min: 1, max: 100, fallback: 10 }),
+    }),
+  );
+});
+platformRouter.get('/announcements/:id', async (req, res) => {
+  res.json({ announcement: await getAnnouncement(req.params.id) });
+});
+platformRouter.post('/announcements', async (req, res) => {
+  res.status(201).json({ announcement: await createAnnouncement(jsonBody(req), req.user, req) });
+});
+platformRouter.patch('/announcements/:id', async (req, res) => {
+  res.json({ announcement: await updateAnnouncement(req.params.id, jsonBody(req), req.user, req) });
+});
+platformRouter.post('/announcements/:id/publish', async (req, res) => {
+  res.json({ announcement: await publishAnnouncement(req.params.id, jsonBody(req), req.user, req) });
+});
+platformRouter.post('/announcements/:id/withdraw', async (req, res) => {
+  res.json({ announcement: await withdrawAnnouncement(req.params.id, req.user, req) });
 });

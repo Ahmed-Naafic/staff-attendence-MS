@@ -42,6 +42,17 @@ export const auditActions = {
   BRANDING_UPDATED: { label: 'Update Branding', tone: 'info', done: 'Platform name updated successfully.' },
   GENERAL_SETTINGS_UPDATED: { label: 'Update General Settings', tone: 'info', done: 'General settings updated successfully.' },
   AUTH_SETTINGS_UPDATED: { label: 'Update Authentication Settings', tone: 'info', security: true, done: 'Authentication settings updated successfully.' },
+  STAFF_TRANSFER_SCHEDULED: { label: 'Schedule Staff Transfer', tone: 'info', done: 'Staff transfer scheduled.' },
+  STAFF_TRANSFER_CANCELLED: { label: 'Cancel Staff Transfer', tone: 'info', done: 'Scheduled staff transfer cancelled.' },
+  STAFF_TRANSFERRED: { label: 'Staff Transfer Took Effect', tone: 'success', done: 'The staff member now works at the new branch.' },
+  NOTIFICATION_SETTINGS_UPDATED: { label: 'Update Notification Settings', tone: 'info', done: 'Notification settings updated successfully.' },
+  BRANCH_REMINDER_SETTINGS_UPDATED: { label: 'Update Branch Reminder Settings', tone: 'info', done: 'Branch reminder settings updated successfully.' },
+  NOTIFICATION_PREFERENCES_UPDATED: { label: 'Update Notification Preferences', tone: 'info', done: 'Notification preferences updated.' },
+  ANNOUNCEMENT_CREATED: { label: 'Create Announcement', tone: 'success', done: 'Announcement created.' },
+  ANNOUNCEMENT_UPDATED: { label: 'Edit Announcement', tone: 'info', done: 'Announcement edited.' },
+  ANNOUNCEMENT_PUBLISHED: { label: 'Publish Announcement', tone: 'success', done: 'Announcement published.' },
+  ANNOUNCEMENT_SCHEDULED: { label: 'Schedule Announcement', tone: 'info', done: 'Announcement scheduled.' },
+  ANNOUNCEMENT_WITHDRAWN: { label: 'Withdraw Announcement', tone: 'error', done: 'Announcement withdrawn.' },
   SUPER_ADMIN_PASSWORD_RESET: { label: 'Reset Super Admin Password', tone: 'error', security: true, done: 'Super Admin password reset from the command line.' },
   SIGN_IN: { label: 'Sign In', tone: 'success', security: true, done: 'Signed in successfully.', failed: 'Sign-in attempt failed.' },
   SIGN_OUT: { label: 'Sign Out', tone: 'info', security: true, done: 'Signed out successfully.' },
@@ -75,6 +86,7 @@ export const targetTypes = {
   staff: 'Staff',
   system: 'System',
   user: 'User',
+  announcement: 'Announcement',
 };
 
 export const isSecurityEvent = (event) => Boolean(actionOf(event.action).security);

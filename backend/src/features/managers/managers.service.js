@@ -5,6 +5,7 @@ import { isUuid } from '../../common/validate.js';
 import { getPrisma } from '../../config/prisma.js';
 import { AUDIT_ACTIONS, MANAGER_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
+import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
 import { hashPassword } from '../auth/password.js';
 import { listSchoolAudit, lockActiveSchool } from '../branches/branches.service.js';
 
@@ -152,6 +153,7 @@ async function assertEmailFree(client, email, exceptId) {
  */
 export async function createManager(school, { password, branchId, ...details }, user, req) {
   const passwordHash = await hashPassword(password);
+  const outbox = [];
   try {
     const id = await getPrisma().$transaction(async (tx) => {
       await lockActiveSchool(tx, school);
@@ -161,7 +163,9 @@ export async function createManager(school, { password, branchId, ...details }, 
         data: { ...details, role: 'MANAGER', status: 'ACTIVE', passwordHash, mustChangePassword: true, branchId: branch.id },
         select: { id: true, name: true },
       });
-      await tx.managerAssignment.create({ data: { managerId: created.id, branchId: branch.id } });
+      const assignment = await tx.managerAssignment.create({ data: { managerId: created.id, branchId: branch.id } });
+      // A branch with no schedule in effect: the new Manager is told (N3-6).
+      await enqueue(tx, OUTBOX.MANAGER_ASSIGNED, { managerId: created.id, branchId: branch.id, assignmentId: assignment.id }, `manager-assigned:${assignment.id}`, outbox);
       await recordAuditEvent({
         client: tx,
         action: AUDIT_ACTIONS.MANAGER_CREATED,
@@ -179,6 +183,7 @@ export async function createManager(school, { password, branchId, ...details }, 
       });
       return created.id;
     });
+    await dispatch(outbox);
     return getManager(school, id);
   } catch (error) {
     if (isUniqueViolation(error)) throw EMAIL_TAKEN();
@@ -223,6 +228,7 @@ export async function updateManager(school, id, values, user, req) {
  * one started (history kept). The Manager's sessions continue; their branch is read on every request.
  */
 export async function transferManager(school, id, branchId, user, req) {
+  const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockActiveSchool(tx, school);
     const current = await lockManager(tx, school, id);
@@ -232,8 +238,17 @@ export async function transferManager(school, id, branchId, user, req) {
     const destination = await schoolBranch(tx, school, branchId);
     const now = new Date();
     await tx.managerAssignment.updateMany({ where: { managerId: current.id, endedAt: null }, data: { endedAt: now } });
-    await tx.managerAssignment.create({ data: { managerId: current.id, branchId: destination.id, startedAt: now } });
+    const assignment = await tx.managerAssignment.create({ data: { managerId: current.id, branchId: destination.id, startedAt: now } });
     await tx.user.update({ where: { id: current.id }, data: { branchId: destination.id } });
+    // The Manager is told (N3-7); the Owner is told if the previous branch is left with no active Manager (N7).
+    await enqueue(
+      tx,
+      OUTBOX.MANAGER_ASSIGNED,
+      { managerId: current.id, branchId: destination.id, fromBranchId: current.branch.id, assignmentId: assignment.id },
+      `manager-assigned:${assignment.id}`,
+      outbox,
+    );
+    await enqueue(tx, OUTBOX.BRANCH_MANAGER_CHECK, { branchId: current.branch.id }, `manager-check:transfer:${assignment.id}`, outbox);
     await recordAuditEvent({
       client: tx,
       action: AUDIT_ACTIONS.MANAGER_TRANSFERRED,
@@ -245,11 +260,13 @@ export async function transferManager(school, id, branchId, user, req) {
       req,
     });
   });
+  await dispatch(outbox);
   return getManager(school, id);
 }
 
 /** ACTIVE → SUSPENDED with a reason; the Manager's sessions end at once. Not active → 409 INVALID_STATUS. */
 export async function suspendManager(school, id, reason, user, req) {
+  const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockActiveSchool(tx, school);
     const current = await lockManager(tx, school, id);
@@ -260,6 +277,8 @@ export async function suspendManager(school, id, reason, user, req) {
     });
     if (count === 0) throw conflict('INVALID_STATUS', `Only an active Manager can be suspended. This Manager is ${fromDbStatus(current.status)}.`);
     await tx.session.deleteMany({ where: { userId: current.id } });
+    // The Owner is told if the branch is left with no active Manager (N7).
+    await enqueue(tx, OUTBOX.BRANCH_MANAGER_CHECK, { branchId: current.branch.id }, `manager-check:suspend:${current.id}:${Date.now()}`, outbox);
     await recordAuditEvent({
       client: tx,
       action: AUDIT_ACTIONS.MANAGER_SUSPENDED,
@@ -271,6 +290,7 @@ export async function suspendManager(school, id, reason, user, req) {
       req,
     });
   });
+  await dispatch(outbox);
   return getManager(school, id);
 }
 
