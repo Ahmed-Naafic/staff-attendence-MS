@@ -54,6 +54,18 @@ export const auditActions = {
   ANNOUNCEMENT_PUBLISHED: { label: 'Publish Announcement', tone: 'success', done: 'Announcement published.' },
   ANNOUNCEMENT_SCHEDULED: { label: 'Schedule Announcement', tone: 'info', done: 'Announcement scheduled.' },
   ANNOUNCEMENT_WITHDRAWN: { label: 'Withdraw Announcement', tone: 'error', done: 'Announcement withdrawn.' },
+  BACKUP_CREATED: { label: 'Create Backup', tone: 'success', done: 'Backup started at Neon.', failed: 'Backup failed.' },
+  BACKUP_DELETED: { label: 'Delete Backup', tone: 'error', done: 'Backup deleted.', failed: 'Backup deletion failed.' },
+  BACKUP_PROTECTION_CHANGED: { label: 'Change Backup Protection', tone: 'info', done: 'Backup protection changed.' },
+  BACKUP_VERIFIED: { label: 'Verify Backup', tone: 'info', done: 'Backup checked: complete and available.', failed: 'Backup check failed.' },
+  BACKUP_SCHEDULE_UPDATED: { label: 'Update Backup Schedule', tone: 'info', done: 'Backup schedule updated.' },
+  BACKUP_RETENTION_UPDATED: { label: 'Update Backup Retention', tone: 'info', done: 'Backup retention updated.' },
+  RESTORE_STARTED: { label: 'Stage Restore', tone: 'info', done: 'Restore staged on a new branch; production unchanged.' },
+  RESTORE_VERIFIED: { label: 'Check Staged Restore', tone: 'info', done: 'Staged restore checked.' },
+  RESTORE_DISCARDED: { label: 'Discard Staged Restore', tone: 'info', done: 'Staged restore discarded; production unchanged.' },
+  RESTORE_PRODUCTION_STARTED: { label: 'Start Production Restore', tone: 'error', done: 'Production restore started.' },
+  RESTORE_COMPLETED: { label: 'Restore Production', tone: 'error', done: 'Production restored from a backup.' },
+  RESTORE_FAILED: { label: 'Restore Failed', tone: 'error', done: 'Restore failed.', failed: 'Restore failed.' },
   SUPER_ADMIN_PASSWORD_RESET: { label: 'Reset Super Admin Password', tone: 'error', security: true, done: 'Super Admin password reset from the command line.' },
   SIGN_IN: { label: 'Sign In', tone: 'success', security: true, done: 'Signed in successfully.', failed: 'Sign-in attempt failed.' },
   SIGN_OUT: { label: 'Sign Out', tone: 'info', security: true, done: 'Signed out successfully.' },
@@ -88,6 +100,7 @@ export const targetTypes = {
   system: 'System',
   user: 'User',
   announcement: 'Announcement',
+  backup: 'Backup',
 };
 
 export const isSecurityEvent = (event) => Boolean(actionOf(event.action).security);

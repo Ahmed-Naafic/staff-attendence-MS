@@ -3,6 +3,7 @@ import { PageContainer, PageHeader } from '../../../components/layout';
 import { useDisplaySettings } from '../../../app/providers/DisplaySettingsProvider.jsx';
 import { Alert, Badge, Card, EmptyState, ErrorState, TabPanel, Tabs } from '../../../components/ui';
 import { useBranding } from '../../branding';
+import { DataBackupPanel } from '../../data-backup';
 import { InactivityTimeoutCard, SessionLifetimeCard, SignInSecurityCard } from '../components/AuthenticationCards.jsx';
 import { BrandingCard } from '../components/BrandingCard.jsx';
 import { GeneralLayout } from '../components/GeneralLayout.jsx';
@@ -38,7 +39,8 @@ const FIELD_LABELS = {
  * other sign-in protection the server enforces (read only). Registration shows how schools and
  * accounts are created (read only; there is no public registration). Notifications saves push,
  * reminder defaults and limits, and the digest hour (docs/notifications/). Scheduling & Assignments
- * saves the effective delay and the two "first may start today" switches. On General, the platform
+ * saves the effective delay and the two "first may start today" switches. Data & Backup manages
+ * Neon snapshots, their schedule and staged restores (docs/data-backup/). On General, the platform
  * switches, uploads, operations and dangerous actions are shown but unavailable. The other
  * sections are not available yet. The active section lives in the URL (?tab=).
  */
@@ -204,7 +206,9 @@ export default function PlatformSettingsPage() {
 
         {data && status !== 'error' && tab === 'scheduling' && data.settings.scheduling && <SchedulingSettingsCard settings={data.settings.scheduling} />}
 
-        {data && status !== 'error' && !['general', 'branding', 'authentication', 'registration', 'notifications', 'scheduling'].includes(tab) && (
+        {data && status !== 'error' && tab === 'data-backup' && <DataBackupPanel timeZone={data.settings.localization?.timezone ?? 'UTC'} />}
+
+        {data && status !== 'error' && !['general', 'branding', 'authentication', 'registration', 'notifications', 'scheduling', 'data-backup'].includes(tab) && (
           <Card as="section" aria-label={`${current.label} settings`}>
             <EmptyState
               icon={current.icon}

@@ -30,6 +30,7 @@ import {
 import { platformLimits, platformNotificationSettings, updatePlatformNotificationSettings } from '../features/notifications/notificationSettings.service.js';
 import { readOwnerCreation, readOwnerSuspension, readOwnerUpdate } from '../features/school-owners/ownerInput.js';
 import { createOwner, getOwner, listOwners, reactivateOwner, suspendOwner, updateOwner } from '../features/school-owners/owners.service.js';
+import { backupsRouter } from '../features/backups/backups.routes.js';
 import { readRegistration, readSuspension, readUpdate } from '../features/schools/schoolInput.js';
 import { getSchool, listSchools, reactivateSchool, registerSchool, suggestCode, suspendSchool, updateSchool } from '../features/schools/schools.service.js';
 
@@ -45,6 +46,8 @@ import { getSchool, listSchools, reactivateSchool, registerSchool, suggestCode, 
  */
 export const platformRouter = Router();
 platformRouter.use(requireAuth, requireRole('SUPER_ADMIN'));
+// Data & Backup (Platform Settings → Data & Backup; docs/data-backup/).
+platformRouter.use('/backups', backupsRouter);
 
 const optionalId = (query, name) => {
   const value = optionalString(query, name, { max: 64 });

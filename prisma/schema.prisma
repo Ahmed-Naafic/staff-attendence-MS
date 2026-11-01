@@ -776,3 +776,79 @@ model StaffTransfer {
   @@index([toBranchId])
   @@index([schoolId])
 }
+
+// ---- Data & Backup (docs/data-backup/) ------------------------------------------------------
+
+/// Backups are Neon snapshots of this deployment's database branch; Neon is the source of truth for
+/// which snapshots exist (they live outside this database, so a restore cannot erase the list).
+/// These rows keep what Neon does not: who created a snapshot, its protection, its last check, and
+/// its fate once Neon no longer lists it (expired or deleted).
+model BackupRecord {
+  /// The Neon snapshot id.
+  snapshotId    String    @id
+  name          String
+  /// MANUAL (Create Backup Now) | SCHEDULED (Neon's schedule) | PRE_RESTORE
+  kind          String
+  /// Protected backups have no expiry and cannot be deleted until protection is removed.
+  protected     Boolean   @default(false)
+  expiresAt     DateTime?
+  createdById   String?
+  createdByName String?
+  verifiedAt    DateTime?
+  /// The last integrity check: { ok, checks: [...] }.
+  verification  Json?
+  deletedAt     DateTime?
+  deletedByName String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+enum BackupOperationType {
+  CREATE
+  DELETE
+  RESTORE
+}
+
+/// RUNNING → COMPLETED | FAILED. A restore is staged on a new branch (RUNNING), checked (VERIFIED),
+/// then finalized into production (COMPLETED) or discarded (DISCARDED).
+enum BackupOperationStatus {
+  RUNNING
+  VERIFIED
+  COMPLETED
+  FAILED
+  DISCARDED
+}
+
+/// A backup or restore operation started from the Data & Backup page. At most one active operation
+/// per lane ('backup', 'restore'): partial unique index on lane while RUNNING or VERIFIED.
+model BackupOperation {
+  id                   String                @id @default(uuid())
+  type                 BackupOperationType
+  status               BackupOperationStatus @default(RUNNING)
+  lane                 String
+  snapshotId           String?
+  /// Restore: the staged branch (Neon id and name), never a connection string.
+  branchId             String?
+  branchName           String?
+  providerOperationIds String[]              @default([])
+  /// Verification results, the preserved pre-restore branch name, …
+  result               Json?
+  errorCode            String?
+  errorMessage         String?
+  requestedById        String?
+  requestedByName      String?
+  startedAt            DateTime              @default(now())
+  finishedAt           DateTime?
+
+  @@index([type, startedAt])
+  @@index([snapshotId])
+}
+
+/// Data & Backup settings kept by EduTrack (the scheduled snapshot settings live in Neon).
+model BackupSettings {
+  id                  String   @id @default("platform")
+  /// Days a manual backup is kept before Neon deletes it (unless protected).
+  manualRetentionDays Int      @default(30)
+  updatedById         String?
+  updatedAt           DateTime @updatedAt
+}

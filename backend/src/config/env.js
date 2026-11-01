@@ -25,6 +25,16 @@ export const env = {
   expoPushUrl: process.env.EXPO_PUSH_URL || 'https://exp.host/--/api/v2/push/send',
   expoReceiptsUrl: process.env.EXPO_RECEIPTS_URL || 'https://exp.host/--/api/v2/push/getReceipts',
   expoAccessToken: process.env.EXPO_ACCESS_TOKEN || undefined,
+  // Data & Backup (docs/data-backup/): backups are Neon snapshots of this deployment's branch, made
+  // through the Neon API. Without the key, project and branch the module shows "not configured".
+  // The key can manage the whole Neon project: keep it only in the server's environment.
+  neonApiKey: process.env.NEON_API_KEY || undefined,
+  neonProjectId: process.env.NEON_PROJECT_ID || undefined,
+  neonBranchId: process.env.NEON_BRANCH_ID || undefined,
+  neonApiUrl: (process.env.NEON_API_URL || 'https://console.neon.tech/api/v2').replace(/\/$/, ''),
+  // Database and role used to check a staged restore (defaults: neondb and DIRECT_URL's user).
+  neonDatabaseName: process.env.NEON_DATABASE_NAME || 'neondb',
+  neonRoleName: process.env.NEON_ROLE_NAME || undefined,
 };
 
 export const isProduction = env.nodeEnv === 'production';
