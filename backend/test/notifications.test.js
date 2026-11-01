@@ -746,12 +746,14 @@ test('push: one token per session, generic payloads, retries, dead tokens remove
 
   const sent = [];
   await sendPendingPush({ now: new Date(Date.now() + HOUR), send: async (batch) => (sent.push(...batch), batch.map(() => ({ status: 'ok' }))) });
-  assert.equal((await prisma.pushMessage.findUnique({ where: { id: message.id } })).status, 'SENT');
+  assert.equal((await prisma.pushMessage.findUnique({ where: { id: message.id } })).status, 'SUBMITTED');
   // Every waiting push of S1 (also from earlier tests) goes to the device, each one generic.
   const mine = sent.filter((m) => m.to === token);
   assert.ok(mine.length >= 1);
   for (const m of mine) {
-    assert.deepEqual(m, { to: token, title: 'EduTrack', body: 'Waxaad leedahay ogeysiis cusub oo imaanshaha ah.', sound: 'default', priority: 'high', channelId: 'default', data: { kind: 'notification' } });
+    const { data, ...shown } = m;
+    assert.deepEqual(shown, { to: token, title: 'EduTrack', body: 'Waxaad leedahay ogeysiis cusub oo imaanshaha ah.', sound: 'default', priority: 'high', channelId: 'default' });
+    assert.deepEqual(Object.keys(data).sort(), ['id', 'kind', 'source'], 'only an opaque reference for the tap');
   }
   assert.ok(!JSON.stringify(mine).includes(people.S1.name) && !JSON.stringify(mine).includes(today), 'nothing personal on the lock screen');
 

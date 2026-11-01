@@ -479,12 +479,27 @@ enum OutboxStatus {
   FAILED
 }
 
-/// SKIPPED: not sent on purpose (account suspended, push turned off, notification expired, no device).
+/// A push message (one user, all their devices): PENDING (queued, or waiting to be retried) →
+/// SUBMITTED (Expo accepted it for at least one device: a ticket) → ACCEPTED (a receipt confirms the
+/// push service — FCM or APNs — accepted it for at least one device). FAILED: no device could be
+/// reached. SKIPPED: not sent on purpose (push turned off, account not active, notification expired
+/// or withdrawn, no device). Neither state proves the phone displayed it.
 enum PushStatus {
   PENDING
-  SENT
+  SUBMITTED
+  ACCEPTED
   FAILED
   SKIPPED
+}
+
+/// One device's delivery of a push message. SUBMITTED: Expo returned a ticket. ACCEPTED: the receipt
+/// is "ok" (handed to FCM/APNs). FAILED: refused (ticket or receipt error). UNCONFIRMED: no receipt
+/// was available before it expired (24 hours).
+enum PushDeliveryStatus {
+  SUBMITTED
+  ACCEPTED
+  FAILED
+  UNCONFIRMED
 }
 
 /// One notification for one recipient. Never edited except readAt; removed by the retention job
@@ -665,10 +680,36 @@ model PushMessage {
   nextAttemptAt DateTime             @default(now())
   lastError     String?
   createdAt     DateTime             @default(now())
-  sentAt        DateTime?
+  /// When Expo first accepted it for a device (a ticket), and when a receipt first confirmed it.
+  submittedAt   DateTime?
+  acceptedAt    DateTime?
+  deliveries    PushDelivery[]
 
   @@unique([userId, sourceKey])
   @@index([status, nextAttemptAt])
+}
+
+/// One device's attempt for a push message, with the Expo ticket and, later, its receipt. A token is
+/// sent a message at most once (unique), so a retry reaches only the devices not yet reached.
+model PushDelivery {
+  id               String             @id @default(uuid())
+  pushMessageId    String
+  pushMessage      PushMessage        @relation(fields: [pushMessageId], references: [id], onDelete: Cascade)
+  /// The device token at the time (the device row may be removed later).
+  token            String
+  platform         String
+  status           PushDeliveryStatus
+  /// Expo's ticket id (a receipt is looked up with it); null when refused at once.
+  ticketId         String?
+  /// Expo / provider error code (e.g. DeviceNotRegistered, MessageRateExceeded) and message.
+  errorCode        String?
+  errorMessage     String?
+  submittedAt      DateTime           @default(now())
+  receiptCheckedAt DateTime?
+
+  @@unique([pushMessageId, token])
+  @@index([status, submittedAt])
+  @@index([ticketId])
 }
 
 // ---- Staff transfers between branches (docs/business-rules.md → Staff transfers) ------------

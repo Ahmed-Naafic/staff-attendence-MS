@@ -515,6 +515,8 @@ describe('staff app reads: profile, history, branch location', () => {
       email: staff.email,
       branch: { code: branches.A.code, name: branches.A.name },
       school: { code: schools.A.code, name: schools.A.name },
+      // No branch transfer scheduled (docs/staff/staff-transfers.md).
+      upcomingTransfer: null,
     });
     assert.equal((await call('/api/attendance/profile', { cookie: people.owner.cookie })).status, 403);
     assert.equal((await call('/api/attendance/profile')).status, 401);

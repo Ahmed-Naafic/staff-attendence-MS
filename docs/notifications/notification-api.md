@@ -79,7 +79,7 @@ Response:
 | GET `/api/notifications/:source/:id` | `{ item }` (`source` is `notification` or `announcement`). 404 when it is not the viewer's, not of the Manager's current branch, not addressed to the role or school, expired, withdrawn or scheduled for later |
 | POST `/api/notifications/:source/:id/read` | `{ item }` with `readAt`; idempotent; 404 as above |
 | POST `/api/notifications/read-all` | `{ "unreadCount": 0 }` (every visible unread item) |
-| POST `/api/notifications/devices` | Body `{ "token": "ExponentPushToken[…]", "platform": "android" \| "ios" }` → 201 `{ "registered": true }`. **Staff only** (403 otherwise). Replaces this session's token and removes the same token from any other session |
+| POST `/api/notifications/devices` | Body `{ "token": "ExponentPushToken[…]", "platform": "android" \| "ios" }` → 201 `{ "registered": true }`. **Staff only** (403 otherwise). The token belongs to the session's account (no user id is accepted). Replaces this session's token (token refresh) and removes the same token from any other session (account switch). A staff member may have several devices, one per signed-in session. |
 | DELETE `/api/notifications/devices/current` | 204; removes this session's token |
 
 ### GET `/api/notifications/preferences`
@@ -253,3 +253,24 @@ The school digest has `schoolName` instead of `branch`, the school totals, and `
 
   A task that failed shows `{ error }`; a task left for the next run shows `{ skipped }`.
 - No secret configured → 503 `JOBS_DISABLED`. A wrong secret → 401.
+
+## 7. Push payload (Expo, phase 3)
+
+What the API sends to Expo for each device:
+
+```json
+{
+  "to": "ExponentPushToken[…]",
+  "title": "EduTrack",
+  "body": "Waxaad leedahay ogeysiis cusub oo imaanshaha ah.",
+  "sound": "default",
+  "priority": "high",
+  "channelId": "default",
+  "data": { "kind": "notification", "source": "notification", "id": "uuid" }
+}
+```
+
+- Announcements use the body "Waxaad leedahay ogeysiis cusub oo EduTrack ah."
+- `data` holds no content: a tap opens `GET /api/notifications/:source/:id` as the signed-in account.
+- Ticket and receipt handling: `notification-architecture.md` §10.
+

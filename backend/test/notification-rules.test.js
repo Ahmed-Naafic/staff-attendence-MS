@@ -15,7 +15,7 @@ import {
 } from '../src/features/notifications/notificationTypes.js';
 import { latestSets, scheduleImpact } from '../src/features/notifications/scheduleImpact.js';
 import { PUSH_TEXTS, render, templateTypes } from '../src/features/notifications/templates.js';
-import { genericPushMessage } from '../src/features/notifications/push.js';
+import { classifyPushError, genericPushMessage, pushDelayMs } from '../src/features/notifications/push.js';
 import { MAX_ATTEMPTS, retryDelayMs } from '../src/features/notifications/outbox.js';
 
 const SAMPLE = {
@@ -155,16 +155,26 @@ test('latestSets keeps the newest set per staff member', () => {
   assert.deepEqual([...latestSets(sets)].map(([k, set]) => [k, set.id]), [['x', 1], ['y', 2]]);
 });
 
-test('push payloads are generic (N21): no names, times, statuses, branches, reasons or ids', () => {
+test('push payloads are generic (N21): no names, times, statuses, branches or reasons; only an opaque reference for the tap', () => {
+  const id = '8f1c2c1e-0a7b-4c55-9c41-3a0e7d1b2f10';
   for (const category of ['ATTENDANCE', 'STATUS', 'ANNOUNCEMENT']) {
-    const message = genericPushMessage('ExponentPushToken[abcdefghijklmnop]', category);
+    const message = genericPushMessage('ExponentPushToken[abcdefghijklmnop]', category, `notification:${id}`);
     assert.equal(message.title, 'EduTrack');
     assert.ok([PUSH_TEXTS.so.attendance, PUSH_TEXTS.so.announcement].includes(message.body));
-    assert.deepEqual(message.data, { kind: 'notification' });
+    assert.deepEqual(message.data, { kind: 'notification', source: 'notification', id });
     assert.deepEqual(Object.keys(message).sort(), ['body', 'channelId', 'data', 'priority', 'sound', 'title', 'to']);
   }
+  assert.deepEqual(genericPushMessage('t', 'ANNOUNCEMENT', `announcement:${id}`).data, { kind: 'notification', source: 'announcement', id });
+  assert.deepEqual(genericPushMessage('t', 'ATTENDANCE').data, { kind: 'notification' });
   assert.equal(genericPushMessage('t', 'ANNOUNCEMENT').body, 'Waxaad leedahay ogeysiis cusub oo EduTrack ah.');
   assert.equal(genericPushMessage('t', 'ATTENDANCE').body, 'Waxaad leedahay ogeysiis cusub oo imaanshaha ah.');
+});
+
+test('push errors are classified: dead tokens, temporary limits, everything else permanent; retries back off', () => {
+  assert.equal(classifyPushError('DeviceNotRegistered'), 'device');
+  assert.equal(classifyPushError('MessageRateExceeded'), 'transient');
+  for (const code of ['MessageTooBig', 'InvalidCredentials', 'MismatchSenderId', 'SomethingNew', undefined]) assert.equal(classifyPushError(code), 'permanent');
+  assert.deepEqual([1, 2, 3, 4, 9].map((n) => pushDelayMs(n) / 60000), [1, 5, 30, 120, 120]);
 });
 
 test('outbox retries back off and stop after the last attempt', () => {

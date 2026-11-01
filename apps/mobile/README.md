@@ -51,7 +51,8 @@ Offline test: check in with the phone's Wi-Fi and mobile data off (the event is 
 - **Notifications:** the notification centre works everywhere. These need a **development or production build** (EAS), not Expo Go:
   - **phone reminders**;
   - **background geofencing**;
-  - **remote push**: uses the Expo project in `app.json` (`extra.eas.projectId`), and Android also needs the project's FCM credentials (`eas credentials`).
+  - **remote push**: uses the Expo project in `app.json` (`extra.eas.projectId`). Android also needs Firebase's `google-services.json` (EAS file variable `GOOGLE_SERVICES_JSON`, read by `app.config.js`) and the FCM V1 key; iOS needs the APNs key. Setup and the real-device procedure: `docs/notifications/push-setup.md`.
+- **Build profiles** (`eas.json`): `development` (developer tools, `expo-dev-client`) and `preview` (plain APK); both internal, Android and iOS.
 - **Branding:** the icon, adaptive icon, splash and in-app logo come from `docs/design/references/staff-app/EduTrack School Attendance Icon.png` (see *Branding assets*). **Expo Go shows its own icon and splash**, not these: they appear only in a native build of this app (below).
 
 ## Branding assets

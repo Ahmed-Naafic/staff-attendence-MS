@@ -64,3 +64,17 @@ Also covered:
 | Real OS geofence events, notification display and Expo or FCM delivery on a phone | Need a development build on a device |
 | Web screens | No DOM test library in the web package (as before); the rules they use are unit-tested, and the screens are checked in a browser during development |
 | Somali wording | Should be reviewed by a native Somali speaker before release |
+
+## Phase 3: remote push
+
+**Automated tests** (mocks; they are **not** real-device tests):
+
+| File | Covers |
+|---|---|
+| `backend/test/push.test.js` (11 tests, dev branch; Expo replaced by test functions and a local HTTP stub) | Android and iOS registration, several phones per staff member, invalid tokens and platforms, no user id accepted, signed out → 401; token refresh; account switching (token moves, the earlier account's pushes do not reach the phone); sign-out and DELETE remove the device; submission to every device with per-device tickets (SUBMITTED ≠ ACCEPTED), Somali generic text, privacy (no name, phone, dates; data only kind, source, id), no second sending; MessageRateExceeded retries only that device (no duplicates); 503 retried with backoff then FAILED after 5 attempts; 401 permanent; DeviceNotRegistered removes the device and it is never used again; MessageTooBig no retry; push turned off → SKIPPED without contacting Expo; receipts not read before 15 minutes, ok → ACCEPTED, DeviceNotRegistered → FAILED and device removed, missing after 24 h → UNCONFIRMED; Expo HTTP (tickets, receipts, access-token header, 503/429 transient, 401/400/request errors permanent, missing tickets) |
+| `backend/test/notification-rules.test.js` | Payload keys and Somali texts, error classification, backoff |
+| `backend/test/notifications.test.js` | End-to-end queueing, generic payload, retry, dead token, sign-out (updated for SUBMITTED) |
+| `apps/mobile/src/test/push.test.js` (10 tests, mocked expo-notifications) | Registration on Android and on iOS with the platform; permission denied → nothing registered; push off → nothing registered; token refresh re-registers; foreground push updates the unread count; terminated-app tap opens the details and marks them read; background tap opens the details once; another account's push (404) opens the list; sign-out clears shown notifications |
+
+**Real devices:** not run yet. They need Firebase (Android) and APNs (iOS) credentials, and builds made with them. The procedure and the results table are in `push-setup.md`.
+

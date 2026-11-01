@@ -2113,3 +2113,29 @@ Implements the approved decisions T1–T12 (`docs/staff/staff-transfers.md`).
   - The first simulation of a transfer starting mid-day was not realistic (transfers start at 00:00); the test now uses midnight and an offline event from the day before.
   - React Native Testing Library 14 has no `UNSAFE_getByType`; the mobile test triggers the app's foreground refresh instead.
 
+
+## Notifications phase 3: remote push completed
+
+- **Found:**
+  - Registration per session, an Expo send with retries, `DeviceNotRegistered` removal from tickets, and a generic payload already existed.
+  - Missing: receipts, per-device tracking (a message was "SENT" as soon as Expo answered), error classification (any ticket error failed the message; a rate limit was not retried), tap → details, a token refresh listener, clearing notifications at sign-out, FCM configuration (`google-services.json`), APNs credentials and a development build profile.
+- **Database:** migration `20261101090000_push_delivery`:
+  - `PushStatus`: `SENT` renamed `SUBMITTED`, `ACCEPTED` added;
+  - `PushMessage.sentAt` renamed `submittedAt`, `acceptedAt` added;
+  - a new `PushDelivery` table (per device: ticket, status, error, receipt).
+  - Existing rows are kept. Applied to the dev branch only.
+- **Backend:** `push.js` rewritten:
+  - error classes (transient, permanent, dead device);
+  - per-device deliveries, so a retry never sends twice to the same device;
+  - receipts (`checkPushReceipts`, job task `pushReceipts`, and after each dispatch);
+  - the opaque `{ source, id }` reference in `data`;
+  - `EXPO_RECEIPTS_URL`.
+- **Mobile:**
+  - tap → details for background and terminated apps (handled once; 404 → list);
+  - foreground pushes refresh the unread count;
+  - token refresh re-registers;
+  - sign-out clears shown notifications and the badge;
+  - `app.config.js` adds `googleServicesFile` from the EAS file variable `GOOGLE_SERVICES_JSON`;
+  - `expo-dev-client` and a `development` EAS profile;
+  - `.gitignore` covers Firebase and Apple files.
+- **Not done (needs your accounts):** the Firebase project and FCM V1 key, the APNs key, builds with them, and the real-device tests. See `docs/notifications/push-setup.md`.

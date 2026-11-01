@@ -73,7 +73,12 @@ jest.mock('expo-notifications', () => ({
   getAllScheduledNotificationsAsync: jest.fn(async () => [...global.__scheduled.values()]),
   getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExponentPushToken[test-device-token]' })),
   getLastNotificationResponseAsync: jest.fn(async () => null),
+  clearLastNotificationResponseAsync: jest.fn(async () => {}),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addPushTokenListener: jest.fn(() => ({ remove: jest.fn() })),
+  dismissAllNotificationsAsync: jest.fn(async () => {}),
+  setBadgeCountAsync: jest.fn(async () => true),
 }));
 jest.mock('expo-task-manager', () => ({ defineTask: jest.fn(), isTaskDefined: jest.fn(() => false) }));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { eas: { projectId: 'test-project' } } } } }));

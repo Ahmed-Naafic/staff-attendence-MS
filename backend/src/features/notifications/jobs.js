@@ -8,7 +8,7 @@ import { queueAnnouncementPush } from './announcements.service.js';
 import { createNotifications } from './notify.js';
 import { platformNotificationSettings } from './notificationSettings.service.js';
 import { noScheduleItems, processPendingEvents } from './outbox.js';
-import { sendPendingPush } from './push.js';
+import { checkPushReceipts, sendPendingPush } from './push.js';
 import { settleDueTransfers } from '../staff/transfers.service.js';
 
 /*
@@ -243,7 +243,7 @@ export async function purgeExpired({ now = new Date() } = {}) {
  * digests, announcement pushes, push delivery and retention, until the time budget is spent.
  * A failing task is reported and does not stop the others. → { [task]: result | { error } }.
  */
-export async function runNotificationJobs({ now = new Date(), budgetMs = 45_000, send } = {}) {
+export async function runNotificationJobs({ now = new Date(), budgetMs = 45_000, send, getReceipts } = {}) {
   const started = Date.now();
   const stop = () => Date.now() - started > budgetMs;
   const tasks = [
@@ -254,6 +254,7 @@ export async function runNotificationJobs({ now = new Date(), budgetMs = 45_000,
     ['digests', () => createDigests({ now })],
     ['announcementPush', () => queueAnnouncementPush({ now })],
     ['push', () => sendPendingPush({ now, stop, ...(send && { send }) })],
+    ['pushReceipts', () => checkPushReceipts({ now, ...(getReceipts && { getReceipts }) })],
     ['retention', () => purgeExpired({ now })],
   ];
   const result = {};

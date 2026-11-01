@@ -9,6 +9,7 @@
  * cancels every reminder, stops the geofence and removes the push token.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import * as Notifications from 'expo-notifications';
 import { AppState } from 'react-native';
 import { useAttendance } from '../attendance/AttendanceProvider';
 import { useSession } from '../auth/SessionProvider';
@@ -122,7 +123,8 @@ export function NotificationsProvider({ children, openDatabase = getDatabase, cl
     });
   }, [userId, today, day, items, reminders, branchOperating, backgroundGranted, openDatabase, clock]);
 
-  // Push for this session, while the platform and the staff member allow it.
+  // Push for this session, while the platform and the staff member allow it. Registered on every
+  // start (the server keeps one token per session) and again whenever the system issues a new token.
   const pushWanted = preferences?.push?.enabled;
   useEffect(() => {
     if (!userId || pushWanted === undefined) return;
@@ -134,10 +136,30 @@ export function NotificationsProvider({ children, openDatabase = getDatabase, cl
       disablePush(api).then(() => setPushState('off'));
     }
   }, [api, userId, pushWanted]);
+  useEffect(() => {
+    if (!userId || !pushWanted) return undefined;
+    // The listener gets the new device (FCM/APNs) token; the Expo token is read again from it.
+    const sub = Notifications.addPushTokenListener?.(() => {
+      enablePush(api).then(setPushState);
+    });
+    return () => sub?.remove?.();
+  }, [api, userId, pushWanted]);
+
+  // A push arriving while the app is open: the banner is shown (local.js) and the unread count updated.
+  useEffect(() => {
+    if (!userId) return undefined;
+    const sub = Notifications.addNotificationReceivedListener?.((notification) => {
+      if (notification?.request?.content?.data?.kind === 'notification') refreshCount();
+    });
+    return () => sub?.remove?.();
+  }, [userId, refreshCount]);
 
   // Signed out (or another account): nothing keeps reminding on this phone.
   useEffect(
     () => () => {
+      // Notifications already shown in the tray belong to the account that signed out.
+      Notifications.dismissAllNotificationsAsync?.().catch(() => {});
+      Notifications.setBadgeCountAsync?.(0).catch(() => {});
       cancelReminders().catch(() => {});
       syncBranchGeofence({ watch: false }).catch(() => {});
     },

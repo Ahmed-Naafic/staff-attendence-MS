@@ -8,6 +8,9 @@ export const fetchNotifications = (api, { page = 1, pageSize = 30, unread = fals
 
 export const fetchUnreadCount = (api) => api.request('/api/notifications/unread-count').then(({ data }) => data.unreadCount);
 
+export const fetchNotification = (api, source, id) =>
+  api.request(`/api/notifications/${encodeURIComponent(source)}/${encodeURIComponent(id)}`).then(({ data }) => data.item);
+
 export const markRead = (api, item) => api.request(`/api/notifications/${item.source}/${item.id}/read`, { method: 'POST' }).then(({ data }) => data.item);
 
 export const markAllRead = (api) => api.request('/api/notifications/read-all', { method: 'POST' }).then(({ data }) => data);

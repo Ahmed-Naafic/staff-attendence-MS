@@ -4,7 +4,7 @@ import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { toTime } from '../schedules/scheduleInput.js';
 import { localDate, scheduleOn } from '../schedules/schedules.service.js';
 import { createNotifications } from './notify.js';
-import { sendPendingPush } from './push.js';
+import { checkPushReceipts, sendPendingPush } from './push.js';
 import { latestSets, scheduleImpact } from './scheduleImpact.js';
 import { staffBranchAt, zonedMidnight } from '../staff/transfers.service.js';
 
@@ -54,6 +54,8 @@ export async function dispatch(ids, { now = new Date(), send } = {}) {
   try {
     for (const id of ids) await processEvent(id, { now });
     await sendPendingPush({ now, limit: 50, send });
+    // Receipts of earlier pushes that are due (cheap when there are none; the job does the rest).
+    await checkPushReceipts({ now, limit: 100 });
   } catch (error) {
     console.error('[notifications] dispatch failed; the scheduled job retries:', error.message);
   }

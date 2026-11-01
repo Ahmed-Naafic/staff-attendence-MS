@@ -11,6 +11,22 @@
       },
       "env": {
         "EXPO_PUBLIC_API_URL": "https://edutrack.colabgroup.study"
+      },
+      "ios": {
+        "simulator": false
+      }
+    },
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://edutrack.colabgroup.study"
       }
     }
   }

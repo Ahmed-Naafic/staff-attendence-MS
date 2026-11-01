@@ -63,7 +63,8 @@ Migration `prisma/migrations/20261030090000_notifications` adds new tables only;
 | `BranchReminderSettings` | Branch reminder settings (PK branchId) | CHECK minutes within the hard limits |
 | `NotificationPreference` | User preferences: disabledCategories, pushEnabled, reminder switches and minutes, locationConsentAt | CHECK minutes within the hard limits |
 | `PushDevice` | Expo push token of a Staff app session | `sessionId` UNIQUE (cascade from Session); `token` UNIQUE; (userId) |
-| `PushMessage` | A push to send to one user for one notification or announcement: status (PENDING, SENT, FAILED, SKIPPED), attempts, nextAttemptAt, lastError | UNIQUE (userId, sourceKey); (status, nextAttemptAt) |
+| `PushMessage` | A push to send to one user (all their devices) for one notification or announcement: status (PENDING, SUBMITTED, ACCEPTED, FAILED, SKIPPED), attempts, nextAttemptAt, lastError, submittedAt, acceptedAt | UNIQUE (userId, sourceKey); (status, nextAttemptAt) |
+| `PushDelivery` | One device's attempt: token, platform, status (SUBMITTED, ACCEPTED, FAILED, UNCONFIRMED), Expo ticket id, error code and message, receipt check time (migration `20261101090000_push_delivery`) | UNIQUE (pushMessageId, token): a device gets a message at most once; (status, submittedAt); (ticketId) |
 
 Enums: `NotificationCategory`, `AnnouncementStatus`, `OutboxStatus`, `PushStatus`.
 
@@ -88,10 +89,7 @@ Enums: `NotificationCategory`, `AnnouncementStatus`, `OutboxStatus`, `PushStatus
   - Outbox events are claimed with a conditional update (lease of 2 minutes).
   - Push batches are claimed with `UPDATE … WHERE id IN (SELECT … FOR UPDATE SKIP LOCKED)`.
   - The after-commit dispatch and the job never process the same item twice at once.
-- **Push retries:**
-  - Network errors, 429 and 5xx: the message stays PENDING (1, 5, 30 minutes, then 2 hours), and becomes FAILED after 5 attempts.
-  - A ticket error makes the message FAILED; `DeviceNotRegistered` also removes the token.
-  - Messages are SKIPPED when push is turned off (platform or user), the account is not active, the notification expired or was withdrawn, or no device is registered.
+- **Push delivery (phase 3):** see §10.
 
 ## 4. Background processing
 
@@ -193,3 +191,57 @@ The API runs as **Vercel serverless functions** (`backend/vercel.json`); there i
 | `EXPO_PUSH_URL` | Backend, optional | Push service address (default `https://exp.host/--/api/v2/push/send`; tests use a local stub) |
 | `extra.eas.projectId` | `apps/mobile/app.json` | Expo project for push tokens (already set) |
 | FCM / APNs credentials | Expo project | Delivery of push to Android / iOS devices |
+
+## 10. Push delivery (phase 3)
+
+Setup, credentials and the real-device procedure: `push-setup.md`.
+
+**Devices:**
+
+- A token belongs to **one session** of the Staff app (`PushDevice.sessionId` unique; it cascades when the session ends: sign-out, suspension, password reset, expiry cleanup). A staff member signed in on several phones has several devices.
+- Registering a token that another session holds moves it to the new session, so after an account switch the earlier account's pushes no longer reach the phone.
+- The app registers on every start and whenever the system issues a new token (`addPushTokenListener`). It clears shown notifications and the badge when signing out.
+
+**Sending** (`sendPendingPush`):
+
+- Messages are claimed with `FOR UPDATE SKIP LOCKED` and sent in batches of 100 to `https://exp.host/--/api/v2/push/send`, with `EXPO_ACCESS_TOKEN` when set.
+- Each device gets a `PushDelivery`: SUBMITTED with the ticket id, or FAILED with the error.
+- Devices already reached are never sent the message again (unique delivery), so a retry only reaches the rest.
+
+| Failure | Handling |
+|---|---|
+| Network, timeout, HTTP 429/5xx, missing tickets | Transient: the message goes back to PENDING with backoff (1, 5, 30, 120 minutes), and FAILED after 5 attempts |
+| Ticket `MessageRateExceeded` | Transient, for that device only |
+| Ticket `DeviceNotRegistered` | The device is removed and the delivery FAILED |
+| HTTP 401/403 (`UNAUTHORIZED`), other 4xx, request-level `errors`, `MessageTooBig`, `InvalidCredentials`, `MismatchSenderId` or unknown codes | Permanent: FAILED with the code, no retry |
+
+**Receipts** (`checkPushReceipts`, job task `pushReceipts`, also after each dispatch):
+
+- Read for deliveries submitted 15 minutes or more ago, in batches of 300, from `…/getReceipts`.
+- `ok` → delivery ACCEPTED, and the message ACCEPTED (`acceptedAt`).
+- Error → FAILED with the code (`DeviceNotRegistered` also removes the device).
+- No receipt after 24 hours → UNCONFIRMED.
+- A failure to read receipts leaves them for the next run.
+
+**What is claimed:**
+
+- SUBMITTED means Expo took the message.
+- ACCEPTED means FCM/APNs took it.
+- Nothing claims the phone displayed it; the app sends no read-back.
+
+**Payload (N21):**
+
+- `title: "EduTrack"`, a generic Somali `body`, `channelId: "default"`, `priority: "high"`, `sound: "default"`.
+- `data: { kind: "notification", source, id }`. The id is opaque; the app fetches the notification as the signed-in account (404 for anyone else) when the push is tapped.
+- No names, phone numbers, times, statuses, branches, reasons, coordinates or secrets.
+
+**App behaviour:**
+
+| State | Behaviour |
+|---|---|
+| Foreground | Banner (notification handler) and the unread count refreshed |
+| Background | The OS shows it; a tap opens the notification's details (marked read) |
+| Terminated | The OS shows it; the tap starts the app, which reads the last response and opens the details once |
+
+A reminder (`kind: "reminder"`) opens Home. On Android the channel `default` (high importance) is created before registration and declared in `app.json`.
+

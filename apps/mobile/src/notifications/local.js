@@ -9,7 +9,8 @@ import { Platform } from 'react-native';
 export const CHANNEL_ID = 'default';
 const KEY_PREFIX = 'edutrack.';
 
-// Shown also while the app is open (a banner), without a badge count of its own.
+// Shown also while the app is open (a banner): a push arriving in the foreground and reminders
+// alike. The badge is not set by EduTrack (the unread count is shown inside the app).
 Notifications.setNotificationHandler?.({
   handleNotification: async () => ({ shouldShowBanner: true, shouldShowList: true, shouldPlaySound: true, shouldSetBadge: false }),
 });

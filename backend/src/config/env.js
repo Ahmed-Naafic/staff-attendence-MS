@@ -23,6 +23,7 @@ export const env = {
   // Expo push service (Staff app push notifications). The access token is optional (needed only when
   // "enhanced push security" is turned on for the Expo project).
   expoPushUrl: process.env.EXPO_PUSH_URL || 'https://exp.host/--/api/v2/push/send',
+  expoReceiptsUrl: process.env.EXPO_RECEIPTS_URL || 'https://exp.host/--/api/v2/push/getReceipts',
   expoAccessToken: process.env.EXPO_ACCESS_TOKEN || undefined,
 };
 
