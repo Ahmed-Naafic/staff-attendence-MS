@@ -107,10 +107,10 @@ const transferBody = (branchKey, shiftNames = [], effectiveFrom = addDays(today,
   effectiveFrom,
   shifts: shiftNames.map((n) => ({ shiftKey: branches[branchKey].keys[n], days: ALL })),
 });
-/** Moves a scheduled transfer's start into the past (as if its day had come), with its destination set. */
+/** Moves a scheduled transfer's start into the past (as if its day had come), with its destination set (date and instant). */
 async function bringForward(transferId, effectiveAt) {
   const t = await prisma.staffTransfer.update({ where: { id: transferId }, data: { effectiveAt, effectiveFrom: new Date(`${today}T00:00:00Z`) } });
-  await prisma.staffAssignment.update({ where: { id: t.assignmentId }, data: { effectiveFrom: new Date(`${today}T00:00:00Z`) } });
+  await prisma.staffAssignment.update({ where: { id: t.assignmentId }, data: { effectiveFrom: new Date(`${today}T00:00:00Z`), effectiveAt } });
 }
 const lastMinutes = () => localMoment(new Date(), zone).minutes >= 1436;
 

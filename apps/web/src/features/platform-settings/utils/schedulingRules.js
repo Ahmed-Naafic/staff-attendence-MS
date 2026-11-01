@@ -21,11 +21,11 @@ export const daysText = (days) => `${days} ${days === 1 ? 'day' : 'days'}`;
 /** 'tomorrow' for 1 day, otherwise 'N days later', for "a change saved today starts …". */
 export const delayExample = (days) => (days === 1 ? 'tomorrow at 00:00' : `${days} days later at 00:00`);
 
-/** The values that differ from the saved ones: { effectiveDelayDays?, immediateFirstSchedule?, immediateFirstAssignment? }. */
+/** The values that differ from the saved ones: { effectiveDelayDays?, immediateFirstSchedule?, immediateFirstAssignment?, timedChanges? }. */
 export function changedValues(saved, draft) {
   const changed = {};
   const days = Number(String(draft.effectiveDelayDays).trim());
   if (days !== saved.effectiveDelayDays) changed.effectiveDelayDays = days;
-  for (const key of ['immediateFirstSchedule', 'immediateFirstAssignment']) if (draft[key] !== saved[key]) changed[key] = draft[key];
+  for (const key of ['immediateFirstSchedule', 'immediateFirstAssignment', 'timedChanges']) if (draft[key] !== undefined && draft[key] !== saved[key]) changed[key] = draft[key];
   return changed;
 }

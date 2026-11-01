@@ -29,7 +29,7 @@ const lower = tag.toLowerCase();
 const phonePrefix = `+96${String(parseInt(randomBytes(3).toString('hex'), 16)).padStart(8, '0')}`;
 const ALL = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const startedAt = new Date();
-const SETTINGS_COLUMNS = { effectiveDelayDays: true, immediateFirstSchedule: true, immediateFirstAssignment: true };
+const SETTINGS_COLUMNS = { effectiveDelayDays: true, immediateFirstSchedule: true, immediateFirstAssignment: true, timedChanges: true };
 const people = {};
 const schools = {};
 const branches = {};
@@ -53,7 +53,7 @@ const as = (key, path, options = {}) => call(path, { ...options, cookie: people[
 const setPolicy = (body, key = 'admin') => as(key, '/api/platform/settings/scheduling', { method: 'PUT', body });
 /** Writes the settings directly (bypassing the API and its audit) for a test's starting point. */
 const forcePolicy = (data) => prisma.platformSettings.upsert({ where: { id: 'platform' }, create: { id: 'platform', ...data }, update: data });
-const resetPolicy = () => forcePolicy({ effectiveDelayDays: null, immediateFirstSchedule: null, immediateFirstAssignment: null });
+const resetPolicy = () => forcePolicy({ effectiveDelayDays: null, immediateFirstSchedule: null, immediateFirstAssignment: null, timedChanges: null });
 
 async function webUser(key, role, extra = {}) {
   counter += 1;
@@ -214,7 +214,7 @@ test('only a Super Admin changes the settings (401 signed out, 403 for Owner and
   assert.equal(await prisma.platformSettings.findUnique({ where: { id: 'platform' } }).then((r) => r?.effectiveDelayDays ?? null), null);
   const read = await as('admin', '/api/platform/settings');
   assert.equal(read.status, 200);
-  assert.deepEqual(read.body.settings.scheduling, { effectiveDelayDays: 1, immediateFirstSchedule: true, immediateFirstAssignment: true, limits: { minDays: 1, maxDays: 30 } });
+  assert.deepEqual(read.body.settings.scheduling, { effectiveDelayDays: 1, immediateFirstSchedule: true, immediateFirstAssignment: true, timedChanges: false, limits: { minDays: 1, maxDays: 30 } });
   const bad = await setPolicy({ effectiveDelayDays: 0 });
   assert.equal(bad.status, 400);
   assert.ok(bad.body.details.effectiveDelayDays);

@@ -140,7 +140,7 @@ All three are in category `TRANSFER` (mandatory). Dedupe keys are `staff-transfe
 | `GET /api/owner/staff?q&branch&status&page&pageSize` | OWNER | The school's staff: `{ items: [{ id, staffId, name, jobTitle, status, branch, scheduledTransfer }], total, page, pageSize, pageCount }` |
 | `GET /api/owner/staff/:id` | OWNER | `{ staff: { …, transfers: [{ id, status, fromBranch, toBranch, effectiveFrom, effectiveAt, timeZone, shifts, createdAt, completedAt, cancelledAt }], timeZone, effectiveDelayDays, earliestTransferDate, latestTransferDate } }` |
 | `GET /api/owner/branches/:id/shifts?date=YYYY-MM-DD` | OWNER | The branch's shifts in the schedule in effect on the date: `{ date, schedule: { effectiveFrom, timeZone, shifts: [{ key, name, days, start, end }] } \| null }` |
-| `POST /api/owner/staff/:id/transfer` `{ branchId, effectiveFrom, shifts: [{ shiftKey, days }] }` | OWNER | Schedules a transfer → 201 `{ transfer }` |
+| `POST /api/owner/staff/:id/transfer` `{ branchId, effectiveFrom, effectiveTime?, shifts: [{ shiftKey, days }] }` | OWNER | Schedules a transfer → 201 `{ transfer }` (`effectiveTime` 'HH:MM' only with timed changes: Platform Settings → Scheduling & Assignments; the transfer then takes effect at that time) |
 | `DELETE /api/owner/staff/:id/transfer/scheduled` | OWNER | Cancels the scheduled transfer → `{ staff }` |
 | `GET /api/manager/staff/:id` | MANAGER | Now also returns `transfer: { scheduledOut: { effectiveFrom } \| null, history: [{ effectiveFrom, direction: 'in' \| 'out' }] }` (no other branch named) |
 | `GET /api/attendance/profile` | STAFF | Now also returns `upcomingTransfer: { effectiveFrom, branch: { code, name } } \| null` |

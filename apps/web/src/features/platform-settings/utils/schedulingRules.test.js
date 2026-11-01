@@ -19,4 +19,6 @@ test('only changed values are sent', () => {
   const saved = { effectiveDelayDays: 1, immediateFirstSchedule: true, immediateFirstAssignment: true };
   assert.deepEqual(changedValues(saved, { effectiveDelayDays: '1', immediateFirstSchedule: true, immediateFirstAssignment: true }), {});
   assert.deepEqual(changedValues(saved, { effectiveDelayDays: '3', immediateFirstSchedule: false, immediateFirstAssignment: true }), { effectiveDelayDays: 3, immediateFirstSchedule: false });
+  const timed = { ...saved, timedChanges: false };
+  assert.deepEqual(changedValues(timed, { effectiveDelayDays: '1', immediateFirstSchedule: true, immediateFirstAssignment: true, timedChanges: true }), { timedChanges: true });
 });

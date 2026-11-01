@@ -1985,6 +1985,36 @@ Found in the dev data for CIT-001-B001. A Manager scheduled a change with a "nig
 - **Not changed:** saved versions and assignment sets are never rewritten. The dev branch's version from 2026-10-28 keeps its separate night shift; that staff member's assignments were re-saved from 2026-10-30 with the current night shift through `saveAssignments` (audit actor "Command-line operator").
 - **Tests:** `backend/test/schedules.test.js`, the shift key test extended: an added shift with an earlier name (any capitalization) gets its key; an added shift whose earlier namesake is kept under another name is new; a never-used name is new; cancelling a scheduled change and typing the shift in again keeps its key. Results: schedules **20 / 20**; staff, attendance, attendance reports and export **89 / 89** (dev branch). A first run was stopped while the dev database was unreachable; its leftover test schools were removed.
 
+## Scheduling & Assignments: changes at their scheduled time
+
+- **Request:** a Platform Settings checkbox "Allow Changes to Take Effect at Their Scheduled Time": schedule changes (shifts), assignments and transfers for today or later at a chosen date and time, bypassing the delay; off keeps the delay (1 day by default).
+- **Decisions (2026-11-01):**
+  - On a day with a change after 00:00, each shift is judged by the schedule version and assignment set in effect at **that shift's start**.
+  - Server and web only; the Staff app shows a mid-day change after it next reloads today.
+- **Database:** migration `20261101180000_timed_changes`:
+  - `PlatformSettings.timedChanges` (null = off).
+  - `effectiveAt` on `BranchSchedule` and `StaffAssignment`, backfilled to 00:00 of `effectiveFrom` in the row's time zone.
+  - A trigger fills `effectiveAt` the same way when an insert leaves it out, so the migration can run before the code is deployed.
+  - The one-per-date partial unique indexes become one-per-instant.
+  - The Prisma client fills a missing `effectiveAt` the same way, for scripts and tests.
+- **Backend:**
+  - `resolveEffective` (`schedulingPolicy.js`) decides the effective instant: off = delay rules, 00:00, a time refused; on = from now, never in the past.
+  - Schedules and assignments resolve by instant (`scheduleAt`, `assignmentAt`); pending = effectiveAt after now.
+  - Attendance: `dayPlan` keeps ordinary days exactly as before; split days use `composeDay`.
+  - A check-out after a same-day transfer is judged at its check-in's branch.
+  - The outbox uses the effective instant.
+  - Audit texts show the time when it is not 00:00.
+  - Responses add `effectiveTime`, `effectiveAt`, `endsAt`, `timedChanges` and `now`.
+- **Web:**
+  - The settings checkbox.
+  - Time fields in the schedule, assignment and transfer forms when the setting is on (default: the next quarter hour), with past times refused.
+  - Times shown wherever versions, sets and transfers are listed.
+- **Not changed:** the Staff app, notification texts (they name the date), reports' filter options (date-level), and the rules on days without a mid-day change.
+- **Results:**
+  - New `timed-changes.test.js`: policy rules, split-day composition, settings access and audit, timed schedule, assignment and transfer saves, and a split-day check-in judged by the old version.
+  - With the scheduling-settings, schedules, staff, staff-transfers, attendance, attendance-reports, attendance-export, notifications and audit suites: **191 / 191**.
+  - Web **75 / 75**; `npm run build:web` passes.
+
 ## Scheduling & Assignments settings: configurable effective delay
 
 - **Request:** a configurable effective delay (default 1 calendar day) in Platform Settings; changes saved at once, operational from their date, activated automatically; pending changes visible; transfers included.

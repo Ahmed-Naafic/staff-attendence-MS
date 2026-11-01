@@ -3,16 +3,31 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button, Checkbox, FieldError, Input, Modal, Switch } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { saveSchedule } from '../data/scheduleApi.js';
-import { effectiveDateHint, emptyShift, MAX_SHIFTS, toRequestShifts, toRow, validateSchedule, WEEKDAYS } from '../utils/scheduleRules.js';
+import {
+  effectiveDateHint,
+  effectiveTimeHint,
+  effectiveTimeProblem,
+  emptyShift,
+  MAX_SHIFTS,
+  nextQuarter,
+  toRequestShifts,
+  toRow,
+  validateSchedule,
+  whenText,
+  WEEKDAYS,
+} from '../utils/scheduleRules.js';
 
 /**
  * Change the branch schedule: a complete new version (effective date, check-out ON/OFF and every
- * shift), starting from the version in effect (or the scheduled one, when there is one).
+ * shift), starting from the version in effect (or the scheduled one, when there is one). When
+ * Platform Settings allow changes at their scheduled time (`page.timedChanges`), a time is chosen
+ * too (any time after now, today or later); otherwise the change starts at 00:00 of its date.
  * `page` is the schedule page data from the API. `onSaved(page)` runs after success.
  */
 export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
   const formId = useId();
   const [effectiveFrom, setEffectiveFrom] = useState('');
+  const [effectiveTime, setEffectiveTime] = useState('');
   const [checkOutEnabled, setCheckOutEnabled] = useState(false);
   const [rows, setRows] = useState([]);
   const [errors, setErrors] = useState({});
@@ -25,7 +40,9 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
   useEffect(() => {
     if (!open || !page) return;
     const base = page.scheduled ?? page.current;
-    setEffectiveFrom(page.earliestEffectiveDate);
+    const start = page.timedChanges && page.now ? nextQuarter(page.now) : null;
+    setEffectiveFrom(start?.date ?? page.earliestEffectiveDate);
+    setEffectiveTime(start?.time ?? '');
     setCheckOutEnabled(base?.checkOutEnabled ?? false);
     setRows(base ? base.shifts.map(toRow) : [emptyShift()]);
     setErrors({});
@@ -51,13 +68,15 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
   function focusFirst(problems) {
     const first = Object.keys(problems)[0];
     if (!first) return;
-    const id = first === 'effectiveFrom' ? `${formId}-date` : first.startsWith('shifts.') ? `${formId}-${first.replaceAll('.', '-')}` : null;
+    const id = first === 'effectiveFrom' ? `${formId}-date` : first === 'effectiveTime' ? `${formId}-time` : first.startsWith('shifts.') ? `${formId}-${first.replaceAll('.', '-')}` : null;
     document.getElementById(id ?? `${formId}-shifts`)?.focus();
   }
 
   async function save() {
     setFormError('');
     const problems = validateSchedule({ effectiveFrom, rows }, { earliest: page.earliestEffectiveDate, latest: page.latestEffectiveDate });
+    const timeProblem = effectiveTimeProblem({ timed: page.timedChanges, date: effectiveFrom, time: effectiveTime, now: page.now });
+    if (timeProblem) Object.assign(problems, { effectiveTime: timeProblem });
     setErrors(problems);
     if (Object.keys(problems).length) {
       focusFirst(problems);
@@ -65,7 +84,7 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
     }
     setSaving(true);
     try {
-      const updated = await saveSchedule({ effectiveFrom, checkOutEnabled, shifts: toRequestShifts(rows) });
+      const updated = await saveSchedule({ effectiveFrom, ...(page.timedChanges && { effectiveTime }), checkOutEnabled, shifts: toRequestShifts(rows) });
       setSaving(false);
       onSaved(updated);
     } catch (error) {
@@ -130,8 +149,30 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
                 clear('effectiveFrom');
               }}
               error={errors.effectiveFrom}
-              hint={effectiveDateHint({ first: !page.current, today: page.today, earliest: page.earliestEffectiveDate, delayDays: page.effectiveDelayDays, what: 'schedule' })}
+              hint={effectiveDateHint({
+                first: !page.current,
+                today: page.today,
+                earliest: page.earliestEffectiveDate,
+                delayDays: page.effectiveDelayDays,
+                what: 'schedule',
+                timedChanges: page.timedChanges,
+              })}
             />
+            {page.timedChanges && (
+              <Input
+                id={`${formId}-time`}
+                label="Effective time"
+                type="time"
+                required
+                value={effectiveTime}
+                onChange={(event) => {
+                  setEffectiveTime(event.target.value);
+                  clear('effectiveTime');
+                }}
+                error={errors.effectiveTime}
+                hint={effectiveTimeHint('schedule', page.timeZone)}
+              />
+            )}
             <div className="flex items-end pb-1">
               <Switch
                 label="Check-out"
@@ -143,7 +184,7 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
           </div>
           {page.scheduled && (
             <p className="rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-small text-warning-fg">
-              A change is already scheduled from {page.scheduled.effectiveFrom}. Saving replaces it (it is kept in the history as cancelled).
+              A change is already scheduled from {whenText(page.scheduled)}. Saving replaces it (it is kept in the history as cancelled).
             </p>
           )}
 

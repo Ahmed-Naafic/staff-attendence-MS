@@ -117,10 +117,12 @@ export const absentAfter = (shift) => {
 export const earliestText = (earliest, delayDays = 1) => (delayDays === 1 ? `Tomorrow (${earliest})` : `${earliest} (${delayDays} days from today)`);
 
 /**
- * The effective-date hint: `first` (nothing in effect today), `what` 'schedule' | 'assignments'.
+ * The effective-date hint: `first` (nothing in effect today), `what` 'schedule' | 'assignments',
+ * `timedChanges` (Platform Settings: any date from today, at a chosen time).
  * A first one that may start today says so; otherwise the earliest date and why.
  */
-export function effectiveDateHint({ first, today, earliest, delayDays, what }) {
+export function effectiveDateHint({ first, today, earliest, delayDays, what, timedChanges = false }) {
+  if (timedChanges) return `Today (${today}) or later, at a time after now. Platform Settings let changes take effect at their scheduled time.`;
   if (first && earliest === today) {
     return what === 'schedule' ? `Your branch has no schedule in effect: it can start today (${today}).` : `No assignments in effect: they can start today (${today}).`;
   }
@@ -130,3 +132,33 @@ export function effectiveDateHint({ first, today, earliest, delayDays, what }) {
     ? `${when} at the earliest, so today's schedule does not change during the day. Until then the current schedule stays in effect.`
     : `${when} at the earliest, so today's assignments do not change during the day. Until then the current assignments stay in effect.`;
 }
+
+/** 'From'-style date of a version, set or transfer: '2026-11-01 13:30', or just the date when it starts at 00:00. */
+export const whenText = (x) => (x?.effectiveTime && x.effectiveTime !== '00:00' ? `${x.effectiveFrom} ${x.effectiveTime}` : (x?.effectiveFrom ?? ''));
+
+/**
+ * The first quarter hour after `now` ({ date, time } in the platform time zone, from the API), as
+ * { date, time }: the default for a change at its scheduled time (e.g. 13:07 → 13:15; 23:50 → next day 00:00).
+ */
+export function nextQuarter(now) {
+  const [h, m] = now.time.split(':').map(Number);
+  const minutes = (Math.floor((h * 60 + m) / 15) + 1) * 15;
+  if (minutes >= 1440) return { date: addOneDay(now.date), time: '00:00' };
+  return { date: now.date, time: `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}` };
+}
+const addOneDay = (date) => new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * The effective time problem with timed changes (Platform Settings), or null: a time is needed and
+ * the date and time must be after now (the API checks again with its own clock).
+ */
+export function effectiveTimeProblem({ timed, date, time, now }) {
+  if (!timed) return null;
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time ?? '')) return 'Choose the time it takes effect.';
+  if (now && /^\d{4}-\d{2}-\d{2}$/.test(date ?? '') && `${date} ${time}` <= `${now.date} ${now.time}`) return `Choose a time after now (${now.time}). Changes cannot start in the past.`;
+  return null;
+}
+
+/** The time field's hint with timed changes. */
+export const effectiveTimeHint = (what, timeZone) =>
+  `Takes effect at this time (${timeZone}). Until then the current ${what === 'schedule' ? 'schedule stays' : what === 'transfer' ? 'branch stays' : 'assignments stay'} in effect.`;

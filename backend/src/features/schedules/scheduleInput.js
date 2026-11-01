@@ -87,8 +87,10 @@ function readShift(raw, index, errors) {
 }
 
 /**
- * A schedule change { effectiveFrom, checkOutEnabled, shifts } → { effectiveFrom: 'YYYY-MM-DD',
- * checkOutEnabled, shifts: [{ key, name, days, startMinute, endMinute, graceMinutes, absenceCutoffMinutes }] }.
+ * A schedule change { effectiveFrom, effectiveTime?, checkOutEnabled, shifts } → { effectiveFrom:
+ * 'YYYY-MM-DD', effectiveTime (minutes after midnight, or null when not sent: 00:00), checkOutEnabled,
+ * shifts: [{ key, name, days, startMinute, endMinute, graceMinutes, absenceCutoffMinutes }] }.
+ * Whether a time may be chosen is decided by the service (Platform Settings).
  * `key` (optional) keeps an existing shift's identity (staff assignments follow it); null = a new shift.
  * Shift names are unique (regardless of capitalization); shifts sharing a day may not overlap
  * (one may start at the minute another ends).
@@ -97,11 +99,12 @@ export function readScheduleChange(body) {
   const keys = Object.keys(body);
   const fixed = keys.filter((k) => FIXED[k]);
   if (fixed.length) throw badRequest(FIXED[fixed[0]], Object.fromEntries(fixed.map((k) => [k, FIXED[k]])));
-  const unknown = keys.filter((k) => !['effectiveFrom', 'checkOutEnabled', 'shifts'].includes(k));
+  const unknown = keys.filter((k) => !['effectiveFrom', 'effectiveTime', 'checkOutEnabled', 'shifts'].includes(k));
   if (unknown.length) throw badRequest(`Unknown fields: ${unknown.join(', ')}.`);
 
   const errors = {};
   if (!isDate(body.effectiveFrom)) errors.effectiveFrom = 'Choose the date the schedule takes effect (YYYY-MM-DD).';
+  const effectiveTime = readEffectiveTime(body, errors);
   if (typeof body.checkOutEnabled !== 'boolean') errors.checkOutEnabled = 'Choose whether check-out is on or off.';
 
   let shifts = [];
@@ -140,5 +143,16 @@ export function readScheduleChange(body) {
   });
 
   if (Object.keys(errors).length) throw badRequest('Check the highlighted fields.', errors);
-  return { effectiveFrom: body.effectiveFrom, checkOutEnabled: body.checkOutEnabled, shifts };
+  return { effectiveFrom: body.effectiveFrom, effectiveTime, checkOutEnabled: body.checkOutEnabled, shifts };
+}
+
+/**
+ * The optional effective time of a change: 'HH:MM' (24-hour) → minutes after midnight; absent or
+ * null → null (00:00). A malformed value adds an `effectiveTime` error.
+ */
+export function readEffectiveTime(body, errors) {
+  if (body.effectiveTime === undefined || body.effectiveTime === null || body.effectiveTime === '') return null;
+  const minutes = toMinutes(body.effectiveTime);
+  if (minutes === null) errors.effectiveTime = 'Enter the time as HH:MM (24-hour).';
+  return minutes;
 }

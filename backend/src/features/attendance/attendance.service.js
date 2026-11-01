@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { HttpError } from '../../common/httpError.js';
+import { zonedInstant, zonedMidnight } from '../../common/zonedTime.js';
 import { getPrisma } from '../../config/prisma.js';
 import { locationAt, scheduledLocationAfter } from '../branches/branches.service.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { WEEKDAYS, toTime } from '../schedules/scheduleInput.js';
-import { localDate, scheduleOn } from '../schedules/schedules.service.js';
-import { assignmentOn } from '../staff/staff.service.js';
+import { daySchedules } from '../schedules/schedules.service.js';
+import { daySets } from '../staff/staff.service.js';
 import { staffBranchAt, upcomingTransfer } from '../staff/transfers.service.js';
 import { dispatch, OUTBOX } from '../notifications/outbox.js';
 import { judgePosition } from './geofence.js';
@@ -68,16 +69,76 @@ export function shiftsWithWindows(assignment, schedule, weekday) {
   });
 }
 
-/** The schedule version for the event's day: the day in the platform time zone, re-read in the schedule's own zone when they differ. */
-async function dayContext(branchId, occurredAt, client) {
+/** The local moment of an instant in the platform time zone (for days without a schedule). */
+async function platformMoment(occurredAt) {
+  return localMoment(occurredAt, await platformTimeZone());
+}
+
+/** The newest of `list` (sorted by effectiveAt) in effect at `instant`, or undefined. */
+const inEffectAt = (list, instant) => list.filter((v) => v.effectiveAt <= instant).at(-1);
+
+/**
+ * The schedule and assignment set for an event's day (the day in the platform time zone, re-read in
+ * the schedule's own zone when they differ) → { moment, schedule, assignment }.
+ *
+ * An ordinary day (one schedule version and at most one assignment set apply all day) gives those
+ * rows exactly. On a day where a version or set takes effect after 00:00 (timed changes), each shift
+ * of the day is taken from the schedule version and assignment set in effect at that shift's start
+ * (approved 2026-11-01), so a 07:00 shift keeps the old rules and a 14:00 shift has the new ones. The
+ * result has the same shape (`composed: true`); each shift carries the `scheduleId` and
+ * `checkOutEnabled` of its version and each assigned shift its `assignmentId`. A shift key appears
+ * at most once a day (the earliest occurrence), as check-ins are one per shift and day.
+ */
+async function dayPlan(staffUserId, branchId, occurredAt, client) {
   const zone = await platformTimeZone();
   let moment = localMoment(occurredAt, zone);
-  let schedule = await scheduleOn(branchId, moment.date, client);
-  if (schedule && schedule.timeZone !== zone) {
-    moment = localMoment(occurredAt, schedule.timeZone);
-    schedule = await scheduleOn(branchId, moment.date, client);
+  let bounds = dayBounds(moment.date, zone);
+  let schedules = await daySchedules(branchId, bounds.start, bounds.end, client);
+  if (schedules.length && schedules[0].timeZone !== zone) {
+    moment = localMoment(occurredAt, schedules[0].timeZone);
+    bounds = dayBounds(moment.date, schedules[0].timeZone);
+    schedules = await daySchedules(branchId, bounds.start, bounds.end, client);
   }
-  return { moment, schedule };
+  if (!schedules.length) return { moment, schedule: null, assignment: null };
+  const sets = staffUserId ? await daySets(staffUserId, bounds.start, bounds.end, client) : [];
+  if (schedules.length === 1 && sets.length <= 1) return { moment, schedule: schedules[0], assignment: sets[0] ?? null };
+  return { moment, ...composeDay(moment.date, schedules, sets, occurredAt) };
+}
+
+/**
+ * A split day (see dayPlan): `schedules` and `sets` are the versions and sets that apply during
+ * `date`, ordered by effectiveAt; each shift comes from the version in effect at its start, each
+ * assigned shift from the set in effect then. → { schedule, assignment } (composed).
+ */
+export function composeDay(date, schedules, sets, occurredAt) {
+  const byKey = new Map();
+  for (const version of schedules) {
+    for (const s of version.shifts) {
+      const startsAt = zonedInstant(date, s.startMinute, version.timeZone);
+      if (inEffectAt(schedules, startsAt) !== version) continue;
+      const earlier = byKey.get(s.shiftKey);
+      if (earlier && earlier.startsAt <= startsAt) continue;
+      byKey.set(s.shiftKey, { ...s, startsAt, scheduleId: version.id, checkOutEnabled: version.checkOutEnabled });
+    }
+  }
+  const shifts = [...byKey.values()].sort((a, b) => a.startMinute - b.startMinute);
+  const now = inEffectAt(schedules, occurredAt) ?? schedules[0];
+  const schedule = { id: now.id, timeZone: now.timeZone, checkOutEnabled: now.checkOutEnabled, shifts, composed: true };
+  if (!sets.length) return { schedule, assignment: null };
+  const assigned = [];
+  for (const s of shifts) {
+    const set = inEffectAt(sets, s.startsAt);
+    const a = set?.shifts.find((x) => x.shiftKey === s.shiftKey);
+    if (a) assigned.push({ shiftKey: a.shiftKey, days: a.days, assignmentId: set.id });
+  }
+  const setNow = inEffectAt(sets, occurredAt) ?? sets[0];
+  return { schedule, assignment: { id: setNow.id, shifts: assigned, composed: true } };
+}
+
+/** [00:00, next 00:00) of a local date in a time zone, as instants. */
+function dayBounds(date, timeZone) {
+  const next = new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  return { start: zonedMidnight(date, timeZone), end: zonedMidnight(next, timeZone) };
 }
 
 const sameContent = (stored, event) =>
@@ -146,11 +207,20 @@ export async function recordEvent(staff, event, receivedAt = new Date()) {
 
   // The branch of the event's own time (T5): an event saved before a transfer and uploaded after it
   // is judged against the branch the staff member belonged to then, never the new one.
-  const branchId = await staffBranchAt(staff.id, event.occurredAt, prisma);
+  let branchId = await staffBranchAt(staff.id, event.occurredAt, prisma);
+  if (event.type === 'CHECK_OUT') {
+    // A transfer that took effect during the day (timed changes): the check-out of a check-in made
+    // before it is judged at the check-in's branch, so it can still be closed there.
+    const open = await prisma.attendanceEvent.findFirst({
+      where: { staffUserId: staff.id, type: 'CHECK_IN', workDate: asDbDate((await platformMoment(event.occurredAt)).date), occurredAt: { lte: event.occurredAt }, checkOut: { is: null } },
+      orderBy: { occurredAt: 'desc' },
+      select: { branchId: true },
+    });
+    if (open && open.branchId !== branchId) branchId = open.branchId;
+  }
   const branch = await prisma.branch.findUnique({ where: { id: branchId ?? staff.branchId }, select: { id: true, schoolId: true } });
-  const { moment, schedule } = await dayContext(branch.id, event.occurredAt, prisma);
+  const { moment, schedule, assignment } = await dayPlan(staff.id, branch.id, event.occurredAt, prisma);
   if (!schedule) throw refuse('NO_SHIFT', 'Your branch has no schedule on this day.');
-  const assignment = await assignmentOn(staff.id, moment.date, prisma);
 
   let shift;
   let checkIn = null;
@@ -176,13 +246,18 @@ export async function recordEvent(staff, event, receivedAt = new Date()) {
       );
     }
   } else {
-    if (!schedule.checkOutEnabled) throw refuse('CHECK_OUT_DISABLED', 'Check-out is not used at your branch on this day.');
+    // On a split day the check-out setting is that of the check-in's own version (checked below).
+    if (!schedule.composed && !schedule.checkOutEnabled) throw refuse('CHECK_OUT_DISABLED', 'Check-out is not used at your branch on this day.');
     // The open check-in of that day: the latest one without a check-out, at or before this time.
     checkIn = await prisma.attendanceEvent.findFirst({
       where: { staffUserId: staff.id, type: 'CHECK_IN', workDate: asDbDate(moment.date), occurredAt: { lte: event.occurredAt }, checkOut: { is: null } },
       orderBy: { occurredAt: 'desc' },
     });
     if (!checkIn) throw refuse('NO_OPEN_CHECK_IN', 'There is no check-in to check out from today.');
+    if (schedule.composed) {
+      const version = await prisma.branchSchedule.findUnique({ where: { id: checkIn.scheduleId }, select: { checkOutEnabled: true } });
+      if (!version?.checkOutEnabled) throw refuse('CHECK_OUT_DISABLED', 'Check-out is not used at your branch on this day.');
+    }
     shift = schedule.shifts.find((s) => s.shiftKey === checkIn.shiftKey) ?? { shiftKey: checkIn.shiftKey };
   }
 
@@ -218,8 +293,9 @@ export async function recordEvent(staff, event, receivedAt = new Date()) {
           receivedAt,
           workDate: asDbDate(moment.date),
           shiftKey: shift.shiftKey,
-          scheduleId: event.type === 'CHECK_OUT' ? checkIn.scheduleId : schedule.id,
-          assignmentId: event.type === 'CHECK_OUT' ? checkIn.assignmentId : assignment.id,
+          // The version and set the check-in was judged against (on a split day: those of its shift).
+          scheduleId: event.type === 'CHECK_OUT' ? checkIn.scheduleId : (shift.scheduleId ?? schedule.id),
+          assignmentId: event.type === 'CHECK_OUT' ? checkIn.assignmentId : (assignment.shifts.find((a) => a.shiftKey === shift.shiftKey)?.assignmentId ?? assignment.id),
           locationId: location.id,
           latitude: event.position.latitude,
           longitude: event.position.longitude,
@@ -253,8 +329,7 @@ const appLocation = (l) => (l ? { latitude: l.latitude, longitude: l.longitude, 
  */
 export async function today(staff, now = new Date()) {
   const prisma = getPrisma();
-  const { moment, schedule } = await dayContext(staff.branchId, now, prisma);
-  const assignment = schedule ? await assignmentOn(staff.id, moment.date, prisma) : null;
+  const { moment, schedule, assignment } = await dayPlan(staff.id, staff.branchId, now, prisma);
   const windows = schedule && assignment ? shiftsWithWindows(assignment, schedule, moment.weekday) : [];
   const [events, current, scheduled] = await Promise.all([
     prisma.attendanceEvent.findMany({ where: { staffUserId: staff.id, workDate: asDbDate(moment.date) }, orderBy: { occurredAt: 'asc' } }),
@@ -308,7 +383,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export async function history(staff, { from, to } = {}, now = new Date()) {
   const prisma = getPrisma();
   if (!to || !from) {
-    const { moment } = await dayContext(staff.branchId, now, prisma);
+    const { moment } = await dayPlan(null, staff.branchId, now, prisma);
     to ??= moment.date;
     from ??= fromDbDate(new Date(asDbDate(to).getTime() - 6 * DAY_MS));
   }

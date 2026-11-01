@@ -69,10 +69,13 @@ export function validateReason(reason) {
  * otherwise the current one's. `branchShifts` is { current, scheduled } from the API (each
  * { effectiveFrom, shifts } or null). Returns { effectiveFrom, shifts } or null.
  */
-export function shiftsOn(branchShifts, date) {
+export function shiftsOn(branchShifts, date, time = '00:00') {
   const { current, scheduled } = branchShifts ?? {};
-  if (scheduled && date >= scheduled.effectiveFrom) return scheduled;
-  if (current && date >= current.effectiveFrom) return current;
+  // A version starts at its date and time ('00:00' when the API sends no time).
+  const at = `${date} ${time || '00:00'}`;
+  const starts = (v) => `${v.effectiveFrom} ${v.effectiveTime ?? '00:00'}`;
+  if (scheduled && at >= starts(scheduled)) return scheduled;
+  if (current && at >= starts(current)) return current;
   return null;
 }
 

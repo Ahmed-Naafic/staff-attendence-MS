@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { absentAfter, earliestText, effectiveDateHint, emptyShift, lateAfter, toRequestShifts, validateSchedule } from './scheduleRules.js';
+import { absentAfter, earliestText, effectiveDateHint, effectiveTimeHint, effectiveTimeProblem, emptyShift, lateAfter, nextQuarter, toRequestShifts, validateSchedule, whenText } from './scheduleRules.js';
 
 const RANGE = { earliest: '2026-11-02', latest: '2027-11-01' };
 const row = (overrides = {}) => ({ name: 'Morning', days: ['TUE', 'MON'], start: '07:00', end: '13:00', graceMinutes: '10', absenceCutoffMinutes: '120', ...overrides });
@@ -62,4 +62,22 @@ test('effective-date hints follow the delay and the first-one rule', () => {
   assert.match(effectiveDateHint({ ...base, first: true, earliest: '2026-11-04', what: 'schedule' }), /^2026-11-04 \(3 days from today\) at the earliest \(the platform's effective delay\)/);
   assert.match(effectiveDateHint({ ...base, first: false, earliest: '2026-11-04', what: 'assignments' }), /today's assignments do not change/);
   assert.match(effectiveDateHint({ ...base, first: false, earliest: '2026-11-04', what: 'schedule' }), /current schedule stays in effect/);
+});
+
+test('timed changes: when text, default time, time problems and hints', () => {
+  assert.equal(whenText({ effectiveFrom: '2026-11-01', effectiveTime: '00:00' }), '2026-11-01');
+  assert.equal(whenText({ effectiveFrom: '2026-11-01', effectiveTime: '13:30' }), '2026-11-01 13:30');
+  assert.equal(whenText({ effectiveFrom: '2026-11-01' }), '2026-11-01', 'older responses without a time');
+  assert.deepEqual(nextQuarter({ date: '2026-11-01', time: '13:07' }), { date: '2026-11-01', time: '13:15' });
+  assert.deepEqual(nextQuarter({ date: '2026-11-01', time: '13:15' }), { date: '2026-11-01', time: '13:30' });
+  assert.deepEqual(nextQuarter({ date: '2026-12-31', time: '23:50' }), { date: '2027-01-01', time: '00:00' });
+  const now = { date: '2026-11-01', time: '13:07' };
+  assert.equal(effectiveTimeProblem({ timed: false, date: '2026-11-01', time: '', now }), null);
+  assert.equal(effectiveTimeProblem({ timed: true, date: '2026-11-01', time: '', now }), 'Choose the time it takes effect.');
+  assert.match(effectiveTimeProblem({ timed: true, date: '2026-11-01', time: '13:07', now }), /after now \(13:07\)/);
+  assert.match(effectiveTimeProblem({ timed: true, date: '2026-11-01', time: '09:00', now }), /cannot start in the past/);
+  assert.equal(effectiveTimeProblem({ timed: true, date: '2026-11-01', time: '13:08', now }), null);
+  assert.equal(effectiveTimeProblem({ timed: true, date: '2026-11-02', time: '00:00', now }), null);
+  assert.match(effectiveDateHint({ first: false, today: '2026-11-01', earliest: '2026-11-01', delayDays: 1, what: 'schedule', timedChanges: true }), /^Today \(2026-11-01\) or later/);
+  assert.match(effectiveTimeHint('assignments', 'Africa/Mogadishu'), /current assignments stay in effect/);
 });

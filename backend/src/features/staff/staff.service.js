@@ -7,10 +7,11 @@ import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
 import { hashPassword } from '../auth/password.js';
-import { earliestDateProblem, earliestEffectiveDate, schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
+import { localDateTime } from '../../common/zonedTime.js';
+import { effectiveDateFields, effectiveText, resolveEffective, schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, toTime } from '../schedules/scheduleInput.js';
-import { addDays, BRANCH_TX, localDate, lockOperatingBranch, MAX_AHEAD_DAYS, scheduleOn } from '../schedules/schedules.service.js';
+import { addDays, BRANCH_TX, lastDayBefore, localDate, lockOperatingBranch, MAX_AHEAD_DAYS, scheduleAt, scheduleOn } from '../schedules/schedules.service.js';
 import { phoneKey } from '../schools/schoolInput.js';
 import { transferSummary } from './transfers.service.js';
 
@@ -103,20 +104,46 @@ async function findOrFail(client, branch, id) {
 
 const assignmentInclude = { shifts: { orderBy: { shiftKey: 'asc' } } };
 
-/** The set in effect on a branch-local date (newest non-cancelled set starting on or before it), or null. */
+/**
+ * The set in effect by the end of a branch-local date (newest non-cancelled set starting on or
+ * before it, at any time that day), or null. Use assignmentAt for an instant and daySets for a day
+ * on which a set starts after 00:00.
+ */
 export function assignmentOn(staffUserId, date, client = getPrisma()) {
   return client.staffAssignment.findFirst({
     where: { staffUserId, cancelledAt: null, effectiveFrom: { lte: asDbDate(date) } },
-    orderBy: [{ effectiveFrom: 'desc' }, { recordedAt: 'desc' }],
+    orderBy: [{ effectiveFrom: 'desc' }, { effectiveAt: 'desc' }, { recordedAt: 'desc' }],
     include: assignmentInclude,
   });
 }
 
-/** The scheduled (future) set of the staff member in a branch (a transfer's destination set belongs to the destination). */
-function assignmentAfter(staffUserId, date, client, branchId) {
+/** The set in effect at an instant (the newest non-cancelled set whose effectiveAt has arrived), or null. */
+export function assignmentAt(staffUserId, instant, client = getPrisma()) {
   return client.staffAssignment.findFirst({
-    where: { staffUserId, cancelledAt: null, effectiveFrom: { gt: asDbDate(date) }, ...(branchId && { branchId }) },
-    orderBy: [{ effectiveFrom: 'asc' }, { recordedAt: 'asc' }],
+    where: { staffUserId, cancelledAt: null, effectiveAt: { lte: instant } },
+    orderBy: [{ effectiveAt: 'desc' }, { recordedAt: 'desc' }],
+    include: assignmentInclude,
+  });
+}
+
+/** The sets that apply during a day [dayStart, dayEnd): the one in effect at dayStart, then each starting during the day, in order. */
+export async function daySets(staffUserId, dayStart, dayEnd, client = getPrisma()) {
+  const [first, later] = await Promise.all([
+    assignmentAt(staffUserId, dayStart, client),
+    client.staffAssignment.findMany({
+      where: { staffUserId, cancelledAt: null, effectiveAt: { gt: dayStart, lt: dayEnd } },
+      orderBy: [{ effectiveAt: 'asc' }, { recordedAt: 'asc' }],
+      include: assignmentInclude,
+    }),
+  ]);
+  return [...(first ? [first] : []), ...later];
+}
+
+/** The scheduled (not yet in effect) set of the staff member in a branch after `now` (an instant); a transfer's destination set belongs to the destination. */
+function assignmentAfter(staffUserId, now, client, branchId) {
+  return client.staffAssignment.findFirst({
+    where: { staffUserId, cancelledAt: null, effectiveAt: { gt: now }, ...(branchId && { branchId }) },
+    orderBy: [{ effectiveAt: 'asc' }, { recordedAt: 'asc' }],
     include: assignmentInclude,
   });
 }
@@ -125,15 +152,18 @@ function assignmentAfter(staffUserId, date, client, branchId) {
 const shiftOptions = (schedule) =>
   schedule ? schedule.shifts.map((s) => ({ key: s.shiftKey, name: s.name, days: s.days, start: toTime(s.startMinute), end: toTime(s.endMinute) })) : [];
 
-/** An assignment set with each shift named from the schedule in effect on its effective date. */
+/** An assignment set with each shift named from the schedule in effect when it takes effect. */
 async function toAssignment(set, client) {
   if (!set) return null;
   const effectiveFrom = fromDbDate(set.effectiveFrom);
-  const schedule = await scheduleOn(set.branchId, effectiveFrom, client);
+  const schedule = await scheduleAt(set.branchId, set.effectiveAt, client);
   const named = new Map(shiftOptions(schedule).map((s) => [s.key, s]));
   return {
     id: set.id,
     effectiveFrom,
+    // The local time it takes effect ('00:00' from the start of its date).
+    effectiveTime: localDateTime(set.effectiveAt, set.timeZone).time,
+    effectiveAt: set.effectiveAt.toISOString(),
     timeZone: set.timeZone,
     recordedAt: set.recordedAt.toISOString(),
     cancelledAt: set.cancelledAt?.toISOString() ?? null,
@@ -150,15 +180,16 @@ async function toAssignment(set, client) {
  */
 export async function getStaff(branch, id, client = getPrisma()) {
   const staff = await findOrFail(client, branch, id);
+  const now = new Date();
   const [timeZone, policy] = await Promise.all([platformTimeZone(), schedulingPolicy(client)]);
-  const today = localDate(timeZone);
+  const today = localDate(timeZone, now);
   const [current, scheduled, scheduleNow, scheduleNext] = await Promise.all([
-    assignmentOn(staff.id, today, client),
-    assignmentAfter(staff.id, today, client, branch.id),
-    scheduleOn(branch.id, today, client),
+    assignmentAt(staff.id, now, client),
+    assignmentAfter(staff.id, now, client, branch.id),
+    scheduleAt(branch.id, now, client),
     client.branchSchedule.findFirst({
-      where: { branchId: branch.id, cancelledAt: null, effectiveFrom: { gt: asDbDate(today) } },
-      orderBy: { effectiveFrom: 'asc' },
+      where: { branchId: branch.id, cancelledAt: null, effectiveAt: { gt: now } },
+      orderBy: { effectiveAt: 'asc' },
       include: { shifts: { orderBy: [{ startMinute: 'asc' }, { name: 'asc' }] } },
     }),
   ]);
@@ -167,16 +198,15 @@ export async function getStaff(branch, id, client = getPrisma()) {
     assignments: {
       timeZone,
       today,
-      effectiveDelayDays: policy.effectiveDelayDays,
-      earliestEffectiveDate: earliestEffectiveDate(today, { delayDays: policy.effectiveDelayDays, first: !current, immediateFirst: policy.immediateFirstAssignment }),
+      ...effectiveDateFields(policy, { timeZone, today, now, first: !current, immediateFirst: policy.immediateFirstAssignment }),
       latestEffectiveDate: addDays(today, MAX_AHEAD_DAYS),
       current: await toAssignment(current, client),
       scheduled: await toAssignment(scheduled, client),
     },
     transfer: await transferSummary(branch, staff.id, client),
     branchShifts: {
-      current: scheduleNow ? { effectiveFrom: fromDbDate(scheduleNow.effectiveFrom), shifts: shiftOptions(scheduleNow) } : null,
-      scheduled: scheduleNext ? { effectiveFrom: fromDbDate(scheduleNext.effectiveFrom), shifts: shiftOptions(scheduleNext) } : null,
+      current: scheduleNow ? { effectiveFrom: fromDbDate(scheduleNow.effectiveFrom), effectiveTime: localDateTime(scheduleNow.effectiveAt, scheduleNow.timeZone).time, shifts: shiftOptions(scheduleNow) } : null,
+      scheduled: scheduleNext ? { effectiveFrom: fromDbDate(scheduleNext.effectiveFrom), effectiveTime: localDateTime(scheduleNext.effectiveAt, scheduleNext.timeZone).time, shifts: shiftOptions(scheduleNext) } : null,
     },
   };
 }
@@ -185,20 +215,25 @@ export async function getStaff(branch, id, client = getPrisma()) {
 export async function listAssignments(branch, id) {
   const prisma = getPrisma();
   const staff = await findOrFail(prisma, branch, id);
-  const today = localDate(await platformTimeZone());
+  const now = new Date();
   const rows = await prisma.staffAssignment.findMany({
     // This branch's sets only: a transferred staff member's sets at another branch are not this Manager's.
     where: { staffUserId: staff.id, branchId: branch.id },
     include: assignmentInclude,
-    orderBy: [{ effectiveFrom: 'desc' }, { recordedAt: 'desc' }],
+    orderBy: [{ effectiveAt: 'desc' }, { recordedAt: 'desc' }],
   });
   const active = rows.filter((a) => !a.cancelledAt);
-  const current = active.find((a) => fromDbDate(a.effectiveFrom) <= today);
+  const current = active.find((a) => a.effectiveAt <= now);
   const items = [];
   for (const a of rows) {
-    const next = active.filter((o) => o.effectiveFrom > a.effectiveFrom).at(-1);
-    const state = a.cancelledAt ? 'cancelled' : a === current ? 'current' : fromDbDate(a.effectiveFrom) > today ? 'scheduled' : 'previous';
-    items.push({ ...(await toAssignment(a, prisma)), state, effectiveUntil: !a.cancelledAt && next ? addDays(fromDbDate(next.effectiveFrom), -1) : null });
+    const next = active.filter((o) => o.effectiveAt > a.effectiveAt).at(-1);
+    const state = a.cancelledAt ? 'cancelled' : a === current ? 'current' : a.effectiveAt > now ? 'scheduled' : 'previous';
+    items.push({
+      ...(await toAssignment(a, prisma)),
+      state,
+      effectiveUntil: !a.cancelledAt && next ? lastDayBefore(next) : null,
+      endsAt: !a.cancelledAt && next ? next.effectiveAt.toISOString() : null,
+    });
   }
   return { items };
 }
@@ -408,49 +443,55 @@ async function cancelSet(tx, branch, staff, set, user, req, reason, outbox) {
     actor: actorOf(user),
     target: auditTarget(staff),
     schoolId: branch.school.id,
-    description: `Scheduled shift assignment change from ${fromDbDate(set.effectiveFrom)} cancelled.${reason ? ` ${reason}` : ''}`,
-    change: { field: 'Scheduled change', from: `From ${fromDbDate(set.effectiveFrom)}`, to: 'Cancelled' },
+    description: `Scheduled shift assignment change from ${effectiveText(set.effectiveAt, set.timeZone)} cancelled.${reason ? ` ${reason}` : ''}`,
+    change: { field: 'Scheduled change', from: `From ${effectiveText(set.effectiveAt, set.timeZone)}`, to: 'Cancelled' },
     req,
   });
 }
 
 /**
- * Saves an assignment set from `effectiveFrom` (at the earliest today + the effective delay, or
- * today for the staff member's first set when the settings allow it; at most a year ahead). Each shift and its days must exist in
- * the branch schedule in effect on that date; assigned shifts sharing a day may not overlap. A
+ * Saves an assignment set from `effectiveFrom` (and `effectiveTime` with timed changes): at the
+ * earliest today + the effective delay, or today for the staff member's first set when the settings
+ * allow it; with timed changes any time after now; at most a year ahead. Each shift and its days
+ * must exist in the branch schedule in effect at that moment; assigned shifts sharing a day may not overlap. A
  * scheduled set is replaced (kept as cancelled). Saving the set in effect changes nothing (or only
  * cancels a scheduled set).
  */
-export async function saveAssignments(branch, id, { effectiveFrom, shifts }, user, req) {
+export async function saveAssignments(branch, id, { effectiveFrom, effectiveTime = null, shifts }, user, req) {
   const timeZone = await platformTimeZone();
   const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockOperatingBranch(tx, branch);
     const staff = await lockStaff(tx, branch, id);
-    const today = localDate(timeZone);
+    const now = new Date();
+    const today = localDate(timeZone, now);
     const [current, scheduled, transfer] = await Promise.all([
-      assignmentOn(staff.id, today, tx),
-      assignmentAfter(staff.id, today, tx, branch.id),
-      tx.staffTransfer.findFirst({ where: { staffUserId: staff.id, status: 'SCHEDULED' }, select: { effectiveFrom: true } }),
+      assignmentAt(staff.id, now, tx),
+      assignmentAfter(staff.id, now, tx, branch.id),
+      tx.staffTransfer.findFirst({ where: { staffUserId: staff.id, status: 'SCHEDULED' }, select: { effectiveFrom: true, effectiveAt: true } }),
     ]);
     // Read in the transaction: a settings change saved meanwhile applies to this save.
     const policy = await schedulingPolicy(tx);
-    const first = !current;
-    const earliest = earliestEffectiveDate(today, { delayDays: policy.effectiveDelayDays, first, immediateFirst: policy.immediateFirstAssignment });
-    const latest = addDays(today, MAX_AHEAD_DAYS);
     const errors = {};
+    const { effectiveAt } = resolveEffective(policy, {
+      what: 'assignments',
+      effectiveFrom,
+      effectiveTime,
+      timeZone,
+      today,
+      latest: addDays(today, MAX_AHEAD_DAYS),
+      now,
+      first: !current,
+      immediateFirst: policy.immediateFirstAssignment,
+    });
     // After a scheduled transfer the destination branch's assignments apply (set by the School Owner).
-    if (transfer && effectiveFrom >= fromDbDate(transfer.effectiveFrom)) {
+    if (transfer && effectiveAt >= transfer.effectiveAt) {
       throw badRequest('Check the highlighted fields.', {
-        effectiveFrom: `This staff member moves to another branch on ${fromDbDate(transfer.effectiveFrom)}. Assignments in your branch must start before that date.`,
+        effectiveFrom: `This staff member moves to another branch from ${effectiveText(transfer.effectiveAt, timeZone)}. Assignments in your branch must start before then.`,
       });
     }
-    if (effectiveFrom < earliest) {
-      errors.effectiveFrom = earliestDateProblem('assignments', { today, earliest, delayDays: policy.effectiveDelayDays, first });
-    } else if (effectiveFrom > latest) errors.effectiveFrom = `Assignments can start at most one year ahead (${latest}).`;
-    if (errors.effectiveFrom) throw badRequest('Check the highlighted fields.', errors);
 
-    const schedule = await scheduleOn(branch.id, effectiveFrom, tx);
+    const schedule = await scheduleAt(branch.id, effectiveAt, tx);
     if (shifts.length && !schedule) {
       throw badRequest('Check the highlighted fields.', { effectiveFrom: `Your branch has no schedule in effect on ${effectiveFrom}. Set the schedule first.` });
     }
@@ -466,17 +507,17 @@ export async function saveAssignments(branch, id, { effectiveFrom, shifts }, use
     const fields = [];
     if (scheduled) {
       await tx.staffAssignment.updateMany({ where: { id: scheduled.id, cancelledAt: null }, data: { cancelledAt: new Date() } });
-      fields.push({ field: 'Scheduled change', from: `From ${fromDbDate(scheduled.effectiveFrom)}`, to: 'Replaced' });
+      fields.push({ field: 'Scheduled change', from: `From ${effectiveText(scheduled.effectiveAt, scheduled.timeZone)}`, to: 'Replaced' });
     }
     const created = await tx.staffAssignment.create({
-      data: { staffUserId: staff.id, branchId: branch.id, effectiveFrom: asDbDate(effectiveFrom), timeZone, shifts: { create: shifts } },
+      data: { staffUserId: staff.id, branchId: branch.id, effectiveFrom: asDbDate(effectiveFrom), effectiveAt, timeZone, shifts: { create: shifts } },
     });
     // The staff member is told about their new shifts (a replaced scheduled set is covered by this notice).
     await enqueue(tx, OUTBOX.ASSIGNMENT_CHANGED, { assignmentId: created.id }, `assignment:${created.id}`, outbox);
-    const previousSchedule = current ? await scheduleOn(branch.id, today, tx) : null;
+    const previousSchedule = current ? await scheduleAt(branch.id, now, tx) : null;
     const previousNames = new Map((previousSchedule?.shifts ?? []).map((s) => [s.shiftKey, s]));
     fields.push(
-      { field: 'Effective from', from: current ? fromDbDate(current.effectiveFrom) : null, to: `${effectiveFrom} (${timeZone})` },
+      { field: 'Effective from', from: current ? effectiveText(current.effectiveAt, current.timeZone) : null, to: `${effectiveText(effectiveAt, timeZone)} (${timeZone})` },
       { field: 'Shifts', from: current ? summary(current.shifts, previousNames) : null, to: summary(shifts, named) },
     );
     await recordAuditEvent({
@@ -485,7 +526,7 @@ export async function saveAssignments(branch, id, { effectiveFrom, shifts }, use
       actor: actorOf(user),
       target: auditTarget(staff),
       schoolId: branch.school.id,
-      description: `Shift assignments ${current ? 'changed' : 'set'} from ${effectiveFrom}: ${summary(shifts, named)}.`,
+      description: `Shift assignments ${current ? 'changed' : 'set'} from ${effectiveText(effectiveAt, timeZone)}: ${summary(shifts, named)}.`,
       change: { fields },
       req,
     });
@@ -496,12 +537,11 @@ export async function saveAssignments(branch, id, { effectiveFrom, shifts }, use
 
 /** Cancels the scheduled assignment set (404 when there is none). */
 export async function cancelScheduledAssignments(branch, id, user, req) {
-  const timeZone = await platformTimeZone();
   const outbox = [];
   await getPrisma().$transaction(async (tx) => {
     await lockOperatingBranch(tx, branch);
     const staff = await lockStaff(tx, branch, id);
-    const scheduled = await assignmentAfter(staff.id, localDate(timeZone), tx, branch.id);
+    const scheduled = await assignmentAfter(staff.id, new Date(), tx, branch.id);
     if (!scheduled) throw notFound('There is no scheduled assignment change.');
     await cancelSet(tx, branch, staff, scheduled, user, req, undefined, outbox);
   }, BRANCH_TX);

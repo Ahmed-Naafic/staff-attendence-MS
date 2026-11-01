@@ -7,10 +7,11 @@ import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { lockActiveSchool } from '../branches/branches.service.js';
 import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
-import { earliestDateProblem, earliestEffectiveDate, schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
+import { localDateTime } from '../../common/zonedTime.js';
+import { effectiveDateFields, effectiveText, resolveEffective, schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, toTime } from '../schedules/scheduleInput.js';
-import { addDays, localDate, MAX_AHEAD_DAYS, scheduleOn } from '../schedules/schedules.service.js';
+import { addDays, localDate, MAX_AHEAD_DAYS, scheduleAt, scheduleOn } from '../schedules/schedules.service.js';
 import { assignedShiftErrors } from './staff.service.js';
 
 /*
@@ -43,17 +44,8 @@ const isUniqueViolation = (error) => error instanceof Prisma.PrismaClientKnownRe
 const ALREADY_SCHEDULED = () => conflict('TRANSFER_SCHEDULED', 'A transfer is already scheduled for this staff member. Cancel it first to choose another.');
 const IN_EFFECT = ['SCHEDULED', 'COMPLETED'];
 
-/** 00:00 of a local date in a time zone, as an instant (no daylight-saving gap at midnight in the platform zones). */
-export function zonedMidnight(date, timeZone) {
-  const guess = new Date(`${date}T00:00:00Z`);
-  const p = Object.fromEntries(
-    new Intl.DateTimeFormat('en-GB', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
-      .formatToParts(guess)
-      .map((x) => [x.type, x.value]),
-  );
-  const shown = Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:00Z`);
-  return new Date(guess.getTime() - (shown - guess.getTime()));
-}
+// 00:00 of a local date in a time zone (moved to common/zonedTime.js; re-exported for existing imports).
+export { zonedMidnight } from '../../common/zonedTime.js';
 
 /**
  * The staff member's branch at an instant (T5), from their transfers: the destination of the latest
@@ -134,12 +126,12 @@ export async function settleIfDue(now = new Date()) {
 
 const shiftLabel = (s) => `${s.name}: ${dayList(s.days)} ${s.start}–${s.end}`;
 
-/** The shifts of an assignment set, named from the branch schedule in effect on its date. */
+/** The shifts of an assignment set, named from the branch schedule in effect when it takes effect. */
 async function assignedShifts(assignmentId, client) {
   if (!assignmentId) return [];
   const set = await client.staffAssignment.findUnique({ where: { id: assignmentId }, include: { shifts: true } });
   if (!set) return [];
-  const schedule = await scheduleOn(set.branchId, fromDbDate(set.effectiveFrom), client);
+  const schedule = await scheduleAt(set.branchId, set.effectiveAt, client);
   const byKey = new Map((schedule?.shifts ?? []).map((s) => [s.shiftKey, s]));
   return set.shifts
     .map((a) => ({ a, s: byKey.get(a.shiftKey) }))
@@ -154,6 +146,8 @@ const toTransfer = async (t, client) => ({
   fromBranch: branchRef(t.fromBranch),
   toBranch: branchRef(t.toBranch),
   effectiveFrom: fromDbDate(t.effectiveFrom),
+  // The local time it takes effect ('00:00' unless timed changes chose another).
+  effectiveTime: localDateTime(t.effectiveAt, t.timeZone).time,
   effectiveAt: t.effectiveAt.toISOString(),
   timeZone: t.timeZone,
   shifts: await assignedShifts(t.assignmentId, client),
@@ -213,12 +207,14 @@ async function findSchoolStaff(client, school, id) {
 /** One staff member for the Owner, with their transfer history (newest first) and today's date. */
 export async function getSchoolStaff(school, id, client = getPrisma()) {
   const staff = await findSchoolStaff(client, school, id);
+  const now = new Date();
   const [timeZone, policy] = await Promise.all([platformTimeZone(), schedulingPolicy(client)]);
-  const today = localDate(timeZone);
+  const today = localDate(timeZone, now);
   const transfers = await client.staffTransfer.findMany({ where: { staffUserId: staff.id }, include: transferInclude, orderBy: [{ effectiveAt: 'desc' }, { createdAt: 'desc' }] });
   const items = [];
   for (const t of transfers) items.push(await toTransfer(t, client));
-  return { ...toOwnerStaff(staff), transfers: items, timeZone, effectiveDelayDays: policy.effectiveDelayDays, earliestTransferDate: earliestEffectiveDate(today, { delayDays: policy.effectiveDelayDays }), latestTransferDate: addDays(today, MAX_AHEAD_DAYS) };
+  const { earliestEffectiveDate: earliestTransferDate, ...dates } = effectiveDateFields(policy, { timeZone, today, now });
+  return { ...toOwnerStaff(staff), transfers: items, timeZone, ...dates, earliestTransferDate, latestTransferDate: addDays(today, MAX_AHEAD_DAYS) };
 }
 
 /** The shifts of one of the Owner's branches in the schedule in effect on a date (for choosing destination shifts). */
@@ -275,12 +271,13 @@ async function lockSchoolStaff(tx, school, id) {
 
 /**
  * Schedules a transfer (School Owner, T1–T7): `branchId` (another branch of the same school,
- * operating), `effectiveFrom` (today + the effective delay at the earliest, at most a year ahead) and `shifts` (the
+ * operating), `effectiveFrom` and `effectiveTime` (today + the effective delay at 00:00 at the earliest, or with
+ * timed changes any time after now; at most a year ahead) and `shifts` (the
  * destination assignment set; may be empty). One transfer per staff member may be scheduled.
  * In one transaction: the destination assignment set from that date, scheduled assignment changes
  * from that date on cancelled, the transfer, its notification event and STAFF_TRANSFER_SCHEDULED.
  */
-export async function scheduleTransfer(school, id, { branchId, effectiveFrom, shifts }, user, req) {
+export async function scheduleTransfer(school, id, { branchId, effectiveFrom, effectiveTime = null, shifts }, user, req) {
   const timeZone = await platformTimeZone();
   const outbox = [];
   let transferId;
@@ -288,7 +285,8 @@ export async function scheduleTransfer(school, id, { branchId, effectiveFrom, sh
     transferId = await getPrisma().$transaction(async (tx) => {
       await lockActiveSchool(tx, school);
       const staff = await lockSchoolStaff(tx, school, id);
-      const today = localDate(timeZone);
+      const now = new Date();
+      const today = localDate(timeZone, now);
       const errors = {};
       const [destination] = await tx.$queryRaw`
         SELECT "id", "code", "name", "status"::text AS "status" FROM "Branch" WHERE "id" = ${branchId} AND "schoolId" = ${school.id} FOR SHARE`;
@@ -296,26 +294,28 @@ export async function scheduleTransfer(school, id, { branchId, effectiveFrom, sh
       if (!destination) errors.branchId = 'Choose a branch of your school.';
       else if (destination.id === staff.branchId) errors.branchId = 'This staff member already works at this branch. Choose another branch.';
       else if (destination.status !== 'ACTIVE') errors.branchId = 'This branch is suspended and cannot receive staff. Choose an active branch.';
-      const { effectiveDelayDays: delayDays } = await schedulingPolicy(tx);
-      const earliest = earliestEffectiveDate(today, { delayDays });
-      if (effectiveFrom < earliest) errors.effectiveFrom = earliestDateProblem('transfer', { today, earliest, delayDays });
-      else if (effectiveFrom > addDays(today, MAX_AHEAD_DAYS)) errors.effectiveFrom = `A transfer can start at most one year ahead (${addDays(today, MAX_AHEAD_DAYS)}).`;
+      let effectiveAt;
+      try {
+        ({ effectiveAt } = resolveEffective(await schedulingPolicy(tx), { what: 'transfer', effectiveFrom, effectiveTime, timeZone, today, latest: addDays(today, MAX_AHEAD_DAYS), now }));
+      } catch (problem) {
+        if (!problem.details) throw problem;
+        Object.assign(errors, problem.details);
+      }
       if (Object.keys(errors).length) throw badRequest('Check the highlighted fields.', errors);
 
       if (await tx.staffTransfer.findFirst({ where: { staffUserId: staff.id, status: 'SCHEDULED' }, select: { id: true } })) throw ALREADY_SCHEDULED();
 
-      const schedule = await scheduleOn(destination.id, effectiveFrom, tx);
+      const schedule = await scheduleAt(destination.id, effectiveAt, tx);
       if (shifts.length && !schedule) {
-        throw badRequest('Check the highlighted fields.', { effectiveFrom: `${destination.name} has no schedule in effect on ${effectiveFrom}. Choose no shifts, or a date when it has one.` });
+        throw badRequest('Check the highlighted fields.', { effectiveFrom: `${destination.name} has no schedule in effect from ${effectiveText(effectiveAt, timeZone)}. Choose no shifts, or a date when it has one.` });
       }
       const shiftErrors = assignedShiftErrors(schedule, shifts, effectiveFrom, 'the destination branch');
       if (Object.keys(shiftErrors).length) throw badRequest('Check the highlighted fields.', shiftErrors);
 
-      const now = new Date();
-      const replaced = await tx.staffAssignment.findMany({ where: { staffUserId: staff.id, cancelledAt: null, effectiveFrom: { gte: asDbDate(effectiveFrom) } }, select: { id: true, effectiveFrom: true } });
+      const replaced = await tx.staffAssignment.findMany({ where: { staffUserId: staff.id, cancelledAt: null, effectiveAt: { gte: effectiveAt } }, select: { id: true, effectiveAt: true, timeZone: true } });
       if (replaced.length) await tx.staffAssignment.updateMany({ where: { id: { in: replaced.map((r) => r.id) } }, data: { cancelledAt: now } });
       const assignment = await tx.staffAssignment.create({
-        data: { staffUserId: staff.id, branchId: destination.id, effectiveFrom: asDbDate(effectiveFrom), timeZone, shifts: { create: shifts } },
+        data: { staffUserId: staff.id, branchId: destination.id, effectiveFrom: asDbDate(effectiveFrom), effectiveAt, timeZone, shifts: { create: shifts } },
       });
       const transfer = await tx.staffTransfer.create({
         data: {
@@ -324,7 +324,7 @@ export async function scheduleTransfer(school, id, { branchId, effectiveFrom, sh
           fromBranchId: staff.branchId,
           toBranchId: destination.id,
           effectiveFrom: asDbDate(effectiveFrom),
-          effectiveAt: zonedMidnight(effectiveFrom, timeZone),
+          effectiveAt,
           timeZone,
           assignmentId: assignment.id,
           requestedById: user.id,
@@ -341,13 +341,13 @@ export async function scheduleTransfer(school, id, { branchId, effectiveFrom, sh
         actor: actorOf(user),
         target: staffTarget(staff),
         schoolId: school.id,
-        description: `Transfer scheduled from ${branchLabel(staff.branch)} to ${branchLabel(destination)}, effective ${effectiveFrom} 00:00 (${timeZone}).`,
+        description: `Transfer scheduled from ${branchLabel(staff.branch)} to ${branchLabel(destination)}, effective ${effectiveFrom} ${localDateTime(effectiveAt, timeZone).time} (${timeZone}).`,
         change: {
           fields: [
             { field: 'Branch', from: branchLabel(staff.branch), to: branchLabel(destination) },
-            { field: 'Effective from', from: null, to: `${effectiveFrom} 00:00 (${timeZone})` },
+            { field: 'Effective from', from: null, to: `${effectiveFrom} ${localDateTime(effectiveAt, timeZone).time} (${timeZone})` },
             { field: 'Shifts at the destination', from: null, to: shiftText },
-            ...(replaced.length ? [{ field: 'Scheduled assignment changes', from: replaced.map((r) => `From ${fromDbDate(r.effectiveFrom)}`).join(', '), to: 'Cancelled' }] : []),
+            ...(replaced.length ? [{ field: 'Scheduled assignment changes', from: replaced.map((r) => `From ${effectiveText(r.effectiveAt, r.timeZone)}`).join(', '), to: 'Cancelled' }] : []),
           ],
         },
         req,

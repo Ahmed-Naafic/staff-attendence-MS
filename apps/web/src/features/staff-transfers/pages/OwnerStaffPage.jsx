@@ -25,7 +25,7 @@ import {
 } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { formatUtc } from '../../branches';
-import { dayList } from '../../schedules/utils/scheduleRules.js';
+import { dayList, whenText } from '../../schedules/utils/scheduleRules.js';
 import { StaffStatusBadge } from '../../staff/components/StaffTable.jsx';
 import { TransferModal } from '../components/TransferModal.jsx';
 import { cancelTransfer, loadSchoolBranches, loadSchoolStaff, loadSchoolStaffMember, PAGE_SIZE } from '../data/transfersApi.js';
@@ -108,7 +108,7 @@ function StaffDetails({ id, onClose, onTransfer, onChanged, version }) {
             <div className="flex flex-col gap-2 rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-warning-fg">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-small font-medium">
-                  Moves to {scheduled.toBranch.name} ({scheduled.toBranch.code}) on {scheduled.effectiveFrom}
+                  Moves to {scheduled.toBranch.name} ({scheduled.toBranch.code}) on {whenText(scheduled)}
                 </p>
                 <Button size="sm" variant="outline" onClick={() => setCancelling(true)}>
                   Cancel Transfer
@@ -134,7 +134,7 @@ function StaffDetails({ id, onClose, onTransfer, onChanged, version }) {
                     <Badge variant={TRANSFER_STATES[t.status].variant}>{TRANSFER_STATES[t.status].label}</Badge>
                   </div>
                   <span className="text-fg-secondary">
-                    From {t.effectiveFrom} ({t.timeZone}) · scheduled {formatUtc(t.createdAt)}
+                    From {whenText(t)} ({t.timeZone}) · scheduled {formatUtc(t.createdAt)}
                     {t.cancelledAt && ` · cancelled ${formatUtc(t.cancelledAt)}`}
                   </span>
                 </li>
@@ -292,7 +292,7 @@ export default function OwnerStaffPage() {
           onClose={() => setTransferring(null)}
           onDone={(transfer) => {
             setTransferring(null);
-            setNotice(`Transfer scheduled: ${transferring.name} moves to ${transfer.toBranch.name} on ${transfer.effectiveFrom}. The staff member and the branch’s Managers were notified.`);
+            setNotice(`Transfer scheduled: ${transferring.name} moves to ${transfer.toBranch.name} on ${whenText(transfer)}. The staff member and the branch’s Managers were notified.`);
             setVersion((v) => v + 1);
           }}
         />

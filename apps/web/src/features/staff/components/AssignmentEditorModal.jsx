@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Checkbox, Input, Modal } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
-import { dayList, effectiveDateHint, WEEKDAYS } from '../../schedules/utils/scheduleRules.js';
+import { dayList, effectiveDateHint, effectiveTimeHint, effectiveTimeProblem, nextQuarter, whenText, WEEKDAYS } from '../../schedules/utils/scheduleRules.js';
 import { saveAssignments } from '../data/staffApi.js';
 import { shiftsOn, toRequestAssignments, validateAssignments } from '../utils/staffRules.js';
 
@@ -13,6 +13,8 @@ import { shiftsOn, toRequestAssignments, validateAssignments } from '../utils/st
 export function AssignmentEditorModal({ staff, open, onClose, onSaved }) {
   const formId = useId();
   const [effectiveFrom, setEffectiveFrom] = useState('');
+  // With timed changes (Platform Settings) a time is chosen too; otherwise changes start at 00:00.
+  const [effectiveTime, setEffectiveTime] = useState('');
   const [picked, setPicked] = useState({});
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
@@ -23,14 +25,16 @@ export function AssignmentEditorModal({ staff, open, onClose, onSaved }) {
   useEffect(() => {
     if (!open || !staff) return;
     const base = staff.assignments.scheduled ?? staff.assignments.current;
-    setEffectiveFrom(staff.assignments.earliestEffectiveDate);
+    const start = staff.assignments.timedChanges && staff.assignments.now ? nextQuarter(staff.assignments.now) : null;
+    setEffectiveFrom(start?.date ?? staff.assignments.earliestEffectiveDate);
+    setEffectiveTime(start?.time ?? '');
     setPicked(Object.fromEntries((base?.shifts ?? []).map((s) => [s.shiftKey, [...s.days]])));
     setErrors({});
     setFormError('');
     setSaving(false);
   }, [open, staff]);
 
-  const schedule = staff ? shiftsOn(staff.branchShifts, effectiveFrom) : null;
+  const schedule = staff ? shiftsOn(staff.branchShifts, effectiveFrom, info.timedChanges ? effectiveTime : '00:00') : null;
   const toggle = (key, day) => {
     setPicked((current) => {
       const days = current[key] ?? [];
@@ -45,11 +49,13 @@ export function AssignmentEditorModal({ staff, open, onClose, onSaved }) {
     const available = new Set((schedule?.shifts ?? []).map((s) => s.key));
     const kept = Object.fromEntries(Object.entries(picked).filter(([key]) => available.has(key)));
     const problems = validateAssignments({ effectiveFrom, picked: kept, schedule }, { earliest: info.earliestEffectiveDate, latest: info.latestEffectiveDate });
+    const timeProblem = effectiveTimeProblem({ timed: info.timedChanges, date: effectiveFrom, time: effectiveTime, now: info.now });
+    if (timeProblem) problems.effectiveTime = timeProblem;
     setErrors(problems);
-    if (Object.keys(problems).length) return document.getElementById(`${formId}-date`)?.focus();
+    if (Object.keys(problems).length) return document.getElementById(problems.effectiveFrom || !problems.effectiveTime ? `${formId}-date` : `${formId}-time`)?.focus();
     setSaving(true);
     try {
-      const updated = await saveAssignments(staff.id, { effectiveFrom, shifts: toRequestAssignments(kept) });
+      const updated = await saveAssignments(staff.id, { effectiveFrom, ...(info.timedChanges && { effectiveTime }), shifts: toRequestAssignments(kept) });
       setSaving(false);
       onSaved(updated);
     } catch (error) {
@@ -105,16 +111,38 @@ export function AssignmentEditorModal({ staff, open, onClose, onSaved }) {
               setErrors({});
             }}
             error={errors.effectiveFrom}
-            hint={effectiveDateHint({ first: !info.current, today: info.today, earliest: info.earliestEffectiveDate, delayDays: info.effectiveDelayDays, what: 'assignments' })}
+            hint={effectiveDateHint({
+              first: !info.current,
+              today: info.today,
+              earliest: info.earliestEffectiveDate,
+              delayDays: info.effectiveDelayDays,
+              what: 'assignments',
+              timedChanges: info.timedChanges,
+            })}
           />
+          {info.timedChanges && (
+            <Input
+              id={`${formId}-time`}
+              label="Effective time"
+              type="time"
+              required
+              value={effectiveTime}
+              onChange={(event) => {
+                setEffectiveTime(event.target.value);
+                setErrors({});
+              }}
+              error={errors.effectiveTime}
+              hint={effectiveTimeHint('assignments', info.timeZone)}
+            />
+          )}
           {info.scheduled && (
             <p className="rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-small text-warning-fg">
-              A change is already scheduled from {info.scheduled.effectiveFrom}. Saving replaces it (it is kept in the history as cancelled).
+              A change is already scheduled from {whenText(info.scheduled)}. Saving replaces it (it is kept in the history as cancelled).
             </p>
           )}
           <fieldset className="flex flex-col gap-3">
             <legend className="mb-2 text-label text-fg">
-              Shifts {schedule && <span className="text-fg-muted">(branch schedule from {schedule.effectiveFrom})</span>}
+              Shifts {schedule && <span className="text-fg-muted">(branch schedule from {whenText(schedule)})</span>}
             </legend>
             {!schedule && <p className="text-small text-fg-muted">Your branch has no schedule in effect on this date. You can save no shifts, or set the schedule first.</p>}
             {schedule?.shifts.map((shift) => (

@@ -11,6 +11,7 @@ import { StaffDrawer } from '../components/StaffDrawer.jsx';
 import { StaffFormModal } from '../components/StaffFormModal.jsx';
 import { staffStatuses, StaffTable } from '../components/StaffTable.jsx';
 import { useStaffDetails, useStaffFilters, useStaffList } from '../hooks/useStaff.js';
+import { whenText } from '../../schedules/utils/scheduleRules.js';
 
 const SUMMARY = [
   { key: 'total', label: 'Total Staff', icon: Users, tone: 'info' },
@@ -182,7 +183,7 @@ export default function StaffPage() {
         open={dialog?.type === 'assign'}
         onClose={closeDialog}
         onSaved={done((s) =>
-          s.assignments.scheduled ? `The shift assignments of ${s.name} change from ${s.assignments.scheduled.effectiveFrom}.` : `The shift assignments of ${s.name} were saved.`,
+          s.assignments.scheduled ? `The shift assignments of ${s.name} change from ${whenText(s.assignments.scheduled)}.` : `The shift assignments of ${s.name} were saved.`,
         )}
       />
       <ResetStaffPasswordModal

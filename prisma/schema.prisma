@@ -242,15 +242,18 @@ model ManagerAssignment {
   @@index([branchId])
 }
 
-/// A version of a branch's schedule (Manager): applies from effectiveFrom (a date in timeZone, from
-/// 00:00) until the next version starts. Never edited or deleted; a scheduled (future) version that
-/// was replaced or cancelled before it started has cancelledAt set and never applies. One
-/// non-cancelled version per branch and date (partial unique index in the migration).
+/// A version of a branch's schedule (Manager): applies from effectiveAt (00:00 of effectiveFrom in
+/// timeZone, or a chosen time when Platform Settings allow timed changes) until the next version
+/// starts. Never edited or deleted; a scheduled (future) version that was replaced or cancelled
+/// before it started has cancelledAt set and never applies. One non-cancelled version per branch
+/// and instant (partial unique index in the migration).
 model BranchSchedule {
   id               String            @id @default(uuid())
   branchId         String
   branch           Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
   effectiveFrom    DateTime          @db.Date
+  /// The instant it takes effect (its local date is effectiveFrom).
+  effectiveAt      DateTime
   /// The platform time zone when the version was saved; its times are wall-clock times in this zone.
   timeZone         String
   checkOutEnabled  Boolean
@@ -260,6 +263,7 @@ model BranchSchedule {
   attendanceEvents AttendanceEvent[]
 
   @@index([branchId, effectiveFrom])
+  @@index([branchId, effectiveAt])
 }
 
 /// A shift of one schedule version. Same-day only: startMinute < endMinute, minutes after midnight
@@ -283,9 +287,10 @@ model BranchShift {
   @@index([scheduleId])
 }
 
-/// A staff member's shift assignments from effectiveFrom (a date in timeZone) until the next set
-/// starts. Never edited or deleted; a scheduled set that was replaced or cancelled has cancelledAt.
-/// One non-cancelled set per staff member and date (partial unique index in the migration).
+/// A staff member's shift assignments from effectiveAt (00:00 of effectiveFrom in timeZone, or a
+/// chosen time when Platform Settings allow timed changes) until the next set starts. Never edited
+/// or deleted; a scheduled set that was replaced or cancelled has cancelledAt. One non-cancelled
+/// set per staff member and instant (partial unique index in the migration).
 model StaffAssignment {
   id               String                 @id @default(uuid())
   staffUserId      String
@@ -293,6 +298,8 @@ model StaffAssignment {
   branchId         String
   branch           Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
   effectiveFrom    DateTime               @db.Date
+  /// The instant it takes effect (its local date is effectiveFrom).
+  effectiveAt      DateTime
   timeZone         String
   recordedAt       DateTime               @default(now())
   cancelledAt      DateTime?
@@ -300,6 +307,7 @@ model StaffAssignment {
   attendanceEvents AttendanceEvent[]
 
   @@index([staffUserId, effectiveFrom])
+  @@index([staffUserId, effectiveAt])
   @@index([branchId])
 }
 
@@ -447,6 +455,10 @@ model PlatformSettings {
   immediateFirstSchedule   Boolean?
   /// Whether a staff member's first assignment set may start today. Null: yes. When false it waits for the delay.
   immediateFirstAssignment Boolean?
+  /// "Allow changes to take effect at their scheduled time": schedule changes, assignment changes
+  /// and transfers may start today or later at a chosen time (not in the past), without the delay.
+  /// Null: no (the effective delay applies; changes start at 00:00).
+  timedChanges             Boolean?
   updatedAt                DateTime @updatedAt
 }
 

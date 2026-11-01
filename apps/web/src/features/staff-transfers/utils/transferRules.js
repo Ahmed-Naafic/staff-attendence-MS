@@ -68,6 +68,8 @@ export function overlapProblems(form, shiftList) {
 export const toTransferBody = (form, shiftList) => ({
   branchId: form.branchId,
   effectiveFrom: form.effectiveFrom,
+  // Only with timed changes (Platform Settings); otherwise the transfer starts at 00:00.
+  ...(form.effectiveTime && { effectiveTime: form.effectiveTime }),
   shifts: shiftList.filter((s) => form.shifts[s.key]).map((s) => ({ shiftKey: s.key, days: form.shifts[s.key] })),
 });
 

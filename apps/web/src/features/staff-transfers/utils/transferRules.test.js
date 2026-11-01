@@ -42,6 +42,12 @@ test('shift choice: a shift with all its days, days toggled, overlaps on shared 
   assert.deepEqual(shiftSummary({ shifts: { m: ['MON'] } }, SHIFTS, (d) => d.join(', ')), ['Morning 07:00–12:00 (MON)']);
 });
 
+test('a timed transfer sends its time; otherwise no time is sent', () => {
+  const form = { branchId: 'b2', effectiveFrom: '2026-11-01', shifts: {} };
+  assert.equal('effectiveTime' in toTransferBody(form, []), false);
+  assert.equal(toTransferBody({ ...form, effectiveTime: '13:30' }, []).effectiveTime, '13:30');
+});
+
 test('the earliest transfer date follows the platform effective delay', () => {
   const limits = { earliest: '2026-11-04', latest: '2027-11-01', delayDays: 3 };
   assert.match(validateTransfer({ branchId: 'b2', effectiveFrom: '2026-11-03', shifts: {} }, limits).effectiveFrom, /on 2026-11-04 \(3 days from today\)/);

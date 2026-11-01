@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { CalendarClock, Save } from 'lucide-react';
-import { Alert, Button, Card, CardContent, CardHeader, Input, Switch } from '../../../components/ui';
+import { Alert, Button, Card, CardContent, CardHeader, Checkbox, Input, Switch } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { saveScheduling } from '../data/saveScheduling.js';
 import { changedValues, daysText, delayExample, delayProblem, EFFECTIVE_DELAY_MAX, EFFECTIVE_DELAY_MIN } from '../utils/schedulingRules.js';
 
-const draftOf = (s) => ({ effectiveDelayDays: String(s.effectiveDelayDays), immediateFirstSchedule: s.immediateFirstSchedule, immediateFirstAssignment: s.immediateFirstAssignment });
+const draftOf = (s) => ({
+  effectiveDelayDays: String(s.effectiveDelayDays),
+  immediateFirstSchedule: s.immediateFirstSchedule,
+  immediateFirstAssignment: s.immediateFirstAssignment,
+  timedChanges: Boolean(s.timedChanges),
+});
 
 /**
  * Scheduling & Assignments (Super Admin): the effective delay (1–30 calendar days, platform time
  * zone) for branch schedule changes, staff assignment changes and staff transfers, and whether a
  * branch's first schedule and a staff member's first assignments may start today. Changes are
  * saved at once by Managers and Owners and apply from 00:00 of their date. A change here applies to
- * changes saved afterwards; changes already saved keep their dates. The API checks everything again.
+ * changes saved afterwards; changes already saved keep their dates. "Allow Changes to Take Effect at
+ * Their Scheduled Time" lets them choose today or a later date and a time (never in the past)
+ * instead; the delay and the two switches then do not apply. The API checks everything again.
  * `settings` is `settings.scheduling` from the API.
  */
 export function SchedulingSettingsCard({ settings: initial }) {
@@ -34,7 +41,8 @@ export function SchedulingSettingsCard({ settings: initial }) {
   const isDirty =
     draft.effectiveDelayDays.trim() !== String(saved.effectiveDelayDays) ||
     draft.immediateFirstSchedule !== saved.immediateFirstSchedule ||
-    draft.immediateFirstAssignment !== saved.immediateFirstAssignment;
+    draft.immediateFirstAssignment !== saved.immediateFirstAssignment ||
+    draft.timedChanges !== Boolean(saved.timedChanges);
 
   function clear() {
     setError('');
@@ -72,7 +80,12 @@ export function SchedulingSettingsCard({ settings: initial }) {
         const next = await saveScheduling(values);
         setSaved(next);
         setDraft(draftOf(next));
-        setNotice({ variant: 'success', text: `Scheduling settings saved. Changes saved from now on start ${delayExample(next.effectiveDelayDays)} at the earliest; changes already saved keep their dates.` });
+        setNotice({
+          variant: 'success',
+          text: next.timedChanges
+            ? 'Scheduling settings saved. Changes saved from now on take effect at the date and time chosen (today or later, never in the past); changes already saved keep their dates.'
+            : `Scheduling settings saved. Changes saved from now on start ${delayExample(next.effectiveDelayDays)} at the earliest; changes already saved keep their dates.`,
+        });
       } catch (failure) {
         if (failure.details?.effectiveDelayDays) {
           setError(failure.details.effectiveDelayDays);
@@ -106,6 +119,17 @@ export function SchedulingSettingsCard({ settings: initial }) {
           </Alert>
         )}
         <form onSubmit={submit} noValidate className="flex flex-col gap-5">
+          <Checkbox
+            label="Allow Changes to Take Effect at Their Scheduled Time"
+            description={
+              draft.timedChanges
+                ? 'ON: schedule changes, staff assignments and transfers can be scheduled for today or any later date at a chosen time (not in the past). The effective delay below does not apply.'
+                : 'OFF: the effective delay below applies, and changes start at 00:00 of their date.'
+            }
+            checked={draft.timedChanges}
+            onChange={(e) => set('timedChanges', e.target.checked)}
+            disabled={saving}
+          />
           <Input
             ref={inputRef}
             label="Effective delay (days)"
@@ -120,7 +144,7 @@ export function SchedulingSettingsCard({ settings: initial }) {
             onChange={(e) => set('effectiveDelayDays', e.target.value)}
             error={error}
             hint={`Whole calendar days from ${EFFECTIVE_DELAY_MIN} to ${EFFECTIVE_DELAY_MAX}, in the platform time zone (not 24-hour periods). Default: 1 day. Managers and School Owners may still choose a later date.`}
-            readOnly={saving}
+            readOnly={saving || draft.timedChanges}
           />
           <Switch
             label="First schedule may start today"

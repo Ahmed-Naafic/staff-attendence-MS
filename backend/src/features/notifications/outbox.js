@@ -2,11 +2,11 @@ import { getPrisma } from '../../config/prisma.js';
 import { localParts } from '../attendance/attendanceReports.service.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { toTime } from '../schedules/scheduleInput.js';
-import { localDate, scheduleOn } from '../schedules/schedules.service.js';
+import { localDate, scheduleAt, scheduleOn } from '../schedules/schedules.service.js';
 import { createNotifications } from './notify.js';
 import { checkPushReceipts, sendPendingPush } from './push.js';
 import { latestSets, scheduleImpact } from './scheduleImpact.js';
-import { staffBranchAt, zonedMidnight } from '../staff/transfers.service.js';
+import { staffBranchAt } from '../staff/transfers.service.js';
 
 /*
  * Transactional outbox (N20). A business change calls enqueue() inside its own transaction, so the
@@ -167,7 +167,7 @@ const HANDLERS = {
     });
     if (!set) return [];
     const effectiveFrom = set.effectiveFrom.toISOString().slice(0, 10);
-    const schedule = await scheduleOn(set.branchId, effectiveFrom, client);
+    const schedule = await scheduleAt(set.branchId, set.effectiveAt, client);
     const byKey = new Map((schedule?.shifts ?? []).map((s) => [s.shiftKey, s]));
     const shifts = set.shifts
       .map((a) => ({ a, s: byKey.get(a.shiftKey) }))
@@ -211,16 +211,16 @@ const HANDLERS = {
     const after = await client.branchSchedule.findUnique({ where: { id: versionId }, include: { shifts: true, branch: true } });
     if (!after) return [];
     const before = baselineId ? await client.branchSchedule.findUnique({ where: { id: baselineId }, include: { shifts: true } }) : null;
-    return impactItems(client, 'SCHEDULE_CHANGED', after.branch, after.effectiveFrom, before, after, `schedule:${after.id}`);
+    return impactItems(client, 'SCHEDULE_CHANGED', after.branch, after, before, after, `schedule:${after.id}`);
   },
 
   /** N9: a cancelled scheduled change → staff it would have affected (compared with the schedule that now applies that day). */
   async SCHEDULE_CHANGE_CANCELLED({ versionId }, { client }) {
     const cancelled = await client.branchSchedule.findUnique({ where: { id: versionId }, include: { shifts: true, branch: true } });
     if (!cancelled) return [];
-    const date = cancelled.effectiveFrom.toISOString().slice(0, 10);
-    const applies = await scheduleOn(cancelled.branchId, date, client);
-    return impactItems(client, 'SCHEDULE_CHANGE_CANCELLED', cancelled.branch, cancelled.effectiveFrom, cancelled, applies, `schedule-cancelled:${cancelled.id}`);
+    // The cancelled version no longer applies, so this is what applies at its moment instead.
+    const applies = await scheduleAt(cancelled.branchId, cancelled.effectiveAt, client);
+    return impactItems(client, 'SCHEDULE_CHANGE_CANCELLED', cancelled.branch, cancelled, cancelled, applies, `schedule-cancelled:${cancelled.id}`);
   },
 
   /** N3-7: a Manager transferred (fromBranchId) or created → the Manager; and the new branch's "no schedule" notice when it has none. */
@@ -288,7 +288,7 @@ const HANDLERS = {
     const shifts = [];
     if (action === 'scheduled' && t.assignmentId) {
       const set = await client.staffAssignment.findUnique({ where: { id: t.assignmentId }, include: { shifts: true } });
-      const schedule = set ? await scheduleOn(t.toBranchId, effectiveFrom, client) : null;
+      const schedule = set ? await scheduleAt(t.toBranchId, set.effectiveAt, client) : null;
       const byKey = new Map((schedule?.shifts ?? []).map((s) => [s.shiftKey, s]));
       for (const a of set?.shifts ?? []) {
         const s = byKey.get(a.shiftKey);
@@ -356,18 +356,21 @@ const HANDLERS = {
   },
 };
 
-/** Notices for the staff of a branch whose assigned shifts (as in effect on `effectiveFrom`) change between two versions. */
-async function impactItems(client, type, branch, effectiveFrom, before, after, key) {
-  const date = effectiveFrom.toISOString().slice(0, 10);
+/**
+ * Notices for the staff of a branch whose assigned shifts (as in effect when `version` takes
+ * effect: its effectiveAt) change between two versions.
+ */
+async function impactItems(client, type, branch, version, before, after, key) {
+  const date = version.effectiveFrom.toISOString().slice(0, 10);
+  const startsAt = version.effectiveAt;
   const sets = latestSets(
     await client.staffAssignment.findMany({
-      where: { branchId: branch.id, cancelledAt: null, effectiveFrom: { lte: effectiveFrom }, staff: { role: 'STAFF' } },
-      orderBy: [{ effectiveFrom: 'desc' }, { recordedAt: 'desc' }],
+      where: { branchId: branch.id, cancelledAt: null, effectiveAt: { lte: startsAt }, staff: { role: 'STAFF' } },
+      orderBy: [{ effectiveAt: 'desc' }, { recordedAt: 'desc' }],
       include: { shifts: true },
     }),
   );
   const items = [];
-  const startsAt = zonedMidnight(date, (after ?? before).timeZone);
   for (const [staffUserId, set] of sets) {
     const impact = scheduleImpact(before, after, set);
     if (!impact.affected) continue;

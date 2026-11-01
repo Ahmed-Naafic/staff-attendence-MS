@@ -18,6 +18,10 @@ test('the shifts on a date come from the schedule in effect then', () => {
   const branchShifts = { current: { effectiveFrom: '2026-10-26', shifts: ['now'] }, scheduled: { effectiveFrom: '2026-11-01', shifts: ['later'] } };
   assert.deepEqual(shiftsOn(branchShifts, '2026-10-31').shifts, ['now']);
   assert.deepEqual(shiftsOn(branchShifts, '2026-11-01').shifts, ['later']);
+  // With a time (timed changes): a version starting at 13:00 applies from 13:00.
+  const timed = { current: { effectiveFrom: '2026-10-01', effectiveTime: '00:00', shifts: ['now'] }, scheduled: { effectiveFrom: '2026-11-01', effectiveTime: '13:00', shifts: ['later'] } };
+  assert.deepEqual(shiftsOn(timed, '2026-11-01', '12:59').shifts, ['now']);
+  assert.deepEqual(shiftsOn(timed, '2026-11-01', '13:00').shifts, ['later']);
   assert.equal(shiftsOn({ current: null, scheduled: null }, '2026-11-01'), null);
 });
 

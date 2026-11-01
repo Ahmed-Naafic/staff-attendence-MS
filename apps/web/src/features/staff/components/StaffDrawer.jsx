@@ -4,7 +4,7 @@ import { Badge, Button, Drawer, Modal, Spinner } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { formatUtc } from '../../branches';
-import { dayList } from '../../schedules/utils/scheduleRules.js';
+import { dayList, whenText } from '../../schedules/utils/scheduleRules.js';
 import { cancelScheduledAssignments, loadAssignmentHistory } from '../data/staffApi.js';
 import { StaffStatusBadge } from './StaffTable.jsx';
 
@@ -63,7 +63,7 @@ function History({ staffId, version }) {
         <li key={set.id} className="flex flex-col gap-2 rounded-md border border-border px-4 py-3">
           <div className="flex flex-wrap items-center gap-2 text-small">
             <span className="font-medium text-fg">
-              {set.state === 'cancelled' ? `Was scheduled from ${set.effectiveFrom}` : `From ${set.effectiveFrom}${set.effectiveUntil ? ` until ${set.effectiveUntil}` : ''}`}
+              {set.state === 'cancelled' ? `Was scheduled from ${whenText(set)}` : `From ${whenText(set)}${set.effectiveUntil ? ` until ${set.effectiveUntil}` : ''}`}
             </span>
             <Badge variant={STATES[set.state].variant}>{STATES[set.state].label}</Badge>
           </div>
@@ -115,7 +115,7 @@ function CancelScheduledModal({ staff, open, onClose, onDone }) {
       }
     >
       <p className="text-body text-fg-secondary">
-        The assignment change from <strong className="text-fg">{staff?.assignments.scheduled?.effectiveFrom}</strong> will not take effect. It stays in the history as cancelled.
+        The assignment change from <strong className="text-fg">{whenText(staff?.assignments.scheduled)}</strong> will not take effect. It stays in the history as cancelled.
       </p>
     </Modal>
   );
@@ -238,7 +238,7 @@ export function StaffDrawer({ staff, open, onClose, readOnly, version, onEdit, o
           <p className="text-small text-fg-muted">Dates are in {staff.assignments.timeZone}.</p>
           {current ? (
             <div className="flex flex-col gap-2 rounded-md border border-border px-4 py-3">
-              <p className="text-small font-medium text-fg">In effect since {current.effectiveFrom}</p>
+              <p className="text-small font-medium text-fg">In effect since {whenText(current)}</p>
               <SetShifts set={current} />
             </div>
           ) : (
@@ -247,7 +247,7 @@ export function StaffDrawer({ staff, open, onClose, readOnly, version, onEdit, o
           {scheduled && (
             <div className="flex flex-col gap-2 rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-warning-fg">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-small font-medium">Scheduled from {scheduled.effectiveFrom}</p>
+                <p className="text-small font-medium">Scheduled from {whenText(scheduled)}</p>
                 <Button size="sm" variant="outline" onClick={() => setCancelling(true)} unavailableReason={blocked}>
                   Cancel Scheduled Change
                 </Button>

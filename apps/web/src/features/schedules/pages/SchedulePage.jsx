@@ -7,6 +7,7 @@ import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { ScheduleEditorModal } from '../components/ScheduleEditorModal.jsx';
 import { ShiftList } from '../components/ShiftList.jsx';
 import { cancelScheduledSchedule, loadSchedule, loadVersions } from '../data/scheduleApi.js';
+import { whenText } from '../utils/scheduleRules.js';
 
 const NOT_OPERATING = {
   branch_suspended: 'Your branch is suspended.',
@@ -26,7 +27,7 @@ function VersionCard({ title, version, action }) {
         <div className="flex flex-col gap-1">
           <h2 className="text-card-title text-fg">{title}</h2>
           <p className="text-small text-fg-secondary">
-            From {version.effectiveFrom} · Check-out {version.checkOutEnabled ? 'ON' : 'OFF'} · {version.timeZone}
+            From {whenText(version)} · Check-out {version.checkOutEnabled ? 'ON' : 'OFF'} · {version.timeZone}
           </p>
         </div>
         {action}
@@ -56,7 +57,7 @@ function History({ version }) {
         <li key={v.id} className="flex flex-col gap-1 rounded-md border border-border px-4 py-3 text-small">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-fg">
-              {v.state === 'cancelled' ? `Was scheduled from ${v.effectiveFrom}` : `From ${v.effectiveFrom}${v.effectiveUntil ? ` until ${v.effectiveUntil}` : ''}`}
+              {v.state === 'cancelled' ? `Was scheduled from ${whenText(v)}` : `From ${whenText(v)}${v.effectiveUntil ? ` until ${v.effectiveUntil}` : ''}`}
             </span>
             <Badge variant={STATES[v.state].variant}>{STATES[v.state].label}</Badge>
           </div>
@@ -115,7 +116,7 @@ function CancelScheduledModal({ scheduled, open, onClose, onDone }) {
       }
     >
       <p className="text-body text-fg-secondary">
-        The schedule change from <strong className="text-fg">{scheduled?.effectiveFrom}</strong> will not take effect. It stays in the history as cancelled.
+        The schedule change from <strong className="text-fg">{whenText(scheduled)}</strong> will not take effect. It stays in the history as cancelled.
       </p>
     </Modal>
   );
@@ -185,7 +186,7 @@ export default function SchedulePage() {
                 title="No schedule in effect"
                 description={
                   data.scheduled
-                    ? `Your branch's first schedule starts on ${data.scheduled.effectiveFrom}. Until then it has no working days.`
+                    ? `Your branch's first schedule starts on ${whenText(data.scheduled)}. Until then it has no working days.`
                     : 'Set your branch’s shifts and check-out setting. Until a schedule starts, your branch has no working days.'
                 }
               />
@@ -218,9 +219,9 @@ export default function SchedulePage() {
         onSaved={(page) =>
           done(
             page.scheduled
-              ? `The schedule change from ${page.scheduled.effectiveFrom} is scheduled.`
+              ? `The schedule change from ${whenText(page.scheduled)} is scheduled.`
               : page.current
-                ? `The schedule is in effect from ${page.current.effectiveFrom}.`
+                ? `The schedule is in effect from ${whenText(page.current)}.`
                 : 'The schedule was saved.',
           )()
         }

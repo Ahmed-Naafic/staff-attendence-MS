@@ -1,7 +1,7 @@
 import { badRequest } from '../../common/httpError.js';
 import { isUuid } from '../../common/validate.js';
 import { passwordProblem } from '../auth/password.js';
-import { WEEKDAYS, isDate } from '../schedules/scheduleInput.js';
+import { WEEKDAYS, isDate, readEffectiveTime } from '../schedules/scheduleInput.js';
 import { isValidEmail, isValidPhone } from '../schools/schoolInput.js';
 
 /*
@@ -110,11 +110,12 @@ export function readStaffPassword(body) {
 }
 
 /**
- * An assignment set { effectiveFrom, shifts: [{ shiftKey, days }] } → the same, days in week order.
+ * An assignment set { effectiveFrom, effectiveTime?, shifts: [{ shiftKey, days }] } → the same, days in
+ * week order, effectiveTime in minutes after midnight (null when not sent: 00:00).
  * Shifts may be empty (no assigned shifts from that date). Whether each shift and day exists in the
  * branch schedule on that date is checked by the service.
  */
-/** Transfer (School Owner): { branchId, effectiveFrom, shifts } — the destination, its date and the destination shifts (may be empty). */
+/** Transfer (School Owner): { branchId, effectiveFrom, effectiveTime?, shifts } — the destination, its date (and time) and the destination shifts (may be empty). */
 export function readTransfer(body) {
   const { branchId, ...change } = body;
   if (!isUuid(branchId)) throw badRequest('Check the highlighted fields.', { branchId: 'Choose the destination branch.' });
@@ -122,9 +123,10 @@ export function readTransfer(body) {
 }
 
 export function readAssignmentChange(body) {
-  refuse(body, ['effectiveFrom', 'shifts'], { branchId: FIXED.branchId, staffId: 'The staff member is the one in the address.' });
+  refuse(body, ['effectiveFrom', 'effectiveTime', 'shifts'], { branchId: FIXED.branchId, staffId: 'The staff member is the one in the address.' });
   const errors = {};
   if (!isDate(body.effectiveFrom)) errors.effectiveFrom = 'Choose the date the assignments take effect (YYYY-MM-DD).';
+  const effectiveTime = readEffectiveTime(body, errors);
   const shifts = [];
   if (!Array.isArray(body.shifts)) errors.shifts = 'Send the list of assigned shifts (it may be empty).';
   else if (body.shifts.length > 20) errors.shifts = 'At most 20 assigned shifts.';
@@ -149,5 +151,5 @@ export function readAssignmentChange(body) {
     });
   }
   fail(errors);
-  return { effectiveFrom: body.effectiveFrom, shifts };
+  return { effectiveFrom: body.effectiveFrom, effectiveTime, shifts };
 }
