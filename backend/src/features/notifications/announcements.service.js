@@ -6,6 +6,7 @@ import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { ANNOUNCEMENT_KINDS, ANNOUNCEMENT_ROLES, DEFAULT_LANGUAGE, RETENTION_DAYS, RETENTION_MS } from './notificationTypes.js';
 import { platformNotificationSettings } from './notificationSettings.service.js';
+import { sendPendingPush } from './push.js';
 
 /*
  * Platform announcements (Super Admin, N17). An announcement is stored once with its audience —
@@ -261,7 +262,7 @@ export async function createAnnouncement(body, user, req, now = new Date()) {
     if (action !== 'draft') await publishAudit(tx, a, user, req, now);
     return a.id;
   });
-  if (action === 'publish') await queueAnnouncementPush({ now }).catch(() => {});
+  if (action === 'publish') await pushAnnouncementsNow(now);
   return getAnnouncement(id);
 }
 
@@ -328,7 +329,7 @@ export async function publishAnnouncement(id, body, user, req, now = new Date())
     if (!count) throw conflict('INVALID_STATUS', 'Only a draft can be published or scheduled.');
     await publishAudit(tx, { ...current, publishAt }, user, req, now);
   });
-  if (publishAt <= now) await queueAnnouncementPush({ now }).catch(() => {});
+  if (publishAt <= now) await pushAnnouncementsNow(now);
   return getAnnouncement(id);
 }
 
@@ -350,6 +351,16 @@ export async function withdrawAnnouncement(id, user, req, now = new Date()) {
     });
   });
   return getAnnouncement(id);
+}
+
+/** Queues the pushes of announcements now due and sends them at once (the job retries what fails). */
+async function pushAnnouncementsNow(now) {
+  try {
+    await queueAnnouncementPush({ now });
+    await sendPendingPush({ now, limit: 50 });
+  } catch (error) {
+    console.error('[notifications] announcement push failed; the scheduled job retries:', error.message);
+  }
 }
 
 /**

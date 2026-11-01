@@ -33,6 +33,7 @@ export function NotificationsProvider({ children, openDatabase = getDatabase, cl
   const [backgroundGranted, setBackgroundGranted] = useState(false);
   const [pushState, setPushState] = useState(null);
   const pushDone = useRef(false);
+  const pushStateRef = useRef(null);
 
   const refreshCount = useCallback(async () => {
     try {
@@ -125,25 +126,43 @@ export function NotificationsProvider({ children, openDatabase = getDatabase, cl
 
   // Push for this session, while the platform and the staff member allow it. Registered on every
   // start (the server keeps one token per session) and again whenever the system issues a new token.
+  // The first registration asks for the notification permission (Android 13+ and iOS show nothing
+  // without it); the system shows its prompt only while the permission has not been refused.
   const pushWanted = preferences?.push?.enabled;
+  const registerPush = useCallback(
+    (ask = false) =>
+      enablePush(api, { ask }).then((state) => {
+        pushStateRef.current = state;
+        setPushState(state);
+      }),
+    [api],
+  );
   useEffect(() => {
     if (!userId || pushWanted === undefined) return;
     if (pushWanted && !pushDone.current) {
       pushDone.current = true;
-      enablePush(api).then(setPushState);
+      registerPush(true);
     } else if (!pushWanted && pushDone.current) {
       pushDone.current = false;
+      pushStateRef.current = 'off';
       disablePush(api).then(() => setPushState('off'));
     }
-  }, [api, userId, pushWanted]);
+  }, [api, userId, pushWanted, registerPush]);
+  // Not registered yet (permission allowed later in the phone's settings, or offline): try again
+  // when the app comes back to the foreground.
+  useEffect(() => {
+    if (!userId || !pushWanted) return undefined;
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active' && pushDone.current && pushStateRef.current !== 'registered') registerPush();
+    });
+    return () => sub?.remove?.();
+  }, [userId, pushWanted, registerPush]);
   useEffect(() => {
     if (!userId || !pushWanted) return undefined;
     // The listener gets the new device (FCM/APNs) token; the Expo token is read again from it.
-    const sub = Notifications.addPushTokenListener?.(() => {
-      enablePush(api).then(setPushState);
-    });
+    const sub = Notifications.addPushTokenListener?.(() => registerPush());
     return () => sub?.remove?.();
-  }, [api, userId, pushWanted]);
+  }, [userId, pushWanted, registerPush]);
 
   // A push arriving while the app is open: the banner is shown (local.js) and the unread count updated.
   useEffect(() => {

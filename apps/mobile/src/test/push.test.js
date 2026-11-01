@@ -8,7 +8,7 @@
  */
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { resetDatabaseForTests } from '../db/database';
 import { createServer, preferencesBody, renderApp, storeSession } from './harness';
 
@@ -75,6 +75,37 @@ test('permission denied, or push turned off: nothing is registered', async () =>
   await act(async () => {});
   expect(denied.count('POST /api/notifications/devices')).toBe(0);
   expect(Notifications.getExpoPushTokenAsync).not.toHaveBeenCalled();
+});
+
+test('first sign-in: the notification permission is asked for, then the token is registered', async () => {
+  Notifications.getPermissionsAsync.mockImplementation(async () => ({ granted: false, status: 'undetermined', canAskAgain: true }));
+  Notifications.requestPermissionsAsync.mockClear();
+  const server = pushServer();
+  await renderApp(server);
+  await waitFor(() => expect(server.count('POST /api/notifications/devices')).toBe(1));
+  expect(Notifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+});
+
+test('permission allowed later in the phone settings: registered when the app returns to the foreground', async () => {
+  const listeners = [];
+  const spy = jest.spyOn(AppState, 'addEventListener').mockImplementation((type, handler) => {
+    listeners.push(handler);
+    return { remove: () => {} };
+  });
+  Notifications.getPermissionsAsync.mockImplementation(async () => ({ granted: false, status: 'denied', canAskAgain: false }));
+  const server = pushServer();
+  await renderApp(server);
+  await waitFor(() => expect(server.count('GET /api/notifications/preferences')).toBeGreaterThan(0));
+  await act(async () => {});
+  expect(server.count('POST /api/notifications/devices')).toBe(0);
+  Notifications.getPermissionsAsync.mockImplementation(async () => ({ granted: true, status: 'granted', canAskAgain: true }));
+  await act(async () => listeners.forEach((l) => l('active')));
+  await waitFor(() => expect(server.count('POST /api/notifications/devices')).toBe(1));
+  // Registered: returning to the foreground again does not register again.
+  await act(async () => listeners.forEach((l) => l('active')));
+  await act(async () => {});
+  expect(server.count('POST /api/notifications/devices')).toBe(1);
+  spy.mockRestore();
 });
 
 test('push turned off in the preferences: nothing is registered', async () => {
