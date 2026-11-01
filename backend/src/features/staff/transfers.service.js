@@ -7,6 +7,7 @@ import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { lockActiveSchool } from '../branches/branches.service.js';
 import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
+import { earliestDateProblem, earliestEffectiveDate, schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, toTime } from '../schedules/scheduleInput.js';
 import { addDays, localDate, MAX_AHEAD_DAYS, scheduleOn } from '../schedules/schedules.service.js';
@@ -17,7 +18,8 @@ import { assignedShiftErrors } from './staff.service.js';
  * docs/business-rules.md → Staff transfers).
  *
  * Only the School Owner transfers, within their own school (T1, T11). A transfer is scheduled for a
- * branch-local date, tomorrow at the earliest (T3), and takes effect at 00:00 of that date in the
+ * branch-local date, at the earliest today + the effective delay of the Scheduling & Assignments
+ * settings (T3, extended 2026-11-01; 1 day by default, i.e. tomorrow), and takes effect at 00:00 of that date in the
  * platform time zone; the work day before it ends at the old branch, so an open check-in can still
  * be checked out there that day (T4). The Staff ID never changes (T2). The Owner chooses the shifts
  * at the destination (T6): a new assignment set of the destination branch from the same date, and
@@ -211,12 +213,12 @@ async function findSchoolStaff(client, school, id) {
 /** One staff member for the Owner, with their transfer history (newest first) and today's date. */
 export async function getSchoolStaff(school, id, client = getPrisma()) {
   const staff = await findSchoolStaff(client, school, id);
-  const timeZone = await platformTimeZone();
+  const [timeZone, policy] = await Promise.all([platformTimeZone(), schedulingPolicy(client)]);
   const today = localDate(timeZone);
   const transfers = await client.staffTransfer.findMany({ where: { staffUserId: staff.id }, include: transferInclude, orderBy: [{ effectiveAt: 'desc' }, { createdAt: 'desc' }] });
   const items = [];
   for (const t of transfers) items.push(await toTransfer(t, client));
-  return { ...toOwnerStaff(staff), transfers: items, timeZone, earliestTransferDate: addDays(today, 1), latestTransferDate: addDays(today, MAX_AHEAD_DAYS) };
+  return { ...toOwnerStaff(staff), transfers: items, timeZone, effectiveDelayDays: policy.effectiveDelayDays, earliestTransferDate: earliestEffectiveDate(today, { delayDays: policy.effectiveDelayDays }), latestTransferDate: addDays(today, MAX_AHEAD_DAYS) };
 }
 
 /** The shifts of one of the Owner's branches in the schedule in effect on a date (for choosing destination shifts). */
@@ -273,7 +275,7 @@ async function lockSchoolStaff(tx, school, id) {
 
 /**
  * Schedules a transfer (School Owner, T1–T7): `branchId` (another branch of the same school,
- * operating), `effectiveFrom` (tomorrow at the earliest, at most a year ahead) and `shifts` (the
+ * operating), `effectiveFrom` (today + the effective delay at the earliest, at most a year ahead) and `shifts` (the
  * destination assignment set; may be empty). One transfer per staff member may be scheduled.
  * In one transaction: the destination assignment set from that date, scheduled assignment changes
  * from that date on cancelled, the transfer, its notification event and STAFF_TRANSFER_SCHEDULED.
@@ -294,7 +296,9 @@ export async function scheduleTransfer(school, id, { branchId, effectiveFrom, sh
       if (!destination) errors.branchId = 'Choose a branch of your school.';
       else if (destination.id === staff.branchId) errors.branchId = 'This staff member already works at this branch. Choose another branch.';
       else if (destination.status !== 'ACTIVE') errors.branchId = 'This branch is suspended and cannot receive staff. Choose an active branch.';
-      if (effectiveFrom < addDays(today, 1)) errors.effectiveFrom = `A transfer can start tomorrow (${addDays(today, 1)}) at the earliest, so a work day is never split between branches.`;
+      const { effectiveDelayDays: delayDays } = await schedulingPolicy(tx);
+      const earliest = earliestEffectiveDate(today, { delayDays });
+      if (effectiveFrom < earliest) errors.effectiveFrom = earliestDateProblem('transfer', { today, earliest, delayDays });
       else if (effectiveFrom > addDays(today, MAX_AHEAD_DAYS)) errors.effectiveFrom = `A transfer can start at most one year ahead (${addDays(today, MAX_AHEAD_DAYS)}).`;
       if (Object.keys(errors).length) throw badRequest('Check the highlighted fields.', errors);
 

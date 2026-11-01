@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Button, Checkbox, FieldError, Input, Modal, Switch } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { saveSchedule } from '../data/scheduleApi.js';
-import { emptyShift, MAX_SHIFTS, toRequestShifts, toRow, validateSchedule, WEEKDAYS } from '../utils/scheduleRules.js';
+import { effectiveDateHint, emptyShift, MAX_SHIFTS, toRequestShifts, toRow, validateSchedule, WEEKDAYS } from '../utils/scheduleRules.js';
 
 /**
  * Change the branch schedule: a complete new version (effective date, check-out ON/OFF and every
@@ -130,11 +130,7 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
                 clear('effectiveFrom');
               }}
               error={errors.effectiveFrom}
-              hint={
-                page.current
-                  ? `Tomorrow (${page.earliestEffectiveDate}) at the earliest, so today's schedule does not change during the day.`
-                  : `Your branch has no schedule in effect: it can start today (${page.today}).`
-              }
+              hint={effectiveDateHint({ first: !page.current, today: page.today, earliest: page.earliestEffectiveDate, delayDays: page.effectiveDelayDays, what: 'schedule' })}
             />
             <div className="flex items-end pb-1">
               <Switch

@@ -108,3 +108,25 @@ export const absentAfter = (shift) => {
   const minutes = toMinutes(shift.start) + shift.absenceCutoffMinutes;
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 };
+
+/**
+ * The earliest effective date in words, from the API's earliest date and effective delay (Platform
+ * Settings → Scheduling & Assignments): 'Tomorrow (2026-11-02)' for 1 day, otherwise
+ * '2026-11-04 (3 days from today)'. Used by the schedule, assignment and transfer forms.
+ */
+export const earliestText = (earliest, delayDays = 1) => (delayDays === 1 ? `Tomorrow (${earliest})` : `${earliest} (${delayDays} days from today)`);
+
+/**
+ * The effective-date hint: `first` (nothing in effect today), `what` 'schedule' | 'assignments'.
+ * A first one that may start today says so; otherwise the earliest date and why.
+ */
+export function effectiveDateHint({ first, today, earliest, delayDays, what }) {
+  if (first && earliest === today) {
+    return what === 'schedule' ? `Your branch has no schedule in effect: it can start today (${today}).` : `No assignments in effect: they can start today (${today}).`;
+  }
+  const when = earliestText(earliest, delayDays);
+  if (first) return `${when} at the earliest (the platform's effective delay).`;
+  return what === 'schedule'
+    ? `${when} at the earliest, so today's schedule does not change during the day. Until then the current schedule stays in effect.`
+    : `${when} at the earliest, so today's assignments do not change during the day. Until then the current assignments stay in effect.`;
+}

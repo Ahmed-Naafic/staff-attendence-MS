@@ -15,7 +15,7 @@ const DAY_ORDER = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 export const destinationOptions = (branches, currentBranchId) =>
   branches.filter((b) => b.id !== currentBranchId && b.status === 'active').map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }));
 
-/** The initial form: no destination, tomorrow, no shifts chosen. */
+/** The initial form: no destination, the earliest date allowed, no shifts chosen. */
 export const emptyTransfer = (earliest) => ({ branchId: '', effectiveFrom: earliest, shifts: {} });
 
 /** Toggles a destination shift: chosen with all its working days, or removed. */
@@ -37,12 +37,12 @@ export function toggleDay(shifts, key, day, on) {
   return next;
 }
 
-/** Field errors ({} when valid). */
-export function validateTransfer(form, { earliest, latest }) {
+/** Field errors ({} when valid). `delayDays`: the platform's effective delay (1 when not sent). */
+export function validateTransfer(form, { earliest, latest, delayDays = 1 }) {
   const errors = {};
   if (!form.branchId) errors.branchId = 'Choose the destination branch.';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(form.effectiveFrom ?? '')) errors.effectiveFrom = 'Choose the date the transfer takes effect.';
-  else if (form.effectiveFrom < earliest) errors.effectiveFrom = `A transfer can start tomorrow (${earliest}) at the earliest.`;
+  else if (form.effectiveFrom < earliest) errors.effectiveFrom = `A transfer can start ${delayDays === 1 ? `tomorrow (${earliest})` : `on ${earliest} (${delayDays} days from today)`} at the earliest.`;
   else if (form.effectiveFrom > latest) errors.effectiveFrom = `A transfer can start at most one year ahead (${latest}).`;
   return errors;
 }

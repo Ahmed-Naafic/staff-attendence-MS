@@ -5,6 +5,7 @@ import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { operatingState } from '../branches/branches.service.js';
 import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
+import { earliestDateProblem, earliestEffectiveDate, schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, nameKey, toTime } from './scheduleInput.js';
 
@@ -14,7 +15,10 @@ import { dayList, nameKey, toTime } from './scheduleInput.js';
  * requireManagerBranch, never from the request).
  *
  * Dates are branch-local calendar dates 'YYYY-MM-DD' in the platform time zone; "today" is the
- * server's date there. A change saves a new, complete version; versions are never edited or
+ * server's date there. The earliest effective date follows the Scheduling & Assignments settings
+ * (schedulingPolicy.js): today + the effective delay, or today for a first schedule when allowed.
+ * Nothing activates a saved version: the one in effect on a day is the newest whose date has
+ * arrived (scheduleOn), so a pending change applies from 00:00 of its date. A change saves a new, complete version; versions are never edited or
  * deleted (a replaced or cancelled scheduled version gets cancelledAt). Writes lock the school row
  * (FOR SHARE) and the branch row (FOR UPDATE) and need both ACTIVE (409 BRANCH_NOT_OPERATING);
  * each change and its audit event are written in one transaction.
@@ -87,17 +91,21 @@ const notOperating = (reasons) =>
     { reasons },
   );
 
-/** The schedule page: time zone, today, allowed effective dates, current and scheduled versions, and whether changes are allowed. */
+/**
+ * The schedule page: time zone, today, the effective delay, allowed effective dates, current and
+ * scheduled versions, and whether changes are allowed.
+ */
 export async function getSchedule(branch) {
   const prisma = getPrisma();
-  const timeZone = await platformTimeZone();
+  const [timeZone, policy] = await Promise.all([platformTimeZone(), schedulingPolicy(prisma)]);
   const today = localDate(timeZone);
   const [current, scheduled] = await Promise.all([scheduleOn(branch.id, today, prisma), scheduledAfter(branch.id, today, prisma)]);
   const { operating, reasons } = operatingState(branch, branch.school);
   return {
     timeZone,
     today,
-    earliestEffectiveDate: current ? addDays(today, 1) : today,
+    effectiveDelayDays: policy.effectiveDelayDays,
+    earliestEffectiveDate: earliestEffectiveDate(today, { delayDays: policy.effectiveDelayDays, first: !current, immediateFirst: policy.immediateFirstSchedule }),
     latestEffectiveDate: addDays(today, MAX_AHEAD_DAYS),
     current: toVersion(current),
     scheduled: toVersion(scheduled),
@@ -195,8 +203,8 @@ async function earlierShiftKeys(tx, branch, shifts) {
 }
 
 /**
- * Saves a new schedule version from `effectiveFrom` (today only for the branch's first schedule,
- * otherwise tomorrow at the earliest; at most a year ahead). A scheduled version is replaced
+ * Saves a new schedule version from `effectiveFrom` (at the earliest today + the effective delay,
+ * or today for the branch's first schedule when the settings allow it; at most a year ahead). A scheduled version is replaced
  * (cancelled, kept). Saving the schedule already in effect with nothing scheduled changes nothing;
  * with something scheduled it only cancels that.
  */
@@ -207,13 +215,14 @@ export async function saveSchedule(branch, { effectiveFrom, checkOutEnabled, shi
     await lockOperatingBranch(tx, branch);
     const today = localDate(timeZone);
     const [current, scheduled] = await Promise.all([scheduleOn(branch.id, today, tx), scheduledAfter(branch.id, today, tx)]);
-    const earliest = current ? addDays(today, 1) : today;
+    // Read in the transaction: a settings change saved meanwhile applies to this save.
+    const policy = await schedulingPolicy(tx);
+    const first = !current;
+    const earliest = earliestEffectiveDate(today, { delayDays: policy.effectiveDelayDays, first, immediateFirst: policy.immediateFirstSchedule });
     const latest = addDays(today, MAX_AHEAD_DAYS);
     if (effectiveFrom < earliest) {
       throw badRequest('Check the highlighted fields.', {
-        effectiveFrom: current
-          ? `A change can start tomorrow (${earliest}) at the earliest, so today's schedule does not change during the day.`
-          : `The schedule can start today (${today}) at the earliest.`,
+        effectiveFrom: earliestDateProblem('schedule', { today, earliest, delayDays: policy.effectiveDelayDays, first }),
       });
     }
     if (effectiveFrom > latest) throw badRequest('Check the highlighted fields.', { effectiveFrom: `The schedule can start at most one year ahead (${latest}).` });

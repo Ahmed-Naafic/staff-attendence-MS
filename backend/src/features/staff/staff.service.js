@@ -7,6 +7,7 @@ import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { dispatch, enqueue, OUTBOX } from '../notifications/outbox.js';
 import { hashPassword } from '../auth/password.js';
+import { earliestDateProblem, earliestEffectiveDate, schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, toTime } from '../schedules/scheduleInput.js';
 import { addDays, BRANCH_TX, localDate, lockOperatingBranch, MAX_AHEAD_DAYS, scheduleOn } from '../schedules/schedules.service.js';
@@ -149,7 +150,7 @@ async function toAssignment(set, client) {
  */
 export async function getStaff(branch, id, client = getPrisma()) {
   const staff = await findOrFail(client, branch, id);
-  const timeZone = await platformTimeZone();
+  const [timeZone, policy] = await Promise.all([platformTimeZone(), schedulingPolicy(client)]);
   const today = localDate(timeZone);
   const [current, scheduled, scheduleNow, scheduleNext] = await Promise.all([
     assignmentOn(staff.id, today, client),
@@ -166,7 +167,8 @@ export async function getStaff(branch, id, client = getPrisma()) {
     assignments: {
       timeZone,
       today,
-      earliestEffectiveDate: current ? addDays(today, 1) : today,
+      effectiveDelayDays: policy.effectiveDelayDays,
+      earliestEffectiveDate: earliestEffectiveDate(today, { delayDays: policy.effectiveDelayDays, first: !current, immediateFirst: policy.immediateFirstAssignment }),
       latestEffectiveDate: addDays(today, MAX_AHEAD_DAYS),
       current: await toAssignment(current, client),
       scheduled: await toAssignment(scheduled, client),
@@ -413,8 +415,8 @@ async function cancelSet(tx, branch, staff, set, user, req, reason, outbox) {
 }
 
 /**
- * Saves an assignment set from `effectiveFrom` (today only for the staff member's first set,
- * otherwise tomorrow at the earliest; at most a year ahead). Each shift and its days must exist in
+ * Saves an assignment set from `effectiveFrom` (at the earliest today + the effective delay, or
+ * today for the staff member's first set when the settings allow it; at most a year ahead). Each shift and its days must exist in
  * the branch schedule in effect on that date; assigned shifts sharing a day may not overlap. A
  * scheduled set is replaced (kept as cancelled). Saving the set in effect changes nothing (or only
  * cancels a scheduled set).
@@ -431,7 +433,10 @@ export async function saveAssignments(branch, id, { effectiveFrom, shifts }, use
       assignmentAfter(staff.id, today, tx, branch.id),
       tx.staffTransfer.findFirst({ where: { staffUserId: staff.id, status: 'SCHEDULED' }, select: { effectiveFrom: true } }),
     ]);
-    const earliest = current ? addDays(today, 1) : today;
+    // Read in the transaction: a settings change saved meanwhile applies to this save.
+    const policy = await schedulingPolicy(tx);
+    const first = !current;
+    const earliest = earliestEffectiveDate(today, { delayDays: policy.effectiveDelayDays, first, immediateFirst: policy.immediateFirstAssignment });
     const latest = addDays(today, MAX_AHEAD_DAYS);
     const errors = {};
     // After a scheduled transfer the destination branch's assignments apply (set by the School Owner).
@@ -441,9 +446,7 @@ export async function saveAssignments(branch, id, { effectiveFrom, shifts }, use
       });
     }
     if (effectiveFrom < earliest) {
-      errors.effectiveFrom = current
-        ? `A change can start tomorrow (${earliest}) at the earliest, so today's assignments do not change during the day.`
-        : `Assignments can start today (${today}) at the earliest.`;
+      errors.effectiveFrom = earliestDateProblem('assignments', { today, earliest, delayDays: policy.effectiveDelayDays, first });
     } else if (effectiveFrom > latest) errors.effectiveFrom = `Assignments can start at most one year ahead (${latest}).`;
     if (errors.effectiveFrom) throw badRequest('Check the highlighted fields.', errors);
 

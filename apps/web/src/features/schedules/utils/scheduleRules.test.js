@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { absentAfter, emptyShift, lateAfter, toRequestShifts, validateSchedule } from './scheduleRules.js';
+import { absentAfter, earliestText, effectiveDateHint, emptyShift, lateAfter, toRequestShifts, validateSchedule } from './scheduleRules.js';
 
 const RANGE = { earliest: '2026-11-02', latest: '2027-11-01' };
 const row = (overrides = {}) => ({ name: 'Morning', days: ['TUE', 'MON'], start: '07:00', end: '13:00', graceMinutes: '10', absenceCutoffMinutes: '120', ...overrides });
@@ -51,4 +51,15 @@ test('names are unique regardless of capitalization; shifts sharing a day cannot
 test('late and absent times are shown from the start time', () => {
   assert.equal(lateAfter({ start: '07:00', graceMinutes: 10 }), '07:10');
   assert.equal(absentAfter({ start: '07:00', absenceCutoffMinutes: 120 }), '09:00');
+});
+
+test('effective-date hints follow the delay and the first-one rule', () => {
+  assert.equal(earliestText('2026-11-02', 1), 'Tomorrow (2026-11-02)');
+  assert.equal(earliestText('2026-11-04', 3), '2026-11-04 (3 days from today)');
+  assert.equal(earliestText('2026-11-02'), 'Tomorrow (2026-11-02)', 'older API responses without the delay mean 1 day');
+  const base = { today: '2026-11-01', delayDays: 3 };
+  assert.match(effectiveDateHint({ ...base, first: true, earliest: '2026-11-01', what: 'schedule' }), /can start today \(2026-11-01\)/);
+  assert.match(effectiveDateHint({ ...base, first: true, earliest: '2026-11-04', what: 'schedule' }), /^2026-11-04 \(3 days from today\) at the earliest \(the platform's effective delay\)/);
+  assert.match(effectiveDateHint({ ...base, first: false, earliest: '2026-11-04', what: 'assignments' }), /today's assignments do not change/);
+  assert.match(effectiveDateHint({ ...base, first: false, earliest: '2026-11-04', what: 'schedule' }), /current schedule stays in effect/);
 });

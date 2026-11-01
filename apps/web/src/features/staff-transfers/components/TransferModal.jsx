@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Alert, Button, Checkbox, Input, Modal, Select, Spinner } from '../../../components/ui';
-import { dayList, WEEKDAYS } from '../../schedules/utils/scheduleRules.js';
+import { dayList, earliestText, WEEKDAYS } from '../../schedules/utils/scheduleRules.js';
 import { loadBranchShifts, scheduleTransfer } from '../data/transfersApi.js';
 import { destinationOptions, emptyTransfer, overlapProblems, shiftSummary, toggleDay, toggleShift, toTransferBody, validateTransfer } from '../utils/transferRules.js';
 
@@ -35,7 +35,7 @@ function ShiftPicker({ shifts, chosen, problems, onChange, disabled }) {
 
 /**
  * Transfer to another branch (School Owner): the current branch, the destination (active branches
- * of the school), the date it takes effect (tomorrow at the earliest) and the destination shifts,
+ * of the school), the date it takes effect (today + the platform's effective delay at the earliest; 1 day by default) and the destination shifts,
  * then a review step and confirmation. The server checks everything again.
  */
 export function TransferModal({ staff, branches, onClose, onDone }) {
@@ -70,7 +70,7 @@ export function TransferModal({ staff, branches, onClose, onDone }) {
 
   function review(event) {
     event.preventDefault();
-    const found = validateTransfer(form, { earliest: staff.earliestTransferDate, latest: staff.latestTransferDate });
+    const found = validateTransfer(form, { earliest: staff.earliestTransferDate, latest: staff.latestTransferDate, delayDays: staff.effectiveDelayDays });
     setErrors(found);
     if (Object.keys(found).length || Object.keys(problems).length || shifts.status !== 'ready') return;
     setStep('review');
@@ -153,7 +153,7 @@ export function TransferModal({ staff, branches, onClose, onDone }) {
             value={form.effectiveFrom}
             onChange={(e) => set('effectiveFrom', e.target.value)}
             error={errors.effectiveFrom}
-            hint={`From 00:00 (${staff.timeZone}). Until then the staff member works at the current branch; an open check-in can still be checked out there that day.`}
+            hint={`${earliestText(staff.earliestTransferDate, staff.effectiveDelayDays)} at the earliest. From 00:00 (${staff.timeZone}). Until then the staff member works at the current branch; an open check-in can still be checked out there that day.`}
           />
           {form.branchId && (
             <fieldset className="flex flex-col gap-3">

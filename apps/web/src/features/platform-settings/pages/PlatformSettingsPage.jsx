@@ -7,6 +7,7 @@ import { InactivityTimeoutCard, SessionLifetimeCard, SignInSecurityCard } from '
 import { BrandingCard } from '../components/BrandingCard.jsx';
 import { GeneralLayout } from '../components/GeneralLayout.jsx';
 import { NotificationSettingsCard } from '../components/NotificationSettingsCard.jsx';
+import { SchedulingSettingsCard } from '../components/SchedulingSettingsCard.jsx';
 import { RegistrationCard } from '../components/RegistrationCard.jsx';
 import { SaveBar } from '../components/SaveBar.jsx';
 import { ConfigurationCard, LocalizationCard, PlatformInfoCard, PlatformLogoCard } from '../components/SettingsCards.jsx';
@@ -36,7 +37,8 @@ const FIELD_LABELS = {
  * Authentication saves the absolute session lifetime and the inactivity timeout and shows the
  * other sign-in protection the server enforces (read only). Registration shows how schools and
  * accounts are created (read only; there is no public registration). Notifications saves push,
- * reminder defaults and limits, and the digest hour (docs/notifications/). On General, the platform
+ * reminder defaults and limits, and the digest hour (docs/notifications/). Scheduling & Assignments
+ * saves the effective delay and the two "first may start today" switches. On General, the platform
  * switches, uploads, operations and dangerous actions are shown but unavailable. The other
  * sections are not available yet. The active section lives in the URL (?tab=).
  */
@@ -200,7 +202,9 @@ export default function PlatformSettingsPage() {
 
         {data && status !== 'error' && tab === 'notifications' && <NotificationSettingsCard />}
 
-        {data && status !== 'error' && !['general', 'branding', 'authentication', 'registration', 'notifications'].includes(tab) && (
+        {data && status !== 'error' && tab === 'scheduling' && data.settings.scheduling && <SchedulingSettingsCard settings={data.settings.scheduling} />}
+
+        {data && status !== 'error' && !['general', 'branding', 'authentication', 'registration', 'notifications', 'scheduling'].includes(tab) && (
           <Card as="section" aria-label={`${current.label} settings`}>
             <EmptyState
               icon={current.icon}

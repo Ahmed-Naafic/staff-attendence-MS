@@ -440,6 +440,13 @@ model PlatformSettings {
   sessionLifetimeHours     Int?
   /// Inactivity timeout in minutes for every session (5, 10, 15, 30, 60, 120, 240 or 480). Null or any other value: disabled.
   inactivityTimeoutMinutes Int?
+  /// Scheduling & Assignments: the minimum effective delay in calendar days (1–30, platform time
+  /// zone) for schedule changes, assignment changes and staff transfers. Null: 1 day.
+  effectiveDelayDays       Int?
+  /// Whether a branch's first schedule may start today. Null: yes. When false it waits for the delay.
+  immediateFirstSchedule   Boolean?
+  /// Whether a staff member's first assignment set may start today. Null: yes. When false it waits for the delay.
+  immediateFirstAssignment Boolean?
   updatedAt                DateTime @updatedAt
 }
 

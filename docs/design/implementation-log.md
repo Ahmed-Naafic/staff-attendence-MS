@@ -1985,6 +1985,35 @@ Found in the dev data for CIT-001-B001. A Manager scheduled a change with a "nig
 - **Not changed:** saved versions and assignment sets are never rewritten. The dev branch's version from 2026-10-28 keeps its separate night shift; that staff member's assignments were re-saved from 2026-10-30 with the current night shift through `saveAssignments` (audit actor "Command-line operator").
 - **Tests:** `backend/test/schedules.test.js`, the shift key test extended: an added shift with an earlier name (any capitalization) gets its key; an added shift whose earlier namesake is kept under another name is new; a never-used name is new; cancelling a scheduled change and typing the shift in again keeps its key. Results: schedules **20 / 20**; staff, attendance, attendance reports and export **89 / 89** (dev branch). A first run was stopped while the dev database was unreachable; its leftover test schools were removed.
 
+## Scheduling & Assignments settings: configurable effective delay
+
+- **Request:** a configurable effective delay (default 1 calendar day) in Platform Settings; changes saved at once, operational from their date, activated automatically; pending changes visible; transfers included.
+- **Decisions (2026-11-01):**
+  - The two "immediate" switches decide whether a **first** schedule / **first** assignment set may start today (default on, as before).
+  - The delay is a **minimum** of 1–30 calendar days; later dates stay allowed.
+  - It also applies to **staff transfers** (extends T3).
+  - Activation stays **at read time** (no job).
+- **Conflicts reported, not changed silently:**
+  - A 0-day delay would break "a day's rules never change during the day", so it is not offered.
+  - There is no per-school or per-branch time zone; the platform time zone is used.
+  - The existing states (scheduled, current, previous, cancelled) already cover pending, active, superseded and cancelled/replaced, so no status column was added.
+- **Database:** migration `20261101120000_scheduling_policy` adds three nullable columns to `PlatformSettings` (`effectiveDelayDays` with CHECK 1–30, `immediateFirstSchedule`, `immediateFirstAssignment`). Empty means the default, so no data changes. Applied to the dev branch only.
+- **API:**
+  - `PUT /api/platform/settings/scheduling` (SUPER_ADMIN), audited per changed setting as `SCHEDULING_SETTINGS_UPDATED`.
+  - `GET /api/platform/settings` returns `scheduling`.
+  - Schedule, staff detail and Owner staff detail return `effectiveDelayDays` and the earliest date from the policy.
+  - Saves check the policy inside their transaction (`schedulingPolicy.js`).
+- **Activation:** unchanged and reliable on serverless. Versions and sets in effect are resolved by date on every read, so nothing can be missed or applied twice. Due transfers keep their idempotent settling (`settleDueTransfers`, row locks, status check).
+- **Web:**
+  - Platform Settings → **Scheduling & Assignments** tab (`SchedulingSettingsCard`).
+  - Schedule, assignment and transfer forms explain the earliest date with the delay (`effectiveDateHint`, `earliestText`).
+  - Audit label "Update Scheduling Settings".
+- **Not changed:** attendance calculation, recorded events, the one-pending-change rule, cancellation and replacement.
+- **Results:**
+  - New `scheduling-settings.test.js` **18 / 18**: default delay, immediate saving, pending, read-time activation, editing and cancelling pending changes, calendar-day and time-zone boundaries, replaced changes, transfers, history preservation, authorization and audit.
+  - Together with the schedules, staff, staff-transfers, audit, general-settings and authentication-settings suites: **142 / 142**.
+  - Web **73 / 73**; `npm run build:web` passes.
+
 ## Mobile: live clock on Home, and the APK build
 
 - **Clock:** Home shows the current time (HH:MM:SS, updated every second) under the date, in the branch time zone from the API (`today.timeZone`), the same zone as the recorded check-in and check-out times. `LiveClock` in `HomeScreen.js` (re-renders alone); `formatClock` in `lib/format.js`; test in `home.test.js`.

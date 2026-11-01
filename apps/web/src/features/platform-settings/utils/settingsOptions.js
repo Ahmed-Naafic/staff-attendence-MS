@@ -2,6 +2,7 @@
 import {
   Bell,
   Blocks,
+  CalendarClock,
   DatabaseBackup,
   KeyRound,
   Palette,
@@ -22,6 +23,7 @@ export const settingsTabs = [
   { value: 'branding', label: 'Branding', icon: Palette },
   { value: 'authentication', label: 'Authentication', icon: KeyRound },
   { value: 'registration', label: 'Registration', icon: UserPlus },
+  { value: 'scheduling', label: 'Scheduling & Assignments', icon: CalendarClock },
   { value: 'notifications', label: 'Notifications', icon: Bell },
   { value: 'system', label: 'System', icon: Server },
   { value: 'integrations', label: 'Integrations', icon: Blocks },

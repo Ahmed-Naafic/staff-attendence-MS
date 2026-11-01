@@ -50,6 +50,8 @@ export const AUDIT_ACTIONS = {
   GENERAL_SETTINGS_UPDATED: 'GENERAL_SETTINGS_UPDATED',
   // Platform Settings: Authentication (Super Admin)
   AUTH_SETTINGS_UPDATED: 'AUTH_SETTINGS_UPDATED',
+  // Platform Settings: Scheduling & Assignments (Super Admin)
+  SCHEDULING_SETTINGS_UPDATED: 'SCHEDULING_SETTINGS_UPDATED',
   // Super Admin recovery (command line only: scripts/reset-super-admin-password.js)
   SUPER_ADMIN_PASSWORD_RESET: 'SUPER_ADMIN_PASSWORD_RESET',
   // Notifications (docs/notifications/): settings and preferences changes and announcements (N22).
@@ -102,6 +104,7 @@ export const FILTERABLE_ACTIONS = [
   'BRANDING_UPDATED',
   'GENERAL_SETTINGS_UPDATED',
   'AUTH_SETTINGS_UPDATED',
+  'SCHEDULING_SETTINGS_UPDATED',
   'SUPER_ADMIN_PASSWORD_RESET',
   'NOTIFICATION_SETTINGS_UPDATED',
   'BRANCH_REMINDER_SETTINGS_UPDATED',
@@ -224,6 +227,7 @@ export const ACTION_LABELS = {
   BRANDING_UPDATED: 'Update Branding',
   GENERAL_SETTINGS_UPDATED: 'Update General Settings',
   AUTH_SETTINGS_UPDATED: 'Update Authentication Settings',
+  SCHEDULING_SETTINGS_UPDATED: 'Update Scheduling Settings',
   SUPER_ADMIN_PASSWORD_RESET: 'Reset Super Admin Password',
   NOTIFICATION_SETTINGS_UPDATED: 'Update Notification Settings',
   BRANCH_REMINDER_SETTINGS_UPDATED: 'Update Branch Reminder Settings',

@@ -193,8 +193,9 @@ Approved in the Branch Schedules decisions (shifts: several, same-day, no overla
   - **Shift identity:** a shift keeps its identity across versions when it is edited in a change (its times, days, name or minutes may change); staff assignments follow it. A shift removed in a change is gone from that date. An added shift with the **name of a shift the branch had before** (in any version, including a cancelled or replaced scheduled one; names compared regardless of capitalization) is that shift again, so its staff assignments apply again; the most recently saved shift with that name decides. Otherwise (a new name, or that earlier shift is already kept in the same change under another name) adding a shift creates a new one.
 - **Check-out ON/OFF:** part of each schedule version (so it changes on an effective date like the rest of the schedule). The Manager chooses it for each version.
 - **Effective date:** a date in the branch time zone; the version applies from 00:00 that day.
-  - The branch's **first** schedule (when no schedule is in effect today) may start **today**.
-  - Any later change starts **tomorrow at the earliest**, so a day's rules never change during the day; at most **one year** ahead. Earlier dates are refused (no backdating), judged by the server's clock in the branch time zone.
+  - The branch's **first** schedule (when no schedule is in effect today) may start **today** when Platform Settings allow it (the default); otherwise it waits for the effective delay like any change.
+  - Any later change starts at the earliest on **today + the effective delay** (Platform Settings → Scheduling & Assignments; **1 calendar day by default**, i.e. tomorrow), so a day's rules never change during the day; the Manager may choose any later date up to **one year** ahead. Earlier dates are refused (no backdating), judged by the server's clock in the branch time zone.
+  - A change is **saved at once** and shown as scheduled (pending) with its date; the version in effect stays operational until then, and the change applies from 00:00 of its date automatically (see Scheduling & Assignments settings).
   - At most one **scheduled** (future) version: saving another replaces it, and the Manager can cancel it before it starts. A replaced or cancelled version is kept, marked as cancelled; it never applies.
   - A branch with no schedule in effect has no working days (attendance cannot be judged there until a schedule starts).
 - **Time zone:** schedule times are wall-clock times in the **platform time zone** (General settings, set by the Super Admin; UTC when not set). The time zone in force when a version is saved is recorded with that version and used for it, so a later change of the platform time zone applies to versions saved after the change and never re-times recorded schedules. The schedule page shows the time zone.
@@ -218,7 +219,7 @@ Approved in the Staff decisions STAFF-001 to STAFF-003 and the four follow-up an
 - **Suspend / reactivate:** Manager only. Suspend needs confirmation and a reason (3–500 characters): sign-in is blocked, sessions end at once, the account, Staff ID and assignment history are kept. Reactivate needs confirmation; earlier sessions stay ended.
 - **Shift assignments:**
   - An assignment is one **shift of the staff member's branch** plus the **days** the staff member works it (one or more of that shift's working days). A staff member can have several assignments, including different shifts on different days and more than one shift on the same day (shifts of a branch never overlap on a shared day). The same shift cannot be listed twice, and two assigned shifts may not overlap on a shared day.
-  - Assignments are saved as a complete **assignment set** effective from a date (in the branch time zone): the staff member's first set may start **today**; any later change starts **tomorrow at the earliest**, at most one year ahead; no backdating. One scheduled (future) set can be replaced or cancelled; replaced and cancelled sets are kept as cancelled and never apply. Earlier sets are never rewritten. A set with no shifts means "no assigned shifts" from that date.
+  - Assignments are saved as a complete **assignment set** effective from a date (in the branch time zone): the staff member's first set may start **today** when Platform Settings allow it (the default; otherwise it waits for the effective delay); any later change starts at the earliest on **today + the effective delay** (1 calendar day by default, i.e. tomorrow), at most one year ahead; no backdating. A change is saved at once, and the set in effect stays operational until the new one's date. One scheduled (future) set can be replaced or cancelled; replaced and cancelled sets are kept as cancelled and never apply. Earlier sets are never rewritten. A set with no shifts means "no assigned shifts" from that date.
   - Each assigned shift and its days are checked against the **branch schedule in effect on the set's effective date**. A set with shifts cannot start on a date when the branch has no schedule in effect.
   - **Shifts keep their identity across schedule versions** (a stable shift key), so a schedule change that only edits a shift's times or days keeps its assignments. On any day, an assignment applies only if that shift exists in the schedule in effect that day and works that day; if a schedule change removes the shift or the day, the assignment stops applying from that date (and applies again if they return). Attendance will use the set and the schedule in effect on the event's day.
 - **Suspended branch or school:** the Manager can view staff and assignments but cannot create, edit, suspend, reactivate, reset or change assignments (409 `BRANCH_NOT_OPERATING`), as for schedules. Whether staff of a suspended branch or school can sign in is still open (today they can).
@@ -234,7 +235,7 @@ Approved decisions T1–T12 (2026-10-31). Specification, lifecycle, API and test
   - For transfers the Owner sees a staff list (name, Staff ID, job title, status, branch; no contact or account data) and each staff member's transfer history.
 - **Destination (T7):** another branch of the same school that is operating (branch and school active). A suspended staff member, or one at a suspended branch, can be transferred. No cross-school transfers.
 - **When (T3):**
-  - From a chosen date, tomorrow at the earliest and at most one year ahead.
+  - From a chosen date, at the earliest on **today + the effective delay** (Platform Settings → Scheduling & Assignments; 1 calendar day by default, i.e. tomorrow; extended to transfers 2026-11-01) and at most one year ahead.
   - It takes effect at **00:00** of that date (platform time zone); until then the staff member works at the old branch.
   - One transfer at a time can be scheduled, and the Owner can cancel it before it takes effect.
   - Simultaneous requests cannot both schedule one.
@@ -437,6 +438,26 @@ Existing technical behavior (not approved policy, unchanged):
 - **Minimum password length:** 12 characters wherever a password is set (owner creation, Manager temporary passwords and password changes, the Super Admin scripts).
 - **Activity:** any API request with a valid session counts as activity. It is recorded at most once a minute per session, and only for sessions that pass every check, so a session can end up to a minute before the timeout has fully passed since its last request (never later). A session ended for inactivity is deleted, so it stays ended.
 - **Applying a timeout change:** immediately in the API process that saved it; other API processes read the setting at most 30 seconds later.
+
+## Scheduling & Assignments settings (Super Admin)
+
+Approved 2026-11-01. Builds on Branch schedules and shifts, Staff accounts and shift assignments, and Staff transfers above. Where those said "tomorrow at the earliest" or "the first may start today", these settings decide; their defaults keep that behaviour.
+
+- **Access:** only SUPER_ADMIN changes them (Platform Settings → Scheduling & Assignments), enforced by the API: 401 when signed out, 403 for other roles. Managers and Owners see their effect as the earliest date on their forms.
+- **Effective delay:** a whole number of **calendar days from 1 to 30**, default **1**. A change saved today can start at the earliest on **today + N** (in the platform time zone, from 00:00); the user may choose any later date up to one year ahead. It applies to **branch schedule changes, staff assignment changes and staff transfers**.
+  - It counts calendar days, not 24-hour periods: a change saved at 23:59 with a 1-day delay can start at 00:00, one minute later.
+  - A delay of 0 is not offered, so a day's rules never change during the day.
+- **First schedule may start today** (default **on**): a branch with no schedule in effect today can start its first schedule today. Off: it waits for the delay like any change.
+- **First assignments may start today** (default **on**): a staff member with no assignment set in effect today can be assigned from today. Off: the first set waits for the delay.
+- **Saved at once, effective later:** every change is saved immediately and shown as **scheduled** (pending) with its effective date. Until then the current schedule, assignments and branch stay operational.
+- **States:** schedule versions and assignment sets are **scheduled** (pending), **current** (active), **previous** (superseded by a later one) or **cancelled** (cancelled by the user, or replaced by a newer pending change). Transfers are SCHEDULED, COMPLETED or CANCELLED. All are kept; nothing is edited or deleted.
+- **Activation:** automatic, with no step that can be missed or repeated.
+  - The schedule and assignments in effect on a day are the newest non-cancelled versions whose date has arrived. This is decided whenever they are read, so a pending change applies from exactly 00:00 of its date.
+  - A due transfer counts from its time at once. Its record (the staff member's branch, COMPLETED, `STAFF_TRANSFERRED`) is settled idempotently by the API on requests and by the daily job.
+- **Pending changes:** at most one per branch schedule, per staff member's assignments and per staff member's transfer. Saving another replaces it (the earlier one is kept as cancelled), and it can be cancelled before its date.
+- **Applying a settings change:** to changes saved afterwards. Changes already saved keep their dates, and recorded attendance keeps the schedule version and assignment it was judged against.
+- **Audit:** each setting that actually changes records one `SCHEDULING_SETTINGS_UPDATED` event ("Update Scheduling Settings") with the field and its previous and new values (e.g. Effective delay: 1 day → 3 days), in the same transaction. The same values, or a rejected value, record nothing. Schedule, assignment and transfer changes keep their own audit events.
+- **Time zone:** the platform time zone (General settings). There is no per-school or per-branch time zone.
 
 ## Notifications
 

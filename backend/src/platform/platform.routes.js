@@ -9,6 +9,7 @@ import { DASHBOARD_RANGES, getDashboard } from '../features/dashboard/dashboard.
 import { readAuthentication } from '../features/platform-settings/authenticationInput.js';
 import { readBranding } from '../features/platform-settings/brandingInput.js';
 import { readGeneral } from '../features/platform-settings/generalInput.js';
+import { readScheduling, updateScheduling } from '../features/platform-settings/schedulingPolicy.js';
 import {
   getSettings,
   platformTimeZone,
@@ -154,6 +155,10 @@ platformRouter.put('/settings/branding', async (req, res) => {
 // Authentication: the session lifetime and inactivity timeout only. The other authentication values are fixed.
 platformRouter.put('/settings/authentication', async (req, res) => {
   res.json({ authentication: await updateAuthentication(readAuthentication(jsonBody(req)), req.user, req) });
+});
+// Scheduling & Assignments: the effective delay and whether a first schedule / first assignments may start today.
+platformRouter.put('/settings/scheduling', async (req, res) => {
+  res.json({ scheduling: await updateScheduling(readScheduling(jsonBody(req)), req.user, req) });
 });
 // Notifications: reminder defaults and limits, push on/off and the digest hour (N5).
 platformRouter.get('/settings/notifications', async (req, res) => {

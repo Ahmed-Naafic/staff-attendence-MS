@@ -42,6 +42,7 @@ export const auditActions = {
   BRANDING_UPDATED: { label: 'Update Branding', tone: 'info', done: 'Platform name updated successfully.' },
   GENERAL_SETTINGS_UPDATED: { label: 'Update General Settings', tone: 'info', done: 'General settings updated successfully.' },
   AUTH_SETTINGS_UPDATED: { label: 'Update Authentication Settings', tone: 'info', security: true, done: 'Authentication settings updated successfully.' },
+  SCHEDULING_SETTINGS_UPDATED: { label: 'Update Scheduling Settings', tone: 'info', done: 'Scheduling settings updated successfully.' },
   STAFF_TRANSFER_SCHEDULED: { label: 'Schedule Staff Transfer', tone: 'info', done: 'Staff transfer scheduled.' },
   STAFF_TRANSFER_CANCELLED: { label: 'Cancel Staff Transfer', tone: 'info', done: 'Scheduled staff transfer cancelled.' },
   STAFF_TRANSFERRED: { label: 'Staff Transfer Took Effect', tone: 'success', done: 'The staff member now works at the new branch.' },

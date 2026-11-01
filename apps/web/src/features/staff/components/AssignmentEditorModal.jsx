@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Checkbox, Input, Modal } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
-import { dayList, WEEKDAYS } from '../../schedules/utils/scheduleRules.js';
+import { dayList, effectiveDateHint, WEEKDAYS } from '../../schedules/utils/scheduleRules.js';
 import { saveAssignments } from '../data/staffApi.js';
 import { shiftsOn, toRequestAssignments, validateAssignments } from '../utils/staffRules.js';
 
@@ -105,11 +105,7 @@ export function AssignmentEditorModal({ staff, open, onClose, onSaved }) {
               setErrors({});
             }}
             error={errors.effectiveFrom}
-            hint={
-              info.current
-                ? `Tomorrow (${info.earliestEffectiveDate}) at the earliest, so today's assignments do not change during the day.`
-                : `No assignments in effect: they can start today (${info.today}).`
-            }
+            hint={effectiveDateHint({ first: !info.current, today: info.today, earliest: info.earliestEffectiveDate, delayDays: info.effectiveDelayDays, what: 'assignments' })}
           />
           {info.scheduled && (
             <p className="rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-small text-warning-fg">

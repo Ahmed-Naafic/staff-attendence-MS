@@ -12,6 +12,7 @@ import {
 import { MIN_PASSWORD_LENGTH } from '../auth/password.js';
 import { MAX_FAILURES, WINDOW_MS } from '../auth/rateLimit.js';
 import { platformNameProblem } from './brandingInput.js';
+import { schedulingSettings } from './schedulingPolicy.js';
 import { DATE_FORMATS, FIELD_LABELS, GENERAL_FIELDS, isValidTimeZone, readField, TIME_FORMATS } from './generalInput.js';
 
 const { version } = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
@@ -19,7 +20,8 @@ const { version } = JSON.parse(readFileSync(new URL('../../../package.json', imp
 /**
  * Platform settings. Values come from the single PlatformSettings row (empty when it does not
  * exist). A Super Admin can change Branding (the platform name), General (platform information
- * and localization) and the session lifetime and inactivity timeout (Authentication); everything
+ * and localization), the session lifetime and inactivity timeout (Authentication) and the
+ * effective delay with the two "first may start today" switches (Scheduling; schedulingPolicy.js); everything
  * else is read-only. Platform Configuration switches are not stored: their rules are not approved,
  * so `configuration` is null. `conflicts` lists stored General values that do not meet the
  * approved rules (kept as stored, never replaced; a save must give a valid value), and `display`
@@ -31,7 +33,7 @@ export async function getSettings() {
   const { information, localization, conflicts, display } = generalSettings(row);
   return {
     isDemo: false,
-    settings: { information, localization, configuration: null, conflicts, display, authentication: authenticationSettings(row) },
+    settings: { information, localization, configuration: null, conflicts, display, authentication: authenticationSettings(row), scheduling: schedulingSettings(row) },
     system: { version, database: 'PostgreSQL (Neon)' },
   };
 }
