@@ -34,6 +34,9 @@ export function NotificationsProvider({ children, openDatabase = getDatabase, cl
   const [pushState, setPushState] = useState(null);
   const pushDone = useRef(false);
   const pushStateRef = useRef(null);
+  const pushRunning = useRef(null);
+  const pushAgain = useRef(false);
+  const deviceToken = useRef(null);
 
   const refreshCount = useCallback(async () => {
     try {
@@ -129,12 +132,27 @@ export function NotificationsProvider({ children, openDatabase = getDatabase, cl
   // The first registration asks for the notification permission (Android 13+ and iOS show nothing
   // without it); the system shows its prompt only while the permission has not been refused.
   const pushWanted = preferences?.push?.enabled;
+  // One registration at a time: a request while one runs is sent once, after it.
   const registerPush = useCallback(
-    (ask = false) =>
-      enablePush(api, { ask }).then((state) => {
-        pushStateRef.current = state;
-        setPushState(state);
-      }),
+    (ask = false) => {
+      if (pushRunning.current) {
+        pushAgain.current = true;
+        return pushRunning.current;
+      }
+      pushRunning.current = enablePush(api, { ask })
+        .then((state) => {
+          pushStateRef.current = state;
+          setPushState(state);
+        })
+        .finally(() => {
+          pushRunning.current = null;
+          if (pushAgain.current) {
+            pushAgain.current = false;
+            registerPush();
+          }
+        });
+      return pushRunning.current;
+    },
     [api],
   );
   useEffect(() => {
@@ -159,8 +177,14 @@ export function NotificationsProvider({ children, openDatabase = getDatabase, cl
   }, [userId, pushWanted, registerPush]);
   useEffect(() => {
     if (!userId || !pushWanted) return undefined;
-    // The listener gets the new device (FCM/APNs) token; the Expo token is read again from it.
-    const sub = Notifications.addPushTokenListener?.(() => registerPush());
+    // The listener gets the new device (FCM/APNs) token; the Expo token is read again from it. Android
+    // also reports the unchanged token each time it is read (which registering does): only a token
+    // not seen before is registered, or registering would repeat without end.
+    const sub = Notifications.addPushTokenListener?.((token) => {
+      if (token?.data && token.data === deviceToken.current) return;
+      deviceToken.current = token?.data ?? null;
+      registerPush();
+    });
     return () => sub?.remove?.();
   }, [userId, pushWanted, registerPush]);
 

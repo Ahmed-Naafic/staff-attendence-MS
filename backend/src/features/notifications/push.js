@@ -86,12 +86,25 @@ export async function registerDevice({ userId, sessionId }, body) {
   if (!['android', 'ios'].includes(body.platform)) throw badRequest('Check the highlighted fields.', { platform: 'Choose android or ios.' });
   const prisma = getPrisma();
   // The token now belongs to this session only: a phone where another account signed in before
-  // stops receiving that account's pushes.
-  await prisma.$transaction([
-    prisma.pushDevice.deleteMany({ where: { OR: [{ token: body.token }, { sessionId }] } }),
-    prisma.pushDevice.create({ data: { userId, sessionId, token: body.token, platform: body.platform } }),
-  ]);
-  return { registered: true };
+  // stops receiving that account's pushes. Saved in place (one row per session), so the same
+  // registration sent twice at once does not fail; a clash with a parallel request is tried again.
+  const save = () =>
+    prisma.$transaction([
+      prisma.pushDevice.deleteMany({ where: { token: body.token, NOT: { sessionId } } }),
+      prisma.pushDevice.upsert({
+        where: { sessionId },
+        create: { userId, sessionId, token: body.token, platform: body.platform },
+        update: { userId, token: body.token, platform: body.platform, lastSeenAt: new Date() },
+      }),
+    ]);
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      await save();
+      return { registered: true };
+    } catch (error) {
+      if (error?.code !== 'P2002' || attempt === 3) throw error;
+    }
+  }
 }
 
 /** Removes this session's push token (the app turned push off or is signing out). */

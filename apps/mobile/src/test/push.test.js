@@ -126,6 +126,21 @@ test('token refresh: a new token from the system is registered again', async () 
   await waitFor(() => expect(server.calls.filter((c) => c.key === 'POST /api/notifications/devices').at(-1).body.token).toBe('ExponentPushToken[refreshed-device-token]'));
 });
 
+test('the same device token reported again (Android does on every token read): no repeated registration', async () => {
+  const server = pushServer();
+  await renderApp(server);
+  await waitFor(() => expect(server.count('POST /api/notifications/devices')).toBe(1));
+  await waitFor(() => expect(Notifications.addPushTokenListener).toHaveBeenCalled());
+  const listener = lastCall(Notifications.addPushTokenListener);
+  await act(async () => listener({ type: 'android', data: 'fcm-token' }));
+  await waitFor(() => expect(server.count('POST /api/notifications/devices')).toBe(2));
+  await act(async () => {
+    for (let i = 0; i < 5; i += 1) listener({ type: 'android', data: 'fcm-token' });
+  });
+  await act(async () => {});
+  expect(server.count('POST /api/notifications/devices')).toBe(2);
+});
+
 test('foreground: a push received while the app is open updates the unread count', async () => {
   let unread = 0;
   const server = pushServer({ 'GET /api/notifications/unread-count': () => [200, { unreadCount: unread }] });

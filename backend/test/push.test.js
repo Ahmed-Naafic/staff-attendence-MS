@@ -137,6 +137,12 @@ test('token refresh: the session’s new token replaces its old one', async () =
   assert.deepEqual((await devicesOf(people.S1)).map((d) => d.token), [token('a2'), token('b1')]);
 });
 
+test('the same registration sent several times at once: all succeed, one device row for the session', async () => {
+  const statuses = await Promise.all(Array.from({ length: 6 }, () => register(people.S1.phoneA, token('a2'), 'android')));
+  assert.deepEqual(statuses.map((r) => r.status), Array(6).fill(201));
+  assert.deepEqual((await devicesOf(people.S1)).map((d) => d.token), [token('a2'), token('b1')]);
+});
+
 test('account switching: the phone’s token moves to the new account; the previous account no longer reaches it', async () => {
   people.S2.phoneA = await signIn(people.S2);
   assert.equal((await register(people.S2.phoneA, token('a2'), 'android')).status, 201);
