@@ -44,6 +44,17 @@ import {
 import { attendanceOptions, attendanceRecords, attendanceSummary, reportToday } from '../features/attendance/attendanceReports.service.js';
 import { previewExport, sendCsvExport, sendPdfExport, sendXlsxExport } from '../features/attendance/attendanceExport.js';
 import { readExportQuery, readOptionsQuery, readRecordsQuery, readSummaryQuery } from '../features/attendance/reportInput.js';
+import { readAcademicYearCreation, readAcademicYearStart, readAcademicYearUpdate } from '../features/academic-years/academicYearInput.js';
+import {
+  closeAcademicYear,
+  createAcademicYear,
+  deleteAcademicYear,
+  getAcademicYear,
+  listAcademicYearAudit,
+  listAcademicYears,
+  startAcademicYear,
+  updateAcademicYear,
+} from '../features/academic-years/academicYears.service.js';
 
 /**
  * School Owner API (/api/owner). Every route requires a signed-in OWNER with a linked school;
@@ -121,6 +132,38 @@ ownerRouter.post('/managers/:id/reactivate', async (req, res) => {
 });
 ownerRouter.post('/managers/:id/password', async (req, res) => {
   res.json({ manager: await resetManagerPassword(req.school, req.params.id, readTemporaryPassword(jsonBody(req)), req.user, req) });
+});
+
+// ---- Academic years (school level; docs/business-rules.md → Academic years) ----
+// The body of start is optional: { closeCurrent: true } confirms closing the current year.
+const optionalJsonBody = (req) => (req.body === undefined ? {} : jsonBody(req));
+
+ownerRouter.get('/academic-years', async (req, res) => {
+  res.json(await listAcademicYears(req.school));
+});
+ownerRouter.get('/academic-years/audit-logs', async (req, res) => {
+  const page = optionalInt(req.query, 'page', { min: 1, max: 100000, fallback: 1 });
+  const pageSize = optionalInt(req.query, 'pageSize', { min: 1, max: 100, fallback: 10 });
+  res.json(await listAcademicYearAudit(req.school, { year: optionalId(req.query, 'year'), page, pageSize }));
+});
+ownerRouter.get('/academic-years/:id', async (req, res) => {
+  res.json({ academicYear: await getAcademicYear(req.school, req.params.id) });
+});
+ownerRouter.post('/academic-years', async (req, res) => {
+  res.status(201).json({ academicYear: await createAcademicYear(req.school, readAcademicYearCreation(jsonBody(req)), req.user, req) });
+});
+ownerRouter.patch('/academic-years/:id', async (req, res) => {
+  res.json({ academicYear: await updateAcademicYear(req.school, req.params.id, readAcademicYearUpdate(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/academic-years/:id/start', async (req, res) => {
+  res.json(await startAcademicYear(req.school, req.params.id, readAcademicYearStart(optionalJsonBody(req)), req.user, req));
+});
+ownerRouter.post('/academic-years/:id/close', async (req, res) => {
+  res.json({ academicYear: await closeAcademicYear(req.school, req.params.id, req.user, req) });
+});
+ownerRouter.delete('/academic-years/:id', async (req, res) => {
+  await deleteAcademicYear(req.school, req.params.id, req.user, req);
+  res.status(204).end();
 });
 
 // ---- Staff transfers between the school's branches (T1: School Owner only) ----

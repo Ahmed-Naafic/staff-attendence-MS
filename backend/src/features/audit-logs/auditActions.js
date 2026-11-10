@@ -20,6 +20,12 @@ export const AUDIT_ACTIONS = {
   BRANCH_REACTIVATED: 'BRANCH_REACTIVATED',
   BRANCH_LOCATION_CHANGED: 'BRANCH_LOCATION_CHANGED',
   BRANCH_LOCATION_CHANGE_CANCELLED: 'BRANCH_LOCATION_CHANGE_CANCELLED',
+  // Academic years (School Owner; school level)
+  ACADEMIC_YEAR_CREATED: 'ACADEMIC_YEAR_CREATED',
+  ACADEMIC_YEAR_UPDATED: 'ACADEMIC_YEAR_UPDATED',
+  ACADEMIC_YEAR_STARTED: 'ACADEMIC_YEAR_STARTED',
+  ACADEMIC_YEAR_CLOSED: 'ACADEMIC_YEAR_CLOSED',
+  ACADEMIC_YEAR_DELETED: 'ACADEMIC_YEAR_DELETED',
   // Branch schedules (Manager)
   BRANCH_SCHEDULE_CHANGED: 'BRANCH_SCHEDULE_CHANGED',
   BRANCH_SCHEDULE_CHANGE_CANCELLED: 'BRANCH_SCHEDULE_CHANGE_CANCELLED',
@@ -97,6 +103,11 @@ export const FILTERABLE_ACTIONS = [
   'BRANCH_LOCATION_CHANGE_CANCELLED',
   'BRANCH_SCHEDULE_CHANGED',
   'BRANCH_SCHEDULE_CHANGE_CANCELLED',
+  'ACADEMIC_YEAR_CREATED',
+  'ACADEMIC_YEAR_UPDATED',
+  'ACADEMIC_YEAR_STARTED',
+  'ACADEMIC_YEAR_CLOSED',
+  'ACADEMIC_YEAR_DELETED',
   'MANAGER_CREATED',
   'MANAGER_UPDATED',
   'MANAGER_TRANSFERRED',
@@ -177,6 +188,12 @@ export const BRANCH_ACTIONS = [
 ];
 
 /**
+ * Academic year events (School Owner actions). School Owners read their own school's; Super Admins
+ * read them in the audit log. School activity: left out of the dashboard's recent platform activity.
+ */
+export const ACADEMIC_YEAR_ACTIONS = ['ACADEMIC_YEAR_CREATED', 'ACADEMIC_YEAR_UPDATED', 'ACADEMIC_YEAR_STARTED', 'ACADEMIC_YEAR_CLOSED', 'ACADEMIC_YEAR_DELETED'];
+
+/**
  * Manager account events (School Owner actions, and the Manager's own password change). School
  * Owners read their own school's; Super Admins read them in the audit log. School activity: left
  * out of the dashboard's recent platform activity.
@@ -232,6 +249,11 @@ export const ACTION_LABELS = {
   BRANCH_LOCATION_CHANGE_CANCELLED: 'Cancel Branch Location Change',
   BRANCH_SCHEDULE_CHANGED: 'Change Branch Schedule',
   BRANCH_SCHEDULE_CHANGE_CANCELLED: 'Cancel Branch Schedule Change',
+  ACADEMIC_YEAR_CREATED: 'Plan Academic Year',
+  ACADEMIC_YEAR_UPDATED: 'Update Academic Year',
+  ACADEMIC_YEAR_STARTED: 'Start Academic Year',
+  ACADEMIC_YEAR_CLOSED: 'Close Academic Year',
+  ACADEMIC_YEAR_DELETED: 'Delete Academic Year',
   MANAGER_CREATED: 'Create Manager',
   MANAGER_UPDATED: 'Update Manager',
   MANAGER_TRANSFERRED: 'Transfer Manager',
