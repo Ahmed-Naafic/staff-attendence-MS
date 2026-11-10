@@ -158,6 +158,7 @@ model School {
   notifications     Notification[]
   announcements     AnnouncementSchool[]
   staffTransfers    StaffTransfer[]
+  academicYears     AcademicYear[]
 
   @@index([status])
   @@index([location])
@@ -851,4 +852,36 @@ model BackupSettings {
   manualRetentionDays Int      @default(30)
   updatedById         String?
   updatedAt           DateTime @updatedAt
+}
+
+/// Academic year lifecycle (docs/business-rules.md → Academic years): PLANNED → CURRENT → CLOSED.
+enum AcademicYearStatus {
+  PLANNED
+  CURRENT
+  CLOSED
+}
+
+/// A school's academic year (School Owner manages; the school's Managers read). School level: it
+/// applies to every branch of the school. At most one CURRENT year per school, and the date ranges
+/// of one school's years never overlap (partial unique index and exclusion constraint in the
+/// migration). A CLOSED year is read only; only a PLANNED year can be deleted.
+model AcademicYear {
+  id        String             @id @default(uuid())
+  schoolId  String
+  school    School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  /// e.g. "2026/2027". At most 40 characters; unique in the school regardless of capitalization.
+  name      String
+  /// The name compared for uniqueness (same folding as branch names; computed by the API).
+  nameKey   String
+  /// Calendar dates (no time, no time zone). Both inclusive; endDate after startDate.
+  startDate DateTime           @db.Date
+  endDate   DateTime           @db.Date
+  status    AcademicYearStatus @default(PLANNED)
+  startedAt DateTime?
+  closedAt  DateTime?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  @@unique([schoolId, nameKey])
+  @@index([schoolId, startDate])
 }

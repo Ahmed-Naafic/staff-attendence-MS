@@ -1,4 +1,5 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { AcademicYearsPage } from '../../features/academic-years';
 import { AttendanceReportsPage } from '../../features/attendance-reports';
 import { AuditLogsPage } from '../../features/audit-logs';
 import { BranchesPage } from '../../features/branches';
@@ -105,6 +106,8 @@ const routes = [
         children: [{ path: ':staffId', element: <></> }],
       },
 
+      // OWNER and MANAGER — academic years (school level: the Owner manages them, Managers read them; enforced by the API)
+      { path: 'academic-years', element: <AcademicYearsPage />, handle: { title: 'Academic Years', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — attendance reports (read only; each role sees its own scope, decided by the API)
       { path: 'attendance', element: <AttendanceReportsPage />, handle: { title: 'Attendance', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — notification centre (each sees only their own notifications, decided by the API)

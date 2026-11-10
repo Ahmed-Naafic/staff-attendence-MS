@@ -526,6 +526,27 @@ Approved decisions N1–N24 (2026-10-30). Full specification: `docs/notification
 - **Language (N24):** notifications and announcements are in **Somali** only (no English fallback); the interfaces' own labels stay English.
 - **Audit (N22):** `NOTIFICATION_SETTINGS_UPDATED`, `BRANCH_REMINDER_SETTINGS_UPDATED` (a branch event), `NOTIFICATION_PREFERENCES_UPDATED` (includes location consent), `ANNOUNCEMENT_CREATED`, `_UPDATED`, `_PUBLISHED`, `_SCHEDULED`, `_WITHDRAWN`, with old and new values. Deliveries, openings and read actions are not audited.
 
+## Academic years (School Owner and Manager)
+
+- **Level:** an academic year belongs to one school and applies to every branch of it. The school is the one linked to the signed-in account (the owner's school, or the Manager's branch's school), decided by the server; a school given in a request is refused, never used.
+- **Who:**
+  - **School Owner:** plans, edits, starts and closes their school's academic years, and deletes planned ones (`/api/owner/academic-years`).
+  - **Manager:** reads their school's academic years and the current one (`GET /api/manager/academic-years`); cannot change them.
+  - **Super Admin and staff:** no access (403). Super Admins read academic year events in the audit log.
+- **Fields:** name (required, at most 40 characters, spaces trimmed and collapsed; unique in the school regardless of capitalization, compared like branch names), start date and end date (calendar dates, both inclusive; end after start; at most 731 days).
+- **Statuses:** PLANNED → CURRENT → CLOSED.
+  - A new year is PLANNED, including a school's first.
+  - **Start:** only a planned year. At most one CURRENT year per school: when the school already has one, starting another needs confirmation (`closeCurrent: true`, otherwise 409 CURRENT_EXISTS) and closes it in the same transaction. Years are started in date order: a year that starts before a current or closed year cannot be started (409 OUT_OF_ORDER).
+  - **Close:** only the current year; the school then has no current year until another is started. Closing cannot be undone.
+  - **Delete:** only a planned year (never started). Current and closed years are kept.
+  - A CLOSED year is read only (409 YEAR_CLOSED).
+- **No overlap:** the date ranges of one school's years never overlap (both dates inclusive; adjacent years are fine). The API names the year that overlaps (409 DATES_OVERLAP); the database enforces it too, as it does "one current year per school", so simultaneous requests cannot break either rule.
+- **School suspension:** while the school is suspended, its owner and Managers can read its academic years, but nothing can be changed (409 SCHOOL_SUSPENDED).
+- **Audit:**
+  - Recorded events are `ACADEMIC_YEAR_CREATED`, `ACADEMIC_YEAR_UPDATED` (changed fields with old and new values), `ACADEMIC_YEAR_STARTED`, `ACADEMIC_YEAR_CLOSED` (also when a start closes the previous year) and `ACADEMIC_YEAR_DELETED` (with the deleted year's details).
+  - Each event is written in the same transaction as the change. Unchanged submissions, rejected requests and failed changes record nothing.
+  - School Owners read their own school's events (`GET /api/owner/academic-years/audit-logs`), without network address or browser details. They are school activity, not listed in the Super Admin dashboard's recent platform activity.
+
 ## Not yet decided
 
 Open questions found while building the platform. These are **not rules**: the related actions stay unavailable until they are answered.

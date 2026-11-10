@@ -8,6 +8,7 @@ import { attendanceOptions, attendanceRecords, attendanceSummary, reportToday } 
 import { previewExport, sendCsvExport, sendPdfExport, sendXlsxExport } from '../features/attendance/attendanceExport.js';
 import { readExportQuery, readOptionsQuery, readRecordsQuery, readSummaryQuery } from '../features/attendance/reportInput.js';
 import { operatingState } from '../features/branches/branches.service.js';
+import { listAcademicYears } from '../features/academic-years/academicYears.service.js';
 import { readScheduleChange } from '../features/schedules/scheduleInput.js';
 import { getBranchReminderSettings, updateBranchReminderSettings } from '../features/notifications/notificationSettings.service.js';
 import { cancelScheduledSchedule, getSchedule, listVersions, saveSchedule } from '../features/schedules/schedules.service.js';
@@ -43,6 +44,11 @@ managerRouter.get('/branch', (req, res) => {
     branch: { ...branch, phone: branch.phone ?? '', status: fromDbStatus(branch.status), operating, notOperatingReasons: reasons },
     school: { id: school.id, code: school.code, name: school.name, status: fromDbStatus(school.status) },
   });
+});
+
+// ---- Academic years of the Manager's school (read only; the School Owner manages them) ----
+managerRouter.get('/academic-years', async (req, res) => {
+  res.json(await listAcademicYears(req.branch.school));
 });
 
 // ---- Schedule (read only while the branch or school is suspended: 409 BRANCH_NOT_OPERATING) ----
