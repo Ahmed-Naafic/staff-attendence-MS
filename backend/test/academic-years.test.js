@@ -383,3 +383,63 @@ describe('school suspension and audit view', () => {
     assert.ok(theirs.body.items.every((e) => !res.body.items.some((mine) => mine.id === e.id)));
   });
 });
+
+describe('attendance reports filtered by academic year', () => {
+  const shift = (day, n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+  let today;
+  let year;
+
+  before(async () => {
+    today = (await ownerA('/api/owner/attendance/options')).body.today;
+    await wipe('A');
+    await wipe('B');
+    year = (await plan('Report Year', shift(today, -100), shift(today, 100))).body.academicYear;
+  });
+
+  test('without dates: the latest 62 days of the year, up to today', async () => {
+    const res = await ownerA(`/api/owner/attendance/summary?academicYear=${year.id}`);
+    assert.equal(res.status, 200);
+    assert.deepEqual([res.body.filters.from, res.body.filters.to, res.body.filters.academicYear], [shift(today, -61), today, 'Report Year']);
+  });
+
+  test('dates inside the year are kept; dates outside it are refused', async () => {
+    let res = await ownerA(`/api/owner/attendance/records?academicYear=${year.id}&from=${shift(today, -90)}&to=${shift(today, -80)}`);
+    assert.equal(res.status, 200);
+    assert.deepEqual([res.body.filters.from, res.body.filters.to], [shift(today, -90), shift(today, -80)]);
+    res = await ownerA(`/api/owner/attendance/records?academicYear=${year.id}&from=${shift(today, -101)}&to=${shift(today, -90)}`);
+    assert.equal(res.status, 400);
+    assert.ok(res.body.details.from);
+  });
+
+  test('"current" needs a current year; a year that has not started is refused', async () => {
+    let res = await ownerA('/api/owner/attendance/summary?academicYear=current');
+    assert.equal(res.status, 400);
+    assert.ok(res.body.details.academicYear);
+    await start(year.id, {});
+    res = await ownerA('/api/owner/attendance/summary?academicYear=current');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.filters.academicYear, 'Report Year');
+
+    const future = (await plan('Future Year', shift(today, 200), shift(today, 400))).body.academicYear;
+    res = await ownerA(`/api/owner/attendance/summary?academicYear=${future.id}`);
+    assert.equal(res.status, 400);
+    assert.match(res.body.details.academicYear, /starts on/);
+    assert.equal((await ownerA('/api/owner/attendance/summary?academicYear=not-an-id')).status, 400);
+  });
+
+  test('Managers filter by their school\'s years; another school\'s year is not found', async () => {
+    let res = await managerA(`/api/manager/attendance/summary?academicYear=${year.id}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.body.filters.academicYear, 'Report Year');
+    const theirs = (await plan('Their Year', shift(today, -100), shift(today, 100), ownerB)).body.academicYear;
+    res = await managerA(`/api/manager/attendance/summary?academicYear=${theirs.id}`);
+    assert.equal(res.status, 404);
+    assert.equal((await ownerA(`/api/owner/attendance/records?academicYear=${theirs.id}`)).status, 404);
+  });
+
+  test('exports name the academic year in their filters', async () => {
+    const res = await ownerA(`/api/owner/attendance/export/preview?academicYear=${year.id}`);
+    assert.equal(res.status, 200);
+    assert.match(res.body.head.filters, /Academic year: Report Year/);
+  });
+});

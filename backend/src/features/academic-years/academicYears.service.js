@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { conflict, notFound } from '../../common/httpError.js';
+import { badRequest, conflict, notFound } from '../../common/httpError.js';
 import { isUuid } from '../../common/validate.js';
 import { getPrisma } from '../../config/prisma.js';
 import { ACADEMIC_YEAR_ACTIONS, AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
@@ -270,3 +270,46 @@ export async function deleteAcademicYear(school, id, user, req) {
 /** Academic year audit events of this school (School Owner view), newest first. */
 export const listAcademicYearAudit = (school, { year, page, pageSize }) =>
   listSchoolAudit(school, { targetType: 'academic_year', action: { in: ACADEMIC_YEAR_ACTIONS }, ...(year && { targetId: year }) }, { page, pageSize });
+
+// ---- attendance reports by academic year (School Owner and Manager) ----------------------------
+
+const REPORT_WINDOW_DAYS = 62;
+const addDayStrings = (dayString, n) => new Date(Date.parse(`${dayString}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
+
+/**
+ * Applies an `academicYear` report filter (an id of the school's year, or 'current') to a report
+ * query: chosen dates must lie inside the year (400 otherwise); missing dates default to the year's
+ * latest days up to today (at most the report's 62 days). Returns { query, academicYear } — the
+ * query without `academicYear` and with from/to set, ready for the report readers, which check the
+ * usual rules (at most 62 days, never after today) again. Without the filter: { query, academicYear: null }.
+ */
+export async function applyAcademicYearFilter(query, schoolId, today) {
+  const { academicYear: raw, ...rest } = query;
+  if (raw === undefined || raw === '') return { query: rest, academicYear: null };
+  if (typeof raw !== 'string' || (raw !== 'current' && !isUuid(raw))) {
+    throw badRequest('"academicYear" must be an id or "current".', { academicYear: 'Choose an academic year from the list.' });
+  }
+  const year = await getPrisma().academicYear.findFirst({ where: raw === 'current' ? { schoolId, status: 'CURRENT' } : { id: raw, schoolId } });
+  if (!year) {
+    if (raw === 'current') throw badRequest('Your school has no current academic year.', { academicYear: 'Your school has no current academic year.' });
+    throw notFound('Academic year not found.');
+  }
+  const start = day(year.startDate);
+  const end = day(year.endDate);
+  if (start > today) throw badRequest(`${year.name} has not started yet (it starts on ${start}).`, { academicYear: `${year.name} starts on ${start}.` });
+
+  const single = (v) => (Array.isArray(v) ? v[0] : v);
+  let from = single(rest.from) || undefined;
+  let to = single(rest.to) || undefined;
+  const last = end < today ? end : today;
+  if (!from && !to) to = last;
+  if (!to) to = [addDayStrings(from, REPORT_WINDOW_DAYS - 1), last].sort()[0];
+  if (!from) from = [addDayStrings(to, -(REPORT_WINDOW_DAYS - 1)), start].sort().at(-1);
+
+  const outside = (value) => typeof value === 'string' && (value < start || value > end);
+  if (outside(from) || outside(to)) {
+    const message = `Choose dates within ${year.name} (${start} to ${end}).`;
+    throw badRequest(message, { ...(outside(from) && { from: message }), ...(outside(to) && { to: message }) });
+  }
+  return { query: { ...rest, from, to }, academicYear: toAcademicYear(year) };
+}

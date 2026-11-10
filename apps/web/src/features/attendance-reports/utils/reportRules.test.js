@@ -57,3 +57,28 @@ test('labels: check-out states are never attendance statuses or absence; duratio
   assert.equal(formatMeters(28.4), '28.4 m');
   assert.equal(formatMeters(null), null);
 });
+
+test('academic year filter: the year preset, presets and custom dates stay inside the year', async () => {
+  const { yearWindow } = await import('./reportRules.js');
+  const year = { id: ID, name: '2026/2027', startDate: '2026-09-01', endDate: '2027-06-30' };
+  // The latest 62 days up to today, or from the start when the year is younger.
+  assert.deepEqual(yearWindow(year, '2026-12-31'), { from: '2026-10-31', to: '2026-12-31' });
+  assert.deepEqual(yearWindow(year, '2026-09-10'), { from: '2026-09-01', to: '2026-09-10' });
+  assert.deepEqual(yearWindow(year, '2027-08-15'), { from: '2027-04-30', to: '2027-06-30' });
+  assert.equal(yearWindow(year, '2026-08-01'), null);
+
+  const view = (query) => readView(params(query), 'OWNER');
+  assert.deepEqual(viewRange(view(`year=${ID}&range=academicYear`), '2026-12-31', year), { from: '2026-10-31', to: '2026-12-31', errors: {} });
+  assert.ok(viewRange(view(`year=${ID}&range=academicYear`), '2026-08-01', year).errors.range);
+  // A preset outside the year is refused; inside it is kept.
+  assert.ok(viewRange(view(`year=${ID}&range=today`), '2027-08-15', year).errors.range);
+  assert.equal(viewRange(view(`year=${ID}&range=today`), '2026-12-31', year).from, '2026-12-31');
+  // Custom dates outside the year: the field that is outside gets the message.
+  const custom = viewRange(view(`year=${ID}&range=custom&from=2026-08-20&to=2026-09-05`), '2026-12-31', year);
+  assert.ok(custom.errors.from && !custom.errors.to);
+
+  // The year preset needs a year; a chosen year counts as a filter.
+  assert.equal(view('range=academicYear').range, 'today');
+  assert.equal(view(`year=${ID}`).year, ID);
+  assert.equal(isFiltered(view(`year=${ID}`)), true);
+});

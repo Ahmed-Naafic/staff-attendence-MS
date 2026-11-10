@@ -23,6 +23,17 @@ export const RANGE_PRESETS = [
   { value: 'custom', label: 'Custom dates' },
 ];
 
+/** The preset offered once an academic year is chosen: its latest days up to today. */
+export const YEAR_PRESET = { value: 'academicYear', label: 'Academic year (latest 62 days)' };
+
+/** { from, to } of the year preset: the year's latest MAX_DAYS days up to today; null when the year has not started. */
+export function yearWindow(year, today) {
+  if (year.startDate > today) return null;
+  const to = year.endDate < today ? year.endDate : today;
+  const earliest = addDays(to, -(MAX_DAYS - 1));
+  return { from: earliest > year.startDate ? earliest : year.startDate, to };
+}
+
 /** { from, to } of a preset for `today` (weeks start on Monday). */
 export function presetRange(preset, today) {
   if (preset === 'yesterday') return { from: addDays(today, -1), to: addDays(today, -1) };
@@ -84,7 +95,7 @@ export const formatMeters = (value) => (typeof value === 'number' && Number.isFi
 export const shortTime = (time) => (time ? time.slice(0, 5) : null);
 
 const TABS = ['overview', 'records', 'branches'];
-const ENUMS = { status: ['present', 'late'], checkOut: Object.keys(CHECK_OUT), sort: SORTS.map((s) => s.value), range: RANGE_PRESETS.map((p) => p.value) };
+const ENUMS = { status: ['present', 'late'], checkOut: Object.keys(CHECK_OUT), sort: SORTS.map((s) => s.value), range: [...RANGE_PRESETS.map((p) => p.value), YEAR_PRESET.value] };
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -98,9 +109,13 @@ export function readView(params, role) {
   const tab = TABS.includes(params.get('tab')) && (owner || params.get('tab') !== 'branches') ? params.get('tab') : 'overview';
   const branch = owner ? id('branch') : '';
   const sort = pick('sort');
+  const year = id('year');
+  const range = pick('range') || 'today';
   return {
     tab,
-    range: pick('range') || 'today',
+    // The year preset only applies with a chosen year.
+    range: range === YEAR_PRESET.value && !year ? 'today' : range,
+    year,
     from: params.get('from') ?? '',
     to: params.get('to') ?? '',
     branch,
@@ -115,12 +130,30 @@ export function readView(params, role) {
 }
 
 /** Whether any filter differs from the default view (today, everything). */
-export const isFiltered = (view) => view.range !== 'today' || Boolean(view.branch || view.staff || view.shift || view.status || view.checkOut || view.q);
+export const isFiltered = (view) => view.range !== 'today' || Boolean(view.year || view.branch || view.staff || view.shift || view.status || view.checkOut || view.q);
 
-/** The dates a view asks for: { from, to, errors } — null dates while today is unknown or the custom range is invalid. */
-export function viewRange(view, today) {
-  if (!today) return { from: null, to: null, errors: {} };
-  if (view.range !== 'custom') return { ...presetRange(view.range, today), errors: {} };
-  const errors = validateRange(view.from, view.to, today);
-  return Object.keys(errors).length ? { from: null, to: null, errors } : { from: view.from, to: view.to, errors };
+/**
+ * The dates a view asks for: { from, to, errors } — null dates while today is unknown or the range is
+ * invalid. With an academic year (`year`: the chosen year, once loaded), the dates must lie inside it.
+ */
+export function viewRange(view, today, year = null) {
+  const none = (errors = {}) => ({ from: null, to: null, errors });
+  if (!today) return none();
+  let range;
+  if (view.range === YEAR_PRESET.value) {
+    if (!year) return none();
+    range = yearWindow(year, today);
+    if (!range) return none({ range: `${year.name} has not started yet (it starts on ${year.startDate}).` });
+  } else if (view.range === 'custom') {
+    const errors = validateRange(view.from, view.to, today);
+    if (Object.keys(errors).length) return none(errors);
+    range = { from: view.from, to: view.to };
+  } else range = presetRange(view.range, today);
+
+  if (year && (range.from < year.startDate || range.to > year.endDate)) {
+    const message = `Choose dates within ${year.name} (${year.startDate} to ${year.endDate}).`;
+    if (view.range !== 'custom') return none({ range: message });
+    return none({ ...(range.from < year.startDate && { from: message }), ...(range.to > year.endDate && { to: message }) });
+  }
+  return { ...range, errors: {} };
 }

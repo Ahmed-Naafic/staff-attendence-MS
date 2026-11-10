@@ -8,7 +8,7 @@ import { attendanceOptions, attendanceRecords, attendanceSummary, reportToday } 
 import { previewExport, sendCsvExport, sendPdfExport, sendXlsxExport } from '../features/attendance/attendanceExport.js';
 import { readExportQuery, readOptionsQuery, readRecordsQuery, readSummaryQuery } from '../features/attendance/reportInput.js';
 import { operatingState } from '../features/branches/branches.service.js';
-import { listAcademicYears } from '../features/academic-years/academicYears.service.js';
+import { applyAcademicYearFilter, listAcademicYears } from '../features/academic-years/academicYears.service.js';
 import { readScheduleChange } from '../features/schedules/scheduleInput.js';
 import { getBranchReminderSettings, updateBranchReminderSettings } from '../features/notifications/notificationSettings.service.js';
 import { cancelScheduledSchedule, getSchedule, listVersions, saveSchedule } from '../features/schedules/schedules.service.js';
@@ -111,34 +111,41 @@ managerRouter.delete('/staff/:id/assignments/scheduled', async (req, res) => {
 // reported; a branch in the request is refused (reportInput.js).
 const managerScope = (req) => ({ schoolId: req.branch.school.id, branchId: req.branch.id });
 
+/** A report query with the optional academic year filter applied (dates inside the year; see applyAcademicYearFilter). */
+async function reportQuery(req, read, today) {
+  const { query, academicYear } = await applyAcademicYearFilter(req.query, req.branch.school.id, today);
+  const filters = read(query, { role: 'MANAGER', today });
+  return academicYear ? { ...filters, academicYear: academicYear.name } : filters;
+}
+
 managerRouter.get('/attendance/summary', async (req, res) => {
   const today = await reportToday();
-  res.json(await attendanceSummary(managerScope(req), readSummaryQuery(req.query, { role: 'MANAGER', today }), { today }));
+  res.json(await attendanceSummary(managerScope(req), await reportQuery(req, readSummaryQuery, today), { today }));
 });
 managerRouter.get('/attendance/records', async (req, res) => {
   const today = await reportToday();
-  res.json(await attendanceRecords(managerScope(req), readRecordsQuery(req.query, { role: 'MANAGER', today }), { today }));
+  res.json(await attendanceRecords(managerScope(req), await reportQuery(req, readRecordsQuery, today), { today }));
 });
 managerRouter.get('/attendance/options', async (req, res) => {
   const today = await reportToday();
-  res.json(await attendanceOptions(managerScope(req), readOptionsQuery(req.query, { role: 'MANAGER', today }), { today }));
+  res.json(await attendanceOptions(managerScope(req), await reportQuery(req, readOptionsQuery, today), { today }));
 });
 // Exports of every record of the current branch matching the filters (at most 10,000 rows, refused rather than truncated): CSV (data only), Excel and PDF.
 managerRouter.get('/attendance/export.csv', async (req, res) => {
   const today = await reportToday();
-  await sendCsvExport(res, 'MANAGER', managerScope(req), readExportQuery(req.query, { role: 'MANAGER', today }));
+  await sendCsvExport(res, 'MANAGER', managerScope(req), await reportQuery(req, readExportQuery, today));
 });
 managerRouter.get('/attendance/export.xlsx', async (req, res) => {
   const today = await reportToday();
-  await sendXlsxExport(res, 'MANAGER', managerScope(req), readExportQuery(req.query, { role: 'MANAGER', today }));
+  await sendXlsxExport(res, 'MANAGER', managerScope(req), await reportQuery(req, readExportQuery, today));
 });
 managerRouter.get('/attendance/export.pdf', async (req, res) => {
   const today = await reportToday();
-  await sendPdfExport(res, 'MANAGER', managerScope(req), readExportQuery(req.query, { role: 'MANAGER', today }));
+  await sendPdfExport(res, 'MANAGER', managerScope(req), await reportQuery(req, readExportQuery, today));
 });
 // Preview of an export (JSON): heading, summary and total of every matching row, and the first 50 rows
 // as the files write them. Not the download's data: each download reads and checks everything again.
 managerRouter.get('/attendance/export/preview', async (req, res) => {
   const today = await reportToday();
-  res.json(await previewExport('MANAGER', managerScope(req), readExportQuery(req.query, { role: 'MANAGER', today })));
+  res.json(await previewExport('MANAGER', managerScope(req), await reportQuery(req, readExportQuery, today)));
 });

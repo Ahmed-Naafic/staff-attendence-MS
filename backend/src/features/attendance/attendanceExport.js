@@ -199,6 +199,7 @@ async function generatedAt(at = new Date()) {
 /** The filters in words (none → 'None'). */
 function filterText(filters, context) {
   const parts = [
+    filters.academicYear && `Academic year: ${filters.academicYear}`,
     context.staff && `Staff: ${context.staff.name} (${context.staff.staffId})`,
     context.shift && `Shift: ${context.shift}`,
     filters.status && `Status: ${FILTER_STATUS[filters.status]}`,

@@ -541,6 +541,7 @@ Approved decisions N1–N24 (2026-10-30). Full specification: `docs/notification
   - **Delete:** only a planned year (never started). Current and closed years are kept.
   - A CLOSED year is read only (409 YEAR_CLOSED).
 - **No overlap:** the date ranges of one school's years never overlap (both dates inclusive; adjacent years are fine). The API names the year that overlaps (409 DATES_OVERLAP); the database enforces it too, as it does "one current year per school", so simultaneous requests cannot break either rule.
+- **Attendance reports:** School Owners and Managers can filter attendance reports and exports by one of their school's academic years (or the current one). The report dates must then lie inside that year (still at most 62 days, never after today); without chosen dates, the report covers the year's latest 62 days up to today. A year that has not started yet cannot be chosen. Exports name the year in their filters.
 - **School suspension:** while the school is suspended, its owner and Managers can read its academic years, but nothing can be changed (409 SCHOOL_SUSPENDED).
 - **Audit:**
   - Recorded events are `ACADEMIC_YEAR_CREATED`, `ACADEMIC_YEAR_UPDATED` (changed fields with old and new values), `ACADEMIC_YEAR_STARTED`, `ACADEMIC_YEAR_CLOSED` (also when a start closes the previous year) and `ACADEMIC_YEAR_DELETED` (with the deleted year's details).

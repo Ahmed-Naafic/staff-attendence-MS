@@ -1,14 +1,16 @@
 import { Button, Card, Input, Select } from '../../../components/ui';
-import { MAX_DAYS, RANGE_PRESETS } from '../utils/reportRules.js';
+import { MAX_DAYS, RANGE_PRESETS, YEAR_PRESET } from '../utils/reportRules.js';
+
+const YEAR_LABEL = { current: ' (current)', closed: ' (closed)', planned: ' (planned)' };
 
 const statusLabel = (status) => (status === 'suspended' ? ' (suspended)' : '');
 
 /**
  * Report filters, applied by the API: dates (presets from the server's today, or custom dates —
  * inclusive, at most 62 days), branch (Owner), staff (search, then choose), shift (Manager; Owner only
- * with one branch: D16). The page states the time zone used.
+ * with one branch: D16), academic year (dates then stay inside it). The page states the time zone used.
  */
-export function ReportFilterBar({ role, view, update, reset, filtered, today, options, rangeErrors, staffQuery, onStaffQuery }) {
+export function ReportFilterBar({ role, view, update, reset, filtered, today, options, rangeErrors, staffQuery, onStaffQuery, years = [], year = null }) {
   const owner = role === 'OWNER';
   const branches = options?.branches ?? [];
   const staff = options?.staff ?? [];
@@ -17,6 +19,10 @@ export function ReportFilterBar({ role, view, update, reset, filtered, today, op
   const staffChoices = view.staff && !staff.some((s) => s.id === view.staff) ? [{ id: view.staff, name: 'Selected staff member', staffId: '' }, ...staff] : staff;
   const shiftChoices = view.shift && !shifts.some((s) => s.key === view.shift) ? [{ key: view.shift, name: 'Selected shift', start: '', end: '' }, ...shifts] : shifts;
   const showShift = !owner || Boolean(view.branch);
+  const presets = view.year ? [YEAR_PRESET, ...RANGE_PRESETS] : RANGE_PRESETS;
+  // Custom dates stay inside the chosen year and never pass today.
+  const minDay = year?.startDate;
+  const maxDay = year && today && year.endDate < today ? year.endDate : (today ?? undefined);
 
   return (
     <Card as="section" aria-labelledby="attendance-filters-title" className="p-4">
@@ -25,19 +31,28 @@ export function ReportFilterBar({ role, view, update, reset, filtered, today, op
       </h2>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Select
+          label="Academic year"
+          options={[{ value: '', label: 'Any academic year' }, ...years.map((y) => ({ value: y.id, label: `${y.name}${YEAR_LABEL[y.status] ?? ''}` }))]}
+          value={view.year}
+          hint={year ? `${year.startDate} to ${year.endDate}` : undefined}
+          onChange={(event) => update({ year: event.target.value, range: event.target.value ? YEAR_PRESET.value : 'today' })}
+        />
+        <Select
           label="Dates"
-          options={RANGE_PRESETS}
+          options={presets}
           value={view.range}
+          error={rangeErrors.range}
           onChange={(event) => {
             const range = event.target.value;
-            // Custom starts from today's date so the inputs are never empty.
-            update(range === 'custom' ? { range, from: view.from || today || '', to: view.to || today || '' } : { range });
+            // Custom starts from the latest allowed day so the inputs are never empty.
+            const start = maxDay || today || '';
+            update(range === 'custom' ? { range, from: view.from || start, to: view.to || start } : { range });
           }}
         />
         {view.range === 'custom' && (
           <>
-            <Input type="date" label="From" value={view.from} max={today ?? undefined} error={rangeErrors.from} onChange={(event) => update({ from: event.target.value })} />
-            <Input type="date" label="To" value={view.to} max={today ?? undefined} error={rangeErrors.to} hint={`Both dates included, at most ${MAX_DAYS} days.`} onChange={(event) => update({ to: event.target.value })} />
+            <Input type="date" label="From" value={view.from} min={minDay} max={maxDay} error={rangeErrors.from} onChange={(event) => update({ from: event.target.value })} />
+            <Input type="date" label="To" value={view.to} min={minDay} max={maxDay} error={rangeErrors.to} hint={`Both dates included, at most ${MAX_DAYS} days.`} onChange={(event) => update({ to: event.target.value })} />
           </>
         )}
         {owner && (

@@ -196,7 +196,7 @@ export async function attendanceSummary(base, filters, { compareBranches = false
   const eventZones = [...new Set([...versions.values()].map((v) => v.timeZone))].sort();
   const timeZones = eventZones.length ? eventZones : await scopeZones(scope, prisma).then((z) => (z.length ? z : platformTimeZone().then((tz) => [tz])));
   return {
-    filters: { from: filters.from, to: filters.to, branch: filters.branch ?? null, staff: filters.staff ?? null, shift: filters.shift ?? null },
+    filters: { from: filters.from, to: filters.to, academicYear: filters.academicYear ?? null, branch: filters.branch ?? null, staff: filters.staff ?? null, shift: filters.shift ?? null },
     today,
     timeZones,
     totals,
@@ -315,6 +315,7 @@ export async function attendanceRecords(base, filters, { withBranch = false, now
     filters: {
       from: filters.from,
       to: filters.to,
+      academicYear: filters.academicYear ?? null,
       branch: filters.branch ?? null,
       staff: filters.staff ?? null,
       shift: filters.shift ?? null,
