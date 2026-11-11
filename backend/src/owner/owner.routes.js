@@ -44,8 +44,31 @@ import {
 import { attendanceOptions, attendanceRecords, attendanceSummary, reportToday } from '../features/attendance/attendanceReports.service.js';
 import { previewExport, sendCsvExport, sendPdfExport, sendXlsxExport } from '../features/attendance/attendanceExport.js';
 import { readExportQuery, readOptionsQuery, readRecordsQuery, readSummaryQuery } from '../features/attendance/reportInput.js';
+import {
+  readClassCreation,
+  readClassListQuery,
+  readClassUpdate,
+  readSectionCreation,
+  readSectionListQuery,
+  readSectionUpdate,
+} from '../features/classes/classInput.js';
+import {
+  createClass,
+  createSection,
+  deactivateClass,
+  deactivateSection,
+  getClass,
+  getSection,
+  listClasses,
+  listSections,
+  reactivateClass,
+  reactivateSection,
+  updateClass,
+  updateSection,
+} from '../features/classes/classes.service.js';
 import { readAcademicYearCreation, readAcademicYearStart, readAcademicYearUpdate } from '../features/academic-years/academicYearInput.js';
 import {
+  applyAcademicYearFilter,
   closeAcademicYear,
   createAcademicYear,
   deleteAcademicYear,
@@ -166,6 +189,47 @@ ownerRouter.delete('/academic-years/:id', async (req, res) => {
   res.status(204).end();
 });
 
+// ---- Classes (School Owner) and sections of every branch of the school ----
+const classScope = (req) => ({ school: req.school, branch: null });
+
+ownerRouter.get('/classes', async (req, res) => {
+  res.json(await listClasses(classScope(req), readClassListQuery(req.query, { role: 'OWNER' })));
+});
+ownerRouter.get('/classes/:id', async (req, res) => {
+  res.json(await getClass(classScope(req), req.params.id, readClassListQuery(req.query, { role: 'OWNER' })));
+});
+ownerRouter.post('/classes', async (req, res) => {
+  res.status(201).json({ class: await createClass(classScope(req), readClassCreation(jsonBody(req)), req.user, req) });
+});
+ownerRouter.patch('/classes/:id', async (req, res) => {
+  res.json({ class: await updateClass(classScope(req), req.params.id, readClassUpdate(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/classes/:id/deactivate', async (req, res) => {
+  res.json({ class: await deactivateClass(classScope(req), req.params.id, req.user, req) });
+});
+ownerRouter.post('/classes/:id/reactivate', async (req, res) => {
+  res.json({ class: await reactivateClass(classScope(req), req.params.id, req.user, req) });
+});
+
+ownerRouter.get('/sections', async (req, res) => {
+  res.json(await listSections(classScope(req), readSectionListQuery(req.query, { role: 'OWNER' })));
+});
+ownerRouter.get('/sections/:id', async (req, res) => {
+  res.json({ section: await getSection(classScope(req), req.params.id) });
+});
+ownerRouter.post('/sections', async (req, res) => {
+  res.status(201).json({ section: await createSection(classScope(req), readSectionCreation(jsonBody(req), { role: 'OWNER' }), req.user, req) });
+});
+ownerRouter.patch('/sections/:id', async (req, res) => {
+  res.json({ section: await updateSection(classScope(req), req.params.id, readSectionUpdate(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/sections/:id/deactivate', async (req, res) => {
+  res.json({ section: await deactivateSection(classScope(req), req.params.id, req.user, req) });
+});
+ownerRouter.post('/sections/:id/reactivate', async (req, res) => {
+  res.json({ section: await reactivateSection(classScope(req), req.params.id, req.user, req) });
+});
+
 // ---- Staff transfers between the school's branches (T1: School Owner only) ----
 // The staff list here is for transfers: name, Staff ID, job title, status, branch; no contact data.
 ownerRouter.get('/staff', async (req, res) => {
@@ -202,34 +266,41 @@ ownerRouter.get('/audit-logs', async (req, res) => {
 // The school is req.school (from the account); a branch or staff member of another school is not found.
 const ownerScope = (req) => ({ schoolId: req.school.id });
 
+/** A report query with the optional academic year filter applied (dates inside the year; see applyAcademicYearFilter). */
+async function reportQuery(req, read, today) {
+  const { query, academicYear } = await applyAcademicYearFilter(req.query, req.school.id, today);
+  const filters = read(query, { role: 'OWNER', today });
+  return academicYear ? { ...filters, academicYear: academicYear.name } : filters;
+}
+
 ownerRouter.get('/attendance/summary', async (req, res) => {
   const today = await reportToday();
-  res.json(await attendanceSummary(ownerScope(req), readSummaryQuery(req.query, { role: 'OWNER', today }), { compareBranches: true, today }));
+  res.json(await attendanceSummary(ownerScope(req), await reportQuery(req, readSummaryQuery, today), { compareBranches: true, today }));
 });
 ownerRouter.get('/attendance/records', async (req, res) => {
   const today = await reportToday();
-  res.json(await attendanceRecords(ownerScope(req), readRecordsQuery(req.query, { role: 'OWNER', today }), { withBranch: true, today }));
+  res.json(await attendanceRecords(ownerScope(req), await reportQuery(req, readRecordsQuery, today), { withBranch: true, today }));
 });
 ownerRouter.get('/attendance/options', async (req, res) => {
   const today = await reportToday();
-  res.json(await attendanceOptions(ownerScope(req), readOptionsQuery(req.query, { role: 'OWNER', today }), { listBranches: true, today }));
+  res.json(await attendanceOptions(ownerScope(req), await reportQuery(req, readOptionsQuery, today), { listBranches: true, today }));
 });
 // Exports of every record matching the filters (at most 10,000 rows, refused rather than truncated): CSV (data only), Excel and PDF.
 ownerRouter.get('/attendance/export.csv', async (req, res) => {
   const today = await reportToday();
-  await sendCsvExport(res, 'OWNER', ownerScope(req), readExportQuery(req.query, { role: 'OWNER', today }));
+  await sendCsvExport(res, 'OWNER', ownerScope(req), await reportQuery(req, readExportQuery, today));
 });
 ownerRouter.get('/attendance/export.xlsx', async (req, res) => {
   const today = await reportToday();
-  await sendXlsxExport(res, 'OWNER', ownerScope(req), readExportQuery(req.query, { role: 'OWNER', today }));
+  await sendXlsxExport(res, 'OWNER', ownerScope(req), await reportQuery(req, readExportQuery, today));
 });
 ownerRouter.get('/attendance/export.pdf', async (req, res) => {
   const today = await reportToday();
-  await sendPdfExport(res, 'OWNER', ownerScope(req), readExportQuery(req.query, { role: 'OWNER', today }));
+  await sendPdfExport(res, 'OWNER', ownerScope(req), await reportQuery(req, readExportQuery, today));
 });
 // Preview of an export (JSON): heading, summary and total of every matching row, and the first 50 rows
 // as the files write them. Not the download's data: each download reads and checks everything again.
 ownerRouter.get('/attendance/export/preview', async (req, res) => {
   const today = await reportToday();
-  res.json(await previewExport('OWNER', ownerScope(req), readExportQuery(req.query, { role: 'OWNER', today })));
+  res.json(await previewExport('OWNER', ownerScope(req), await reportQuery(req, readExportQuery, today)));
 });

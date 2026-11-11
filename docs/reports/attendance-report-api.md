@@ -49,11 +49,12 @@ Definitions are in `attendance-calculation-rules.md`; decisions (Dn) in `attenda
 | Parameter | Format | Default | Validation |
 |---|---|---|---|
 | `from`, `to` | `YYYY-MM-DD` work dates (the branch-local day stored with each event) | Today in the platform time zone. With only one given, the other is the same day. | A strict, real date; `from` ≤ `to`; **both included**, at most **62 days**; `to` ≤ today (D13) |
+| `academicYear` | UUID of one of the school's academic years, or `current` | — (any dates) | The year must belong to the account's school (else 404) and have started; `current` needs a current year (400). `from`/`to` must lie inside the year (400). Missing dates default to the year's latest days up to today (at most 62). Also accepted by `options` and the exports, whose Filters line names the year; responses echo it as `filters.academicYear` (the year's name). |
 | `branch` | UUID | — (all branches) | Owner only; see §2 |
 | `staff` | UUID | — | See §2 |
 | `shift` | UUID (shift key) | — | See §2 |
 
-- **Errors:** 400 `VALIDATION_ERROR` with a message, and `details` per field (`from`, `to`, `branch`, `staff`, `shift`) where useful.
+- **Errors:** 400 `VALIDATION_ERROR` with a message, and `details` per field (`from`, `to`, `academicYear`, `branch`, `staff`, `shift`) where useful.
 - **Repeated parameters** are refused (`"from" must be given once.`).
 - **Unknown parameters** are ignored, as elsewhere in the API.
 

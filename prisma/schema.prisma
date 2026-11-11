@@ -159,6 +159,8 @@ model School {
   announcements     AnnouncementSchool[]
   staffTransfers    StaffTransfer[]
   academicYears     AcademicYear[]
+  classes           SchoolClass[]
+  sections          Section[]
 
   @@index([status])
   @@index([location])
@@ -201,6 +203,7 @@ model Branch {
   reminderSettings   BranchReminderSettings?
   transfersOut       StaffTransfer[]         @relation("TransferFrom")
   transfersIn        StaffTransfer[]         @relation("TransferTo")
+  sections           Section[]
 
   @@unique([schoolId, number])
   @@unique([schoolId, code])
@@ -881,7 +884,67 @@ model AcademicYear {
   closedAt  DateTime?
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
+  sections  Section[]
 
   @@unique([schoolId, nameKey])
   @@index([schoolId, startDate])
+}
+
+/// Class and section status: deactivated instead of deleted, so history keeps them.
+enum ClassStatus {
+  ACTIVE
+  INACTIVE
+}
+
+/// A permanent class of a school (e.g. "Grade 7"), created once by the School Owner and reused
+/// every academic year (docs/business-rules.md → Classes and sections). Never deleted.
+model SchoolClass {
+  id            String      @id @default(uuid())
+  schoolId      String
+  school        School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  /// At most 60 characters; unique in the school regardless of capitalization.
+  name          String
+  /// The name compared for uniqueness (same folding as branch names; computed by the API).
+  nameKey       String
+  description   String?
+  /// Academic progression order (1 = first class). Unique in the school.
+  sequence      Int
+  status        ClassStatus @default(ACTIVE)
+  deactivatedAt DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  sections Section[]
+
+  @@unique([schoolId, nameKey])
+  @@unique([schoolId, sequence])
+  @@index([schoolId, status])
+}
+
+/// A section of a class for one academic year in one branch (e.g. "Grade 7A" in 2026/2027 at Main
+/// Branch). A new year gets new sections; old ones stay with their year. Never deleted.
+model Section {
+  id             String       @id @default(uuid())
+  /// The school of the class, year and branch (checked by the API to be the same school).
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId       String
+  branch         Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  classId        String
+  class          SchoolClass  @relation(fields: [classId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  /// e.g. "A". At most 20 characters; unique per class, year and branch regardless of capitalization.
+  name           String
+  nameKey        String
+  capacity       Int?
+  room           String?
+  status         ClassStatus  @default(ACTIVE)
+  deactivatedAt  DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([classId, academicYearId, branchId, nameKey])
+  @@index([schoolId, academicYearId])
+  @@index([branchId, academicYearId])
 }

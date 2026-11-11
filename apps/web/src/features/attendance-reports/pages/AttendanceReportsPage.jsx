@@ -2,6 +2,7 @@ import { useId, useState } from 'react';
 import { PageContainer, PageHeader } from '../../../components/layout';
 import { Alert, Button, Card, ErrorState, Skeleton, TabPanel, Tabs } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
+import { loadAcademicYears } from '../../academic-years';
 import { useSession } from '../../auth';
 import { BranchesPanel } from '../components/BranchesPanel.jsx';
 import { OverviewPanel } from '../components/OverviewPanel.jsx';
@@ -36,8 +37,8 @@ function LoadProblem({ error, retry, onClear }) {
   }
   if (error?.status === 404) {
     return (
-      <Alert variant="warning" title="Not available" action={<Button size="sm" variant="outline" onClick={onClear}>Clear branch and staff</Button>}>
-        The selected branch or staff member is not part of your reports.
+      <Alert variant="warning" title="Not available" action={<Button size="sm" variant="outline" onClick={onClear}>Clear filters</Button>}>
+        The selected academic year, branch or staff member is not part of your reports.
       </Alert>
     );
   }
@@ -58,7 +59,14 @@ export default function AttendanceReportsPage() {
   const { user } = useSession();
   const role = user.role === 'OWNER' ? 'OWNER' : 'MANAGER';
   const tabsId = useId();
-  const { view, filtered, update, reset } = useReportView(role);
+  const { view: urlView, filtered, update, reset } = useReportView(role);
+  // The school's academic years (newest first) for the year filter. A year in the URL that is not
+  // one of them (an old link) is ignored rather than breaking the page.
+  const academicYears = useApiData(() => loadAcademicYears(role), `years|${role}`);
+  const years = academicYears.data?.items ?? [];
+  const year = years.find((y) => y.id === urlView.year) ?? null;
+  const yearUnknown = Boolean(urlView.year) && academicYears.status !== 'loading' && !year;
+  const view = yearUnknown ? { ...urlView, year: '', range: urlView.range === 'academicYear' ? 'today' : urlView.range } : urlView;
   const [staffQuery, setStaffQuery] = useState('');
   const [selected, setSelected] = useState(null);
 
@@ -66,22 +74,22 @@ export default function AttendanceReportsPage() {
   // filter choices (branches, the shifts of the dates, staff) for the chosen range.
   const day = useApiData(() => loadOptions(role), `today|${role}`);
   const today = day.data?.today ?? null;
-  const range = viewRange(view, today);
+  const range = viewRange(view, today, year);
   const ready = Boolean(range.from);
   const options = useApiData(
     () => (ready ? loadOptions(role, { from: range.from, to: range.to, branch: view.branch, staffQuery }) : Promise.resolve(day.data)),
-    JSON.stringify([role, range.from, range.to, view.branch, staffQuery]),
+    JSON.stringify([role, range.from, range.to, view.year, view.branch, staffQuery]),
     { delayMs: 250 },
   );
 
-  const summaryKey = JSON.stringify(['summary', range.from, range.to, view.branch, view.staff, view.shift]);
+  const summaryKey = JSON.stringify(['summary', range.from, range.to, view.year, view.branch, view.staff, view.shift]);
   const summary = useApiData(() => (ready && view.tab !== 'records' ? loadSummary(role, view, range) : skip()), `${summaryKey}|${view.tab !== 'records'}`);
-  const recordsKey = JSON.stringify(['records', range.from, range.to, view.branch, view.staff, view.shift, view.status, view.checkOut, view.q, view.sort, view.page]);
+  const recordsKey = JSON.stringify(['records', range.from, range.to, view.year, view.branch, view.staff, view.shift, view.status, view.checkOut, view.q, view.sort, view.page]);
   const records = useApiData(() => (ready && view.tab === 'records' ? loadRecords(role, view, range) : skip()), `${recordsKey}|${view.tab === 'records'}`, { delayMs: 200 });
 
   const current = view.tab === 'records' ? records : summary;
   const zones = summary.data?.timeZones ?? [];
-  const clearScope = () => update({ branch: '', staff: '' });
+  const clearScope = () => update({ year: '', range: view.range === 'academicYear' ? 'today' : view.range, branch: '', staff: '' });
   const onReset = () => {
     setStaffQuery('');
     reset();
@@ -105,9 +113,12 @@ export default function AttendanceReportsPage() {
         rangeErrors={range.errors}
         staffQuery={staffQuery}
         onStaffQuery={setStaffQuery}
+        years={years}
+        year={year}
       />
       {ready && (
         <p className="text-small text-fg-muted">
+          {year && `${year.name} · `}
           {range.from === range.to ? `Work date ${range.from}` : `Work dates ${range.from} to ${range.to} (both included)`}
           {zones.length > 0 && ` · Times in ${zones.join(', ')} (branch time)`}
         </p>

@@ -541,11 +541,31 @@ Approved decisions N1–N24 (2026-10-30). Full specification: `docs/notification
   - **Delete:** only a planned year (never started). Current and closed years are kept.
   - A CLOSED year is read only (409 YEAR_CLOSED).
 - **No overlap:** the date ranges of one school's years never overlap (both dates inclusive; adjacent years are fine). The API names the year that overlaps (409 DATES_OVERLAP); the database enforces it too, as it does "one current year per school", so simultaneous requests cannot break either rule.
+- **Attendance reports:** School Owners and Managers can filter attendance reports and exports by one of their school's academic years (or the current one). The report dates must then lie inside that year (still at most 62 days, never after today); without chosen dates, the report covers the year's latest 62 days up to today. A year that has not started yet cannot be chosen. Exports name the year in their filters.
 - **School suspension:** while the school is suspended, its owner and Managers can read its academic years, but nothing can be changed (409 SCHOOL_SUSPENDED).
 - **Audit:**
   - Recorded events are `ACADEMIC_YEAR_CREATED`, `ACADEMIC_YEAR_UPDATED` (changed fields with old and new values), `ACADEMIC_YEAR_STARTED`, `ACADEMIC_YEAR_CLOSED` (also when a start closes the previous year) and `ACADEMIC_YEAR_DELETED` (with the deleted year's details).
   - Each event is written in the same transaction as the change. Unchanged submissions, rejected requests and failed changes record nothing.
   - School Owners read their own school's events (`GET /api/owner/academic-years/audit-logs`), without network address or browser details. They are school activity, not listed in the Super Admin dashboard's recent platform activity.
+
+## Classes and sections (School Owner and Manager)
+
+- **Classes are permanent and school level:** a class (e.g. Grade 7) belongs to one school, is created once and is used in every academic year. Fields: name (required, at most 60 characters, unique in the school regardless of capitalization), optional description (at most 300), and order (a whole number 1–100, unique in the school: the academic progression, 1 = first class). Statuses ACTIVE and INACTIVE.
+- **Sections belong to one academic year and one branch:** a section (e.g. A, shown as "Grade 7A") belongs to one class, one academic year and one branch, all of the same school. Fields: name (required, at most 20 characters), optional capacity (1–1000) and optional room (at most 60). The class, year and branch of a section never change; next year's sections are new records, and earlier years' sections stay as they are.
+- **Uniqueness:** a section name is unique per class, academic year and branch, regardless of capitalization (enforced by the database too). The same name may be used in another year, another class or another branch.
+- **Who:**
+  - **School Owner:** creates, edits, deactivates and reactivates the school's classes; views and manages sections of every branch of the school (choosing the branch).
+  - **Manager:** views the school's classes (read only); creates, edits, deactivates and reactivates sections of their own branch only. The branch comes from the account; a branch in a request is refused.
+  - **Staff and Super Admin:** no access (403). Super Admins read class and section events in the audit log.
+  - Every class, year, branch and section id in a request is looked up inside the account's school (and a Manager's branch); anything else is not found (404).
+- **Academic years:** sections are created only in a PLANNED or CURRENT year of the school. A CLOSED year gets no new sections, and its sections are read only (409 YEAR_CLOSED). A planned year that has sections cannot be deleted (409 YEAR_IN_USE).
+- **No deletion:** classes and sections are deactivated, never deleted.
+  - A class cannot be deactivated while it has active sections in a planned or current year (409 CLASS_IN_USE). An inactive class gets no new sections, and its sections cannot be reactivated, until it is reactivated.
+  - Inactive sections stay with their history and are not offered for choosing.
+- **Suspension:** while the school is suspended nothing can be changed (409 SCHOOL_SUSPENDED for the Owner). A Manager's writes also need their branch active (409 BRANCH_NOT_OPERATING). Everything can still be viewed.
+- **Section picker:** the active sections of an academic year are listed in class order, then name, with their full name ("Grade 7A", "Grade 7B", "Grade 8A"), for the branch in scope.
+- **Students:** not part of the product (see Not yet decided). Student counts, enrollment and promotion between years are not available; sections are ready to be used by them if students are added.
+- **Audit:** `CLASS_CREATED`, `CLASS_UPDATED`, `CLASS_DEACTIVATED`, `CLASS_REACTIVATED`, `SECTION_CREATED`, `SECTION_UPDATED`, `SECTION_DEACTIVATED` and `SECTION_REACTIVATED`, with the actor, school, the class or section (with its year and branch), changed fields and old and new values, written in the same transaction as the change. Unchanged submissions record nothing. School activity: not listed in the Super Admin dashboard's recent platform activity.
 
 ## Not yet decided
 
@@ -562,4 +582,5 @@ Open questions found while building the platform. These are **not rules**: the r
   - absence (D4–D8) awaits separate approval;
   - whether CSV exports are recorded in the audit log, and who sees them (D21, `docs/reports/`).
   - Phases 1 and 2 are approved (see Attendance reports).
+- **Students:** students are not part of the product today. Student records, enrollment into sections, student counts per class or section, and assisted promotion to the next academic year (suggested next class by order, explicit repeat / graduate / transfer decisions, Manager confirmation, no duplicate enrollment) await a decision to add students.
 - **Super Admin accounts:** whether there can be several, and who creates them (today: a command-line script only).

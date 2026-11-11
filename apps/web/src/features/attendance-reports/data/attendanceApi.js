@@ -9,7 +9,8 @@ import { PAGE_SIZE } from '../utils/reportRules.js';
  * staff member outside the scope).
  */
 const base = (role) => (role === 'OWNER' ? '/owner/attendance' : '/manager/attendance');
-const scoped = (role, view) => ({ branch: role === 'OWNER' ? view.branch : undefined, staff: view.staff, shift: view.shift });
+// The academic year is sent when chosen: the server checks that the dates lie inside it and names it in exports.
+const scoped = (role, view) => ({ ...(view.year && { academicYear: view.year }), branch: role === 'OWNER' ? view.branch : undefined, staff: view.staff, shift: view.shift });
 
 /** { today, branches (Owner) | null, shifts, staff } — called without dates it covers today. */
 export const loadOptions = (role, { from, to, branch, staffQuery } = {}) =>

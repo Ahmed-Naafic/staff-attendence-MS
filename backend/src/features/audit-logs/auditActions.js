@@ -26,6 +26,15 @@ export const AUDIT_ACTIONS = {
   ACADEMIC_YEAR_STARTED: 'ACADEMIC_YEAR_STARTED',
   ACADEMIC_YEAR_CLOSED: 'ACADEMIC_YEAR_CLOSED',
   ACADEMIC_YEAR_DELETED: 'ACADEMIC_YEAR_DELETED',
+  // Classes (School Owner) and sections (School Owner or the branch's Manager)
+  CLASS_CREATED: 'CLASS_CREATED',
+  CLASS_UPDATED: 'CLASS_UPDATED',
+  CLASS_DEACTIVATED: 'CLASS_DEACTIVATED',
+  CLASS_REACTIVATED: 'CLASS_REACTIVATED',
+  SECTION_CREATED: 'SECTION_CREATED',
+  SECTION_UPDATED: 'SECTION_UPDATED',
+  SECTION_DEACTIVATED: 'SECTION_DEACTIVATED',
+  SECTION_REACTIVATED: 'SECTION_REACTIVATED',
   // Branch schedules (Manager)
   BRANCH_SCHEDULE_CHANGED: 'BRANCH_SCHEDULE_CHANGED',
   BRANCH_SCHEDULE_CHANGE_CANCELLED: 'BRANCH_SCHEDULE_CHANGE_CANCELLED',
@@ -108,6 +117,14 @@ export const FILTERABLE_ACTIONS = [
   'ACADEMIC_YEAR_STARTED',
   'ACADEMIC_YEAR_CLOSED',
   'ACADEMIC_YEAR_DELETED',
+  'CLASS_CREATED',
+  'CLASS_UPDATED',
+  'CLASS_DEACTIVATED',
+  'CLASS_REACTIVATED',
+  'SECTION_CREATED',
+  'SECTION_UPDATED',
+  'SECTION_DEACTIVATED',
+  'SECTION_REACTIVATED',
   'MANAGER_CREATED',
   'MANAGER_UPDATED',
   'MANAGER_TRANSFERRED',
@@ -194,6 +211,21 @@ export const BRANCH_ACTIONS = [
 export const ACADEMIC_YEAR_ACTIONS = ['ACADEMIC_YEAR_CREATED', 'ACADEMIC_YEAR_UPDATED', 'ACADEMIC_YEAR_STARTED', 'ACADEMIC_YEAR_CLOSED', 'ACADEMIC_YEAR_DELETED'];
 
 /**
+ * Class and section events (School Owner; sections also the branch's Manager). Super Admins read them
+ * in the audit log. School activity: left out of the dashboard's recent platform activity.
+ */
+export const CLASS_ACTIONS = [
+  'CLASS_CREATED',
+  'CLASS_UPDATED',
+  'CLASS_DEACTIVATED',
+  'CLASS_REACTIVATED',
+  'SECTION_CREATED',
+  'SECTION_UPDATED',
+  'SECTION_DEACTIVATED',
+  'SECTION_REACTIVATED',
+];
+
+/**
  * Manager account events (School Owner actions, and the Manager's own password change). School
  * Owners read their own school's; Super Admins read them in the audit log. School activity: left
  * out of the dashboard's recent platform activity.
@@ -254,6 +286,14 @@ export const ACTION_LABELS = {
   ACADEMIC_YEAR_STARTED: 'Start Academic Year',
   ACADEMIC_YEAR_CLOSED: 'Close Academic Year',
   ACADEMIC_YEAR_DELETED: 'Delete Academic Year',
+  CLASS_CREATED: 'Create Class',
+  CLASS_UPDATED: 'Update Class',
+  CLASS_DEACTIVATED: 'Deactivate Class',
+  CLASS_REACTIVATED: 'Reactivate Class',
+  SECTION_CREATED: 'Create Section',
+  SECTION_UPDATED: 'Update Section',
+  SECTION_DEACTIVATED: 'Deactivate Section',
+  SECTION_REACTIVATED: 'Reactivate Section',
   MANAGER_CREATED: 'Create Manager',
   MANAGER_UPDATED: 'Update Manager',
   MANAGER_TRANSFERRED: 'Transfer Manager',

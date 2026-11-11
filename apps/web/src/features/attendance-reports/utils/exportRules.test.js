@@ -20,6 +20,8 @@ test('the export asks for the current filters and sort, never a page, and only a
     from: '2026-10-01', to: '2026-10-28', branch: ID, staff: '', shift: ID, status: 'late', checkOut: 'missing', q: 'amina', sort: 'staffName', order: 'asc',
   });
   assert.equal(exportQuery('MANAGER', readView(new URLSearchParams(`branch=${ID}`), 'MANAGER'), { from: 'a', to: 'b' }).branch, undefined);
+  // A chosen academic year is sent, so the server checks the dates and names it in the file.
+  assert.equal(exportQuery('MANAGER', readView(new URLSearchParams(`year=${ID}`), 'MANAGER'), { from: 'a', to: 'b' }).academicYear, ID);
 
   let requested;
   globalThis.fetch = async (url, init) => {
