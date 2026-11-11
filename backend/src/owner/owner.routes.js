@@ -44,6 +44,28 @@ import {
 import { attendanceOptions, attendanceRecords, attendanceSummary, reportToday } from '../features/attendance/attendanceReports.service.js';
 import { previewExport, sendCsvExport, sendPdfExport, sendXlsxExport } from '../features/attendance/attendanceExport.js';
 import { readExportQuery, readOptionsQuery, readRecordsQuery, readSummaryQuery } from '../features/attendance/reportInput.js';
+import {
+  readClassCreation,
+  readClassListQuery,
+  readClassUpdate,
+  readSectionCreation,
+  readSectionListQuery,
+  readSectionUpdate,
+} from '../features/classes/classInput.js';
+import {
+  createClass,
+  createSection,
+  deactivateClass,
+  deactivateSection,
+  getClass,
+  getSection,
+  listClasses,
+  listSections,
+  reactivateClass,
+  reactivateSection,
+  updateClass,
+  updateSection,
+} from '../features/classes/classes.service.js';
 import { readAcademicYearCreation, readAcademicYearStart, readAcademicYearUpdate } from '../features/academic-years/academicYearInput.js';
 import {
   applyAcademicYearFilter,
@@ -165,6 +187,47 @@ ownerRouter.post('/academic-years/:id/close', async (req, res) => {
 ownerRouter.delete('/academic-years/:id', async (req, res) => {
   await deleteAcademicYear(req.school, req.params.id, req.user, req);
   res.status(204).end();
+});
+
+// ---- Classes (School Owner) and sections of every branch of the school ----
+const classScope = (req) => ({ school: req.school, branch: null });
+
+ownerRouter.get('/classes', async (req, res) => {
+  res.json(await listClasses(classScope(req), readClassListQuery(req.query, { role: 'OWNER' })));
+});
+ownerRouter.get('/classes/:id', async (req, res) => {
+  res.json(await getClass(classScope(req), req.params.id, readClassListQuery(req.query, { role: 'OWNER' })));
+});
+ownerRouter.post('/classes', async (req, res) => {
+  res.status(201).json({ class: await createClass(classScope(req), readClassCreation(jsonBody(req)), req.user, req) });
+});
+ownerRouter.patch('/classes/:id', async (req, res) => {
+  res.json({ class: await updateClass(classScope(req), req.params.id, readClassUpdate(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/classes/:id/deactivate', async (req, res) => {
+  res.json({ class: await deactivateClass(classScope(req), req.params.id, req.user, req) });
+});
+ownerRouter.post('/classes/:id/reactivate', async (req, res) => {
+  res.json({ class: await reactivateClass(classScope(req), req.params.id, req.user, req) });
+});
+
+ownerRouter.get('/sections', async (req, res) => {
+  res.json(await listSections(classScope(req), readSectionListQuery(req.query, { role: 'OWNER' })));
+});
+ownerRouter.get('/sections/:id', async (req, res) => {
+  res.json({ section: await getSection(classScope(req), req.params.id) });
+});
+ownerRouter.post('/sections', async (req, res) => {
+  res.status(201).json({ section: await createSection(classScope(req), readSectionCreation(jsonBody(req), { role: 'OWNER' }), req.user, req) });
+});
+ownerRouter.patch('/sections/:id', async (req, res) => {
+  res.json({ section: await updateSection(classScope(req), req.params.id, readSectionUpdate(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/sections/:id/deactivate', async (req, res) => {
+  res.json({ section: await deactivateSection(classScope(req), req.params.id, req.user, req) });
+});
+ownerRouter.post('/sections/:id/reactivate', async (req, res) => {
+  res.json({ section: await reactivateSection(classScope(req), req.params.id, req.user, req) });
 });
 
 // ---- Staff transfers between the school's branches (T1: School Owner only) ----

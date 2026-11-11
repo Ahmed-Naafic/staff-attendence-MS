@@ -9,6 +9,17 @@ import { previewExport, sendCsvExport, sendPdfExport, sendXlsxExport } from '../
 import { readExportQuery, readOptionsQuery, readRecordsQuery, readSummaryQuery } from '../features/attendance/reportInput.js';
 import { operatingState } from '../features/branches/branches.service.js';
 import { applyAcademicYearFilter, listAcademicYears } from '../features/academic-years/academicYears.service.js';
+import { readClassListQuery, readSectionCreation, readSectionListQuery, readSectionUpdate } from '../features/classes/classInput.js';
+import {
+  createSection,
+  deactivateSection,
+  getClass,
+  getSection,
+  listClasses,
+  listSections,
+  reactivateSection,
+  updateSection,
+} from '../features/classes/classes.service.js';
 import { readScheduleChange } from '../features/schedules/scheduleInput.js';
 import { getBranchReminderSettings, updateBranchReminderSettings } from '../features/notifications/notificationSettings.service.js';
 import { cancelScheduledSchedule, getSchedule, listVersions, saveSchedule } from '../features/schedules/schedules.service.js';
@@ -49,6 +60,37 @@ managerRouter.get('/branch', (req, res) => {
 // ---- Academic years of the Manager's school (read only; the School Owner manages them) ----
 managerRouter.get('/academic-years', async (req, res) => {
   res.json(await listAcademicYears(req.branch.school));
+});
+
+// ---- Classes (read only; the School Owner manages them) and the sections of the Manager's branch ----
+const classScope = (req) => {
+  const { school, ...branch } = req.branch;
+  return { school, branch };
+};
+
+managerRouter.get('/classes', async (req, res) => {
+  res.json(await listClasses(classScope(req), readClassListQuery(req.query, { role: 'MANAGER' })));
+});
+managerRouter.get('/classes/:id', async (req, res) => {
+  res.json(await getClass(classScope(req), req.params.id, readClassListQuery(req.query, { role: 'MANAGER' })));
+});
+managerRouter.get('/sections', async (req, res) => {
+  res.json(await listSections(classScope(req), readSectionListQuery(req.query, { role: 'MANAGER' })));
+});
+managerRouter.get('/sections/:id', async (req, res) => {
+  res.json({ section: await getSection(classScope(req), req.params.id) });
+});
+managerRouter.post('/sections', async (req, res) => {
+  res.status(201).json({ section: await createSection(classScope(req), readSectionCreation(jsonBody(req), { role: 'MANAGER' }), req.user, req) });
+});
+managerRouter.patch('/sections/:id', async (req, res) => {
+  res.json({ section: await updateSection(classScope(req), req.params.id, readSectionUpdate(jsonBody(req)), req.user, req) });
+});
+managerRouter.post('/sections/:id/deactivate', async (req, res) => {
+  res.json({ section: await deactivateSection(classScope(req), req.params.id, req.user, req) });
+});
+managerRouter.post('/sections/:id/reactivate', async (req, res) => {
+  res.json({ section: await reactivateSection(classScope(req), req.params.id, req.user, req) });
 });
 
 // ---- Schedule (read only while the branch or school is suspended: 409 BRANCH_NOT_OPERATING) ----

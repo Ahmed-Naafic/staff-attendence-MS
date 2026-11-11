@@ -253,6 +253,10 @@ export async function deleteAcademicYear(school, id, user, req) {
   await withSchoolLock(school, async (tx) => {
     const year = await findOrFail(tx, school, id);
     if (year.status !== 'PLANNED') throw INVALID_STATUS('Only a planned academic year can be deleted. Current and closed years are kept.');
+    const sections = await tx.section.count({ where: { academicYearId: year.id } });
+    if (sections) {
+      throw conflict('YEAR_IN_USE', `${year.name} has ${sections} section${sections === 1 ? '' : 's'}. A year with sections is kept; it cannot be deleted.`, { sections });
+    }
     await tx.academicYear.delete({ where: { id: year.id } });
     await audit(tx, AUDIT_ACTIONS.ACADEMIC_YEAR_DELETED, year, {
       school,
