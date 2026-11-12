@@ -35,6 +35,15 @@ export const AUDIT_ACTIONS = {
   SECTION_UPDATED: 'SECTION_UPDATED',
   SECTION_DEACTIVATED: 'SECTION_DEACTIVATED',
   SECTION_REACTIVATED: 'SECTION_REACTIVATED',
+  // Students, enrollments and academic year promotion (Manager; student profiles also the School Owner)
+  STUDENT_REGISTERED: 'STUDENT_REGISTERED',
+  STUDENT_UPDATED: 'STUDENT_UPDATED',
+  STUDENT_ENROLLED: 'STUDENT_ENROLLED',
+  ENROLLMENT_UPDATED: 'ENROLLMENT_UPDATED',
+  STUDENT_TRANSFERRED_OUT: 'STUDENT_TRANSFERRED_OUT',
+  PROMOTION_STARTED: 'PROMOTION_STARTED',
+  PROMOTION_CONFIRMED: 'PROMOTION_CONFIRMED',
+  PROMOTION_PROCESSED: 'PROMOTION_PROCESSED',
   // Branch schedules (Manager)
   BRANCH_SCHEDULE_CHANGED: 'BRANCH_SCHEDULE_CHANGED',
   BRANCH_SCHEDULE_CHANGE_CANCELLED: 'BRANCH_SCHEDULE_CHANGE_CANCELLED',
@@ -125,6 +134,14 @@ export const FILTERABLE_ACTIONS = [
   'SECTION_UPDATED',
   'SECTION_DEACTIVATED',
   'SECTION_REACTIVATED',
+  'STUDENT_REGISTERED',
+  'STUDENT_UPDATED',
+  'STUDENT_ENROLLED',
+  'ENROLLMENT_UPDATED',
+  'STUDENT_TRANSFERRED_OUT',
+  'PROMOTION_STARTED',
+  'PROMOTION_CONFIRMED',
+  'PROMOTION_PROCESSED',
   'MANAGER_CREATED',
   'MANAGER_UPDATED',
   'MANAGER_TRANSFERRED',
@@ -226,6 +243,21 @@ export const CLASS_ACTIONS = [
 ];
 
 /**
+ * Student, enrollment and promotion events. Super Admins read them in the audit log. School
+ * activity: left out of the dashboard's recent platform activity.
+ */
+export const STUDENT_ACTIONS = [
+  'STUDENT_REGISTERED',
+  'STUDENT_UPDATED',
+  'STUDENT_ENROLLED',
+  'ENROLLMENT_UPDATED',
+  'STUDENT_TRANSFERRED_OUT',
+  'PROMOTION_STARTED',
+  'PROMOTION_CONFIRMED',
+  'PROMOTION_PROCESSED',
+];
+
+/**
  * Manager account events (School Owner actions, and the Manager's own password change). School
  * Owners read their own school's; Super Admins read them in the audit log. School activity: left
  * out of the dashboard's recent platform activity.
@@ -294,6 +326,14 @@ export const ACTION_LABELS = {
   SECTION_UPDATED: 'Update Section',
   SECTION_DEACTIVATED: 'Deactivate Section',
   SECTION_REACTIVATED: 'Reactivate Section',
+  STUDENT_REGISTERED: 'Register Student',
+  STUDENT_UPDATED: 'Update Student',
+  STUDENT_ENROLLED: 'Enroll Student',
+  ENROLLMENT_UPDATED: 'Update Enrollment',
+  STUDENT_TRANSFERRED_OUT: 'Transfer Student Out',
+  PROMOTION_STARTED: 'Prepare Promotion',
+  PROMOTION_CONFIRMED: 'Confirm Promotion',
+  PROMOTION_PROCESSED: 'Process Promotion',
   MANAGER_CREATED: 'Create Manager',
   MANAGER_UPDATED: 'Update Manager',
   MANAGER_TRANSFERRED: 'Transfer Manager',

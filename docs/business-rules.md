@@ -564,8 +564,41 @@ Approved decisions N1–N24 (2026-10-30). Full specification: `docs/notification
   - Inactive sections stay with their history and are not offered for choosing.
 - **Suspension:** while the school is suspended nothing can be changed (409 SCHOOL_SUSPENDED for the Owner). A Manager's writes also need their branch active (409 BRANCH_NOT_OPERATING). Everything can still be viewed.
 - **Section picker:** the active sections of an academic year are listed in class order, then name, with their full name ("Grade 7A", "Grade 7B", "Grade 8A"), for the branch in scope.
-- **Students:** not part of the product (see Not yet decided). Student counts, enrollment and promotion between years are not available; sections are ready to be used by them if students are added.
+- **Students:** class and section pages show the number of students actively enrolled in the chosen year (see Students).
 - **Audit:** `CLASS_CREATED`, `CLASS_UPDATED`, `CLASS_DEACTIVATED`, `CLASS_REACTIVATED`, `SECTION_CREATED`, `SECTION_UPDATED`, `SECTION_DEACTIVATED` and `SECTION_REACTIVATED`, with the actor, school, the class or section (with its year and branch), changed fields and old and new values, written in the same transaction as the change. Unchanged submissions record nothing. School activity: not listed in the Super Admin dashboard's recent platform activity.
+
+## Students (School Owner and Manager)
+
+- **One permanent profile:** a student is registered once, in one branch of a school, and keeps the same profile for good. Registration does not choose a class or section: a new student is PENDING_ENROLLMENT until enrolled.
+- **Student ID:** generated when registering: the branch code, `-S` and the branch's next number, at least four digits (e.g. `JHA-001-B001-S0001`). Unique, never changed or reused. A Student ID in a request is refused.
+- **Fields:** first name, last name, guardian name (required, at most 60 / 60 / 120 characters), gender (Male or Female), date of birth (a real date, not in the future), guardian phone (required); optional middle name, phone, address (at most 200), guardian relationship, emergency contact name and phone. Phones use the School phone format. No photo yet (no file storage).
+- **Duplicates:** a student with the same full name (compared like branch names) and date of birth already in the school is reported with their Student IDs (409 POSSIBLE_DUPLICATE); registering anyway needs explicit confirmation. Names alone never block registration.
+- **Statuses:** PENDING_ENROLLMENT → ENROLLED (first enrollment) → TRANSFERRED_OUT or GRADUATED. A transferred-out student can be enrolled again (re-admission); a graduated one cannot.
+- **Who:** School Owner registers (choosing a branch of the school), views and edits students of every branch. Manager registers, views and edits students of their own branch, enrolls them, records results and transfers them out. Staff and Super Admins have no access. A student of another school, or of another branch for a Manager, is not found (404). A student's branch does not change.
+- **Transfer out (Manager):** needs a reason (3–300 characters). The ACTIVE enrollment ends as TRANSFERRED_OUT; the profile and all history are kept; the student leaves promotion lists.
+- **Audit:** `STUDENT_REGISTERED`, `STUDENT_UPDATED` (old and new values), `STUDENT_ENROLLED`, `ENROLLMENT_UPDATED`, `STUDENT_TRANSFERRED_OUT`. While the school or branch is suspended nothing can be changed (409 BRANCH_NOT_OPERATING).
+
+## Student enrollment (Manager)
+
+- **Per academic year:** an enrollment links a student to one academic year through one section of the Manager's branch; the class is the section's class. A student has at most one enrollment per academic year (enforced by the database too: retries and simultaneous requests cannot create two).
+- **Choosing:** the Manager chooses the section directly ("Grade 7A"); the academic year and class follow from it. Only active sections of active classes, in planned or current years, of the branch. Closed years take no enrollments (409 YEAR_CLOSED).
+- **Changes:** an ACTIVE enrollment's section can be corrected within the same academic year and branch (not in a closed year); a section of another year is refused (409 WRONG_YEAR) — a new year is a new enrollment. Ended enrollments are kept as they are.
+- **Year-end result:** the Manager records Passed, Failed or nothing on an ACTIVE enrollment; it drives promotion recommendations.
+- **History:** enrollments are never deleted, moved to another year or overwritten. Each one records how the student arrived (new, promoted, repeating), the previous-year enrollment it continues, and how it ended (completed, transferred out, graduated).
+
+## Academic year promotion (Manager; Owners read)
+
+Bulk Academic Year Enrollment & Promotion prepares a branch's students for a new academic year.
+
+1. **Years:** the Manager chooses the previous academic year and a later new year (planned or current, never closed). The branch is the Manager's. One promotion per branch and pair of years; starting it again reopens it.
+2. **Students:** the branch's ACTIVE enrollments of the previous year whose students are still enrolled; transferred-out and graduated students are not candidates. Grouped by previous section with counts.
+3. **Recommendations (never applied without confirmation):** Passed → promote to the next class by order, keeping the section name (Grade 6A → Grade 7A). Failed → repeat the same class and section name. Passed the school's final class → graduate. No result → pending review. Transfer out is chosen by the Manager.
+4. **Destinations:** the expected section must exist in the new year and branch (active, active class). A missing one is flagged and never replaced by another section; the Manager chooses one, creates it and reloads, or changes the decision. A promoted student goes to a later class, a repeating one stays in the same class.
+5. **Review:** totals per decision, students without destination, destination sections with students already enrolled, incoming and capacity (over-capacity warnings). Decisions can be changed per student or for a whole previous section.
+6. **Confirmation:** typed (PROCESS), refused while any destination is missing (409 MISSING_TARGETS). Pending-review students are excluded: nothing happens to them. After confirmation decisions cannot be changed.
+7. **Processing:** promoted and repeating students get a new enrollment (PROMOTED / REPEATED, linked to the previous one) and the previous one becomes COMPLETED; graduates and transfers end their enrollment as GRADUATED / TRANSFERRED_OUT and the student's status changes. Students are processed in chunks of 50, each chunk in its own transaction; each call works for a limited time and reports progress until done. A student that cannot be processed (e.g. the destination became inactive, or already enrolled elsewhere in the new year) is FAILED with the reason; the others continue. Failed students can be retried; processing is idempotent and never enrolls a student twice.
+- **Audit:** `PROMOTION_STARTED`, `PROMOTION_CONFIRMED` (with counts per decision, the actor and time) and `PROMOTION_PROCESSED` (done, failed, excluded; a failure result when any failed). Each student's decision, destination, result and new enrollment stay on the promotion and in their history.
+- **Owners** see every branch's promotions read only. Staff and Super Admins have no access.
 
 ## Not yet decided
 
@@ -582,5 +615,4 @@ Open questions found while building the platform. These are **not rules**: the r
   - absence (D4–D8) awaits separate approval;
   - whether CSV exports are recorded in the audit log, and who sees them (D21, `docs/reports/`).
   - Phases 1 and 2 are approved (see Attendance reports).
-- **Students:** students are not part of the product today. Student records, enrollment into sections, student counts per class or section, and assisted promotion to the next academic year (suggested next class by order, explicit repeat / graduate / transfer decisions, Manager confirmation, no duplicate enrollment) await a decision to add students.
 - **Super Admin accounts:** whether there can be several, and who creates them (today: a command-line script only).

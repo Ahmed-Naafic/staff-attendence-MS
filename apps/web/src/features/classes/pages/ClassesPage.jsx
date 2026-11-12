@@ -29,6 +29,7 @@ function ClassCard({ cls, to }) {
       </div>
       <div className="flex flex-wrap items-center gap-2 text-small text-fg-secondary">
         <span className="font-medium text-fg">{plural(cls.sections, 'section')}</span>
+        <span>· {plural(cls.students ?? 0, 'student')}</span>
         {cls.capacity ? <span>· {cls.capacity} places</span> : null}
         {cls.inactiveSections ? <span className="text-fg-muted">· {cls.inactiveSections} inactive</span> : null}
       </div>

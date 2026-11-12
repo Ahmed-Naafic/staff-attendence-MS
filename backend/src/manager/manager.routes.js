@@ -9,6 +9,28 @@ import { previewExport, sendCsvExport, sendPdfExport, sendXlsxExport } from '../
 import { readExportQuery, readOptionsQuery, readRecordsQuery, readSummaryQuery } from '../features/attendance/reportInput.js';
 import { operatingState } from '../features/branches/branches.service.js';
 import { applyAcademicYearFilter, listAcademicYears } from '../features/academic-years/academicYears.service.js';
+import {
+  readEnrollment,
+  readEnrollmentUpdate,
+  readPromotionChanges,
+  readPromotionConfirm,
+  readPromotionStart,
+  readStudentListQuery,
+  readStudentRegistration,
+  readStudentUpdate,
+  readTransferOut,
+} from '../features/students/studentInput.js';
+import { enrollStudent, getStudent, listStudents, registerStudent, transferOutStudent, updateEnrollment, updateStudent } from '../features/students/students.service.js';
+import {
+  confirmPromotion,
+  getPromotion,
+  listPromotions,
+  processPromotion,
+  refreshPromotion,
+  retryPromotion,
+  startPromotion,
+  updatePromotionItems,
+} from '../features/students/promotions.service.js';
 import { readClassListQuery, readSectionCreation, readSectionListQuery, readSectionUpdate } from '../features/classes/classInput.js';
 import {
   createSection,
@@ -91,6 +113,59 @@ managerRouter.post('/sections/:id/deactivate', async (req, res) => {
 });
 managerRouter.post('/sections/:id/reactivate', async (req, res) => {
   res.json({ section: await reactivateSection(classScope(req), req.params.id, req.user, req) });
+});
+
+// ---- Students of the Manager's branch: registration, enrollment, transfer out ----
+const todayDay = () => new Date().toISOString().slice(0, 10);
+
+managerRouter.get('/students', async (req, res) => {
+  res.json(await listStudents(classScope(req), readStudentListQuery(req.query, { role: 'MANAGER' })));
+});
+managerRouter.get('/students/:id', async (req, res) => {
+  res.json({ student: await getStudent(classScope(req), req.params.id) });
+});
+managerRouter.post('/students', async (req, res) => {
+  res.status(201).json({ student: await registerStudent(classScope(req), readStudentRegistration(jsonBody(req), { role: 'MANAGER', today: todayDay() }), req.user, req) });
+});
+managerRouter.patch('/students/:id', async (req, res) => {
+  res.json({ student: await updateStudent(classScope(req), req.params.id, readStudentUpdate(jsonBody(req), { today: todayDay() }), req.user, req) });
+});
+managerRouter.post('/students/:id/enrollments', async (req, res) => {
+  res.status(201).json({ enrollment: await enrollStudent(classScope(req), req.params.id, readEnrollment(jsonBody(req)), req.user, req) });
+});
+managerRouter.post('/students/:id/transfer-out', async (req, res) => {
+  res.json({ student: await transferOutStudent(classScope(req), req.params.id, readTransferOut(jsonBody(req)), req.user, req) });
+});
+managerRouter.patch('/enrollments/:id', async (req, res) => {
+  res.json({ enrollment: await updateEnrollment(classScope(req), req.params.id, readEnrollmentUpdate(jsonBody(req)), req.user, req) });
+});
+
+// ---- Bulk Academic Year Enrollment & Promotion (the Manager's branch) ----
+managerRouter.get('/promotions', async (req, res) => {
+  res.json(await listPromotions(classScope(req)));
+});
+managerRouter.post('/promotions', async (req, res) => {
+  res.json(await startPromotion(classScope(req), readPromotionStart(jsonBody(req)), req.user, req));
+});
+managerRouter.get('/promotions/:id', async (req, res) => {
+  res.json(await getPromotion(classScope(req), req.params.id));
+});
+managerRouter.post('/promotions/:id/refresh', async (req, res) => {
+  res.json(await refreshPromotion(classScope(req), req.params.id));
+});
+managerRouter.patch('/promotions/:id/items', async (req, res) => {
+  res.json(await updatePromotionItems(classScope(req), req.params.id, readPromotionChanges(jsonBody(req))));
+});
+managerRouter.post('/promotions/:id/confirm', async (req, res) => {
+  readPromotionConfirm(jsonBody(req));
+  res.json(await confirmPromotion(classScope(req), req.params.id, req.user, req));
+});
+// Processes for a limited time per call and reports progress; the web app calls again until nothing is waiting.
+managerRouter.post('/promotions/:id/process', async (req, res) => {
+  res.json(await processPromotion(classScope(req), req.params.id, req.user, req));
+});
+managerRouter.post('/promotions/:id/retry', async (req, res) => {
+  res.json(await retryPromotion(classScope(req), req.params.id));
 });
 
 // ---- Schedule (read only while the branch or school is suspended: 409 BRANCH_NOT_OPERATING) ----
