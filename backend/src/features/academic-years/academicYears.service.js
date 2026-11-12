@@ -85,7 +85,7 @@ async function withSchoolLock(school, work) {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`academic-year:${school.id}`}))`;
       await lockActiveSchool(tx, school);
       return work(tx);
-    });
+    }, { timeout: 20000, maxWait: 10000 });
   } catch (error) {
     throw translateDbError(error);
   }

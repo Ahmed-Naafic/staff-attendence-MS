@@ -161,6 +161,9 @@ model School {
   academicYears     AcademicYear[]
   classes           SchoolClass[]
   sections          Section[]
+  students          Student[]
+  enrollments       Enrollment[]
+  promotionBatches  PromotionBatch[]
 
   @@index([status])
   @@index([location])
@@ -189,6 +192,9 @@ model Branch {
   /// The last staff number given in this branch (Staff IDs); raised only by the update that creates a
   /// staff account (which locks this row), so Staff IDs are never repeated or reused.
   staffSequence    Int          @default(0)
+  /// The last student number given in this branch (Student IDs, e.g. JHA-001-B001-S0001); raised only
+  /// by the update that registers a student (which locks this row), so Student IDs are never reused.
+  studentSequence  Int          @default(0)
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
@@ -204,6 +210,9 @@ model Branch {
   transfersOut       StaffTransfer[]         @relation("TransferFrom")
   transfersIn        StaffTransfer[]         @relation("TransferTo")
   sections           Section[]
+  students           Student[]
+  enrollments        Enrollment[]
+  promotionBatches   PromotionBatch[]
 
   @@unique([schoolId, number])
   @@unique([schoolId, code])
@@ -869,22 +878,25 @@ enum AcademicYearStatus {
 /// of one school's years never overlap (partial unique index and exclusion constraint in the
 /// migration). A CLOSED year is read only; only a PLANNED year can be deleted.
 model AcademicYear {
-  id        String             @id @default(uuid())
-  schoolId  String
-  school    School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  id             String             @id @default(uuid())
+  schoolId       String
+  school         School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   /// e.g. "2026/2027". At most 40 characters; unique in the school regardless of capitalization.
-  name      String
+  name           String
   /// The name compared for uniqueness (same folding as branch names; computed by the API).
-  nameKey   String
+  nameKey        String
   /// Calendar dates (no time, no time zone). Both inclusive; endDate after startDate.
-  startDate DateTime           @db.Date
-  endDate   DateTime           @db.Date
-  status    AcademicYearStatus @default(PLANNED)
-  startedAt DateTime?
-  closedAt  DateTime?
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
-  sections  Section[]
+  startDate      DateTime           @db.Date
+  endDate        DateTime           @db.Date
+  status         AcademicYearStatus @default(PLANNED)
+  startedAt      DateTime?
+  closedAt       DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  sections       Section[]
+  enrollments    Enrollment[]
+  promotionsFrom PromotionBatch[]   @relation("PromotionFrom")
+  promotionsTo   PromotionBatch[]   @relation("PromotionTo")
 
   @@unique([schoolId, nameKey])
   @@index([schoolId, startDate])
@@ -944,7 +956,202 @@ model Section {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
+  enrollments      Enrollment[]
+  promotionsFrom   PromotionItem[] @relation("PromotionItemFrom")
+  promotionsTarget PromotionItem[] @relation("PromotionItemTarget")
+
   @@unique([classId, academicYearId, branchId, nameKey])
   @@index([schoolId, academicYearId])
   @@index([branchId, academicYearId])
+}
+
+/// Student profile status (docs/business-rules.md → Students).
+enum StudentStatus {
+  PENDING_ENROLLMENT
+  ENROLLED
+  TRANSFERRED_OUT
+  GRADUATED
+}
+
+enum StudentGender {
+  MALE
+  FEMALE
+}
+
+/// A permanent student profile, registered once in a branch of a school and kept for good. Academic
+/// years are linked through Enrollment; a profile can exist without one (PENDING_ENROLLMENT).
+model Student {
+  id                    String        @id @default(uuid())
+  schoolId              String
+  school                School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId              String
+  branch                Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// Generated Student ID: branch code + "-S" + number (at least four digits). Unique; never changed or reused.
+  studentNumber         String        @unique
+  firstName             String
+  middleName            String?
+  lastName              String
+  /// Full name compared for possible duplicates (folded like branch names; computed by the API).
+  nameKey               String
+  gender                StudentGender
+  dateOfBirth           DateTime      @db.Date
+  phone                 String?
+  address               String?
+  guardianName          String
+  guardianPhone         String
+  guardianRelationship  String?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  status                StudentStatus @default(PENDING_ENROLLMENT)
+  /// Why the status last changed to TRANSFERRED_OUT or GRADUATED (kept in the audit log too).
+  statusReason          String?
+  statusChangedAt       DateTime?
+  registeredAt          DateTime      @default(now())
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  enrollments    Enrollment[]
+  promotionItems PromotionItem[]
+
+  @@index([schoolId, branchId, status])
+  @@index([schoolId, nameKey, dateOfBirth])
+}
+
+/// ACTIVE: in progress. COMPLETED: the year ended and the student continued (promoted or repeating, in
+/// a later enrollment). TRANSFERRED_OUT / GRADUATED: the last enrollment of a student who left or finished.
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  TRANSFERRED_OUT
+  GRADUATED
+}
+
+/// How a student came into an enrollment: newly enrolled, promoted, or repeating a class.
+enum EnrollmentEntry {
+  NEW
+  PROMOTED
+  REPEATED
+}
+
+/// The year-end result the Manager records; it drives promotion recommendations.
+enum EnrollmentResult {
+  PASSED
+  FAILED
+}
+
+/// A student in a section for one academic year. One per student and year; never deleted, never moved
+/// to another year. The class is the section's class (not stored twice).
+model Enrollment {
+  id                   String            @id @default(uuid())
+  schoolId             String
+  school               School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId             String
+  branch               Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  studentId            String
+  student              Student           @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicYearId       String
+  academicYear         AcademicYear      @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  sectionId            String
+  section              Section           @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  status               EnrollmentStatus  @default(ACTIVE)
+  entry                EnrollmentEntry   @default(NEW)
+  result               EnrollmentResult?
+  /// The previous-year enrollment this one continues (promotion or repeating).
+  previousEnrollmentId String?           @unique
+  previousEnrollment   Enrollment?       @relation("EnrollmentHistory", fields: [previousEnrollmentId], references: [id], onDelete: Restrict)
+  nextEnrollment       Enrollment?       @relation("EnrollmentHistory")
+  enrolledAt           DateTime          @default(now())
+  endedAt              DateTime?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  promotionItemsFrom   PromotionItem[] @relation("PromotionItemFromEnrollment")
+  promotionItemsResult PromotionItem[] @relation("PromotionItemResultEnrollment")
+
+  @@unique([studentId, academicYearId])
+  @@index([sectionId, status])
+  @@index([branchId, academicYearId, status])
+}
+
+enum PromotionBatchStatus {
+  DRAFT
+  PROCESSING
+  COMPLETED
+}
+
+enum PromotionDecision {
+  PROMOTE
+  REPEAT
+  TRANSFER_OUT
+  GRADUATE
+  PENDING
+}
+
+/// DRAFT: before confirmation. WAITING: confirmed, not processed yet. DONE / FAILED: processed (a
+/// failed one can be retried). EXCLUDED: left PENDING (for review) at confirmation, so nothing was done.
+enum PromotionItemStatus {
+  DRAFT
+  WAITING
+  DONE
+  FAILED
+  EXCLUDED
+}
+
+/// Bulk Academic Year Enrollment & Promotion for one branch, from one academic year to the next. One
+/// per branch and pair of years, so a retry resumes it instead of starting another.
+model PromotionBatch {
+  id              String               @id @default(uuid())
+  schoolId        String
+  school          School               @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId        String
+  branch          Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  fromYearId      String
+  fromYear        AcademicYear         @relation("PromotionFrom", fields: [fromYearId], references: [id], onDelete: Restrict)
+  toYearId        String
+  toYear          AcademicYear         @relation("PromotionTo", fields: [toYearId], references: [id], onDelete: Restrict)
+  status          PromotionBatchStatus @default(DRAFT)
+  createdById     String
+  createdByName   String
+  confirmedById   String?
+  confirmedByName String?
+  confirmedAt     DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  items PromotionItem[]
+
+  @@unique([branchId, fromYearId, toYearId])
+  @@index([schoolId])
+}
+
+/// One student's decision in a promotion batch: what was recommended and why, what the Manager chose,
+/// where the student goes, and what happened when it was processed (the new enrollment, or the error).
+model PromotionItem {
+  id                 String              @id @default(uuid())
+  batchId            String
+  batch              PromotionBatch      @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  studentId          String
+  student            Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  fromEnrollmentId   String
+  fromEnrollment     Enrollment          @relation("PromotionItemFromEnrollment", fields: [fromEnrollmentId], references: [id], onDelete: Restrict)
+  fromSectionId      String
+  fromSection        Section             @relation("PromotionItemFrom", fields: [fromSectionId], references: [id], onDelete: Restrict)
+  recommendation     PromotionDecision
+  /// Why it was recommended, e.g. "Passed", "No result recorded", "Final class".
+  recommendationNote String
+  decision           PromotionDecision
+  targetSectionId    String?
+  targetSection      Section?            @relation("PromotionItemTarget", fields: [targetSectionId], references: [id], onDelete: Restrict)
+  status             PromotionItemStatus @default(DRAFT)
+  error              String?
+  attempts           Int                 @default(0)
+  resultEnrollmentId String?
+  resultEnrollment   Enrollment?         @relation("PromotionItemResultEnrollment", fields: [resultEnrollmentId], references: [id], onDelete: Restrict)
+  processedAt        DateTime?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([batchId, fromEnrollmentId])
+  @@index([batchId, status])
 }

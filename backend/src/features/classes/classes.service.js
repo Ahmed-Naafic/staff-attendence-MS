@@ -84,7 +84,7 @@ async function withLock(scope, kind, work) {
       if (scope.branch) await lockOperatingBranch(tx, scope);
       else await lockActiveSchool(tx, scope.school);
       return work(tx);
-    });
+    }, { timeout: 20000, maxWait: 10000 });
   } catch (error) {
     throw translateDbError(error, kind);
   }
@@ -110,6 +110,8 @@ const sectionInclude = {
   class: { select: { id: true, name: true, sequence: true, status: true } },
   branch: { select: { id: true, name: true, code: true, status: true } },
   academicYear: true,
+  // Students currently enrolled (ACTIVE enrollments) in the section.
+  _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } },
 };
 
 /** The section shape the web app uses; `displayName` is what pickers show (e.g. "Grade 7A"). */
@@ -118,6 +120,7 @@ export const toSection = (s) => ({
   name: s.name,
   displayName: sectionDisplayName(s.class.name, s.name),
   capacity: s.capacity,
+  students: s._count?.enrollments ?? 0,
   room: s.room ?? '',
   status: fromDbStatus(s.status),
   deactivatedAt: s.deactivatedAt?.toISOString() ?? null,
@@ -197,7 +200,7 @@ export async function listClasses(scope, { academicYear, branch, q, status }) {
     ...(q && { name: { contains: q, mode: 'insensitive' } }),
     ...(status && { status: status === 'active' ? 'ACTIVE' : 'INACTIVE' }),
   };
-  const [classes, counts] = await Promise.all([
+  const [classes, counts, enrolled] = await Promise.all([
     prisma.schoolClass.findMany({ where, orderBy: { sequence: 'asc' } }),
     year
       ? prisma.section.groupBy({
@@ -205,6 +208,12 @@ export async function listClasses(scope, { academicYear, branch, q, status }) {
           where: { schoolId: scope.school.id, academicYearId: year.id, ...(branchId && { branchId }) },
           _count: { _all: true },
           _sum: { capacity: true },
+        })
+      : [],
+    year
+      ? prisma.section.findMany({
+          where: { schoolId: scope.school.id, academicYearId: year.id, ...(branchId && { branchId }) },
+          select: { classId: true, _count: { select: { enrollments: { where: { status: 'ACTIVE' } } } } },
         })
       : [],
   ]);
@@ -215,6 +224,7 @@ export async function listClasses(scope, { academicYear, branch, q, status }) {
       sections: active?._count._all ?? 0,
       inactiveSections: rows.find((r) => r.status === 'INACTIVE')?._count._all ?? 0,
       capacity: active?._sum.capacity ?? null,
+      students: enrolled.filter((e) => e.classId === classId).reduce((n, e) => n + e._count.enrollments, 0),
     };
   };
   const items = classes

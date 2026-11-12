@@ -1,4 +1,4 @@
-import { Building2, CalendarClock, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, House, Megaphone, School, ScrollText, Settings, UserCog, Users } from 'lucide-react';
+import { ArrowRightLeft, Backpack, Building2, CalendarClock, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, House, Megaphone, School, ScrollText, Settings, UserCog, Users } from 'lucide-react';
 
 /*
  * Role-aware navigation. Each role gets its own identity and sidebar sections;
@@ -57,6 +57,8 @@ export const navigationByRole = {
         { to: '/staff', label: 'Staff', icon: Users },
         { to: '/academic-years', label: 'Academic Years', icon: CalendarRange },
         { to: '/classes', label: 'Classes', icon: GraduationCap },
+        { to: '/students', label: 'Students', icon: Backpack },
+        { to: '/promotions', label: 'Promotion', icon: ArrowRightLeft },
         { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
       ],
     },
@@ -70,6 +72,8 @@ export const navigationByRole = {
         { to: '/staff', label: 'Staff', icon: Users },
         { to: '/academic-years', label: 'Academic Years', icon: CalendarRange },
         { to: '/classes', label: 'Classes', icon: GraduationCap },
+        { to: '/students', label: 'Students', icon: Backpack },
+        { to: '/promotions', label: 'Promotion', icon: ArrowRightLeft },
         { to: '/attendance', label: 'Attendance', icon: ClipboardCheck },
       ],
     },

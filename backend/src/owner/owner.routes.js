@@ -66,6 +66,9 @@ import {
   updateClass,
   updateSection,
 } from '../features/classes/classes.service.js';
+import { readStudentListQuery, readStudentRegistration, readStudentUpdate } from '../features/students/studentInput.js';
+import { getStudent, listStudents, registerStudent, updateStudent } from '../features/students/students.service.js';
+import { getPromotion, listPromotions } from '../features/students/promotions.service.js';
 import { readAcademicYearCreation, readAcademicYearStart, readAcademicYearUpdate } from '../features/academic-years/academicYearInput.js';
 import {
   applyAcademicYearFilter,
@@ -228,6 +231,31 @@ ownerRouter.post('/sections/:id/deactivate', async (req, res) => {
 });
 ownerRouter.post('/sections/:id/reactivate', async (req, res) => {
   res.json({ section: await reactivateSection(classScope(req), req.params.id, req.user, req) });
+});
+
+// ---- Students of every branch of the school (profiles; enrollment and promotion are the Managers') ----
+const studentScope = (req) => ({ school: req.school, branch: null });
+
+ownerRouter.get('/students', async (req, res) => {
+  res.json(await listStudents(studentScope(req), readStudentListQuery(req.query, { role: 'OWNER' })));
+});
+ownerRouter.get('/students/:id', async (req, res) => {
+  res.json({ student: await getStudent(studentScope(req), req.params.id) });
+});
+ownerRouter.post('/students', async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  res.status(201).json({ student: await registerStudent(studentScope(req), readStudentRegistration(jsonBody(req), { role: 'OWNER', today }), req.user, req) });
+});
+ownerRouter.patch('/students/:id', async (req, res) => {
+  const today = new Date().toISOString().slice(0, 10);
+  res.json({ student: await updateStudent(studentScope(req), req.params.id, readStudentUpdate(jsonBody(req), { today }), req.user, req) });
+});
+// Promotions of every branch (read only).
+ownerRouter.get('/promotions', async (req, res) => {
+  res.json(await listPromotions(studentScope(req)));
+});
+ownerRouter.get('/promotions/:id', async (req, res) => {
+  res.json(await getPromotion(studentScope(req), req.params.id));
 });
 
 // ---- Staff transfers between the school's branches (T1: School Owner only) ----

@@ -197,6 +197,7 @@ export default function ClassDetailsPage() {
                 <TableRow interactive={false}>
                   <TableHeaderCell>Section</TableHeaderCell>
                   {owner && <TableHeaderCell>Branch</TableHeaderCell>}
+                  <TableHeaderCell>Students</TableHeaderCell>
                   <TableHeaderCell>Capacity</TableHeaderCell>
                   <TableHeaderCell>Room</TableHeaderCell>
                   <TableHeaderCell>Status</TableHeaderCell>
@@ -206,7 +207,7 @@ export default function ClassDetailsPage() {
               <TableBody>
                 {sections.length === 0 && (
                   <TableEmpty
-                    columns={owner ? 6 : 5}
+                    columns={owner ? 7 : 6}
                     icon={Layers}
                     title={year ? `No sections in ${year.name}` : 'No academic year yet'}
                     description={year ? `Add ${cls.name}’s sections for ${year.name}, e.g. A, B and C.` : 'Sections belong to an academic year.'}
@@ -227,6 +228,7 @@ export default function ClassDetailsPage() {
                     <TableRow key={s.id} selected={selected?.id === s.id}>
                       <TableCell className="font-medium whitespace-nowrap">{s.displayName}</TableCell>
                       {owner && <TableCell className="whitespace-nowrap text-fg-secondary">{`${s.branch.name} (${s.branch.code})`}</TableCell>}
+                      <TableCell className="tabular-nums">{s.students ?? 0}</TableCell>
                       <TableCell className="tabular-nums text-fg-secondary">{s.capacity ?? '—'}</TableCell>
                       <TableCell className="text-fg-secondary">{s.room || '—'}</TableCell>
                       <TableCell>
@@ -267,6 +269,7 @@ export default function ClassDetailsPage() {
             <Detail label="Section name">{selected.name}</Detail>
             <Detail label="Academic year">{`${selected.academicYear.name} (${selected.academicYear.startDate} to ${selected.academicYear.endDate})`}</Detail>
             <Detail label="Branch">{`${selected.branch.name} (${selected.branch.code})`}</Detail>
+            <Detail label="Students">{String(selected.students ?? 0)}</Detail>
             <Detail label="Capacity">{selected.capacity ? String(selected.capacity) : ''}</Detail>
             <Detail label="Room">{selected.room}</Detail>
             <Detail label="Status">

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AcademicYearsPage } from '../../features/academic-years';
 import { AttendanceReportsPage } from '../../features/attendance-reports';
 import { ClassDetailsPage, ClassesPage } from '../../features/classes';
+import { PromotionPage, PromotionsPage, StudentProfilePage, StudentsPage } from '../../features/students';
 import { AuditLogsPage } from '../../features/audit-logs';
 import { BranchesPage } from '../../features/branches';
 import { LoginPage, RequireSession, useSession } from '../../features/auth';
@@ -112,6 +113,11 @@ const routes = [
       // OWNER and MANAGER — classes (Owner manages; Managers read) and sections (Owner: any branch; Manager: own branch)
       { path: 'classes', element: <ClassesPage />, handle: { title: 'Class Management', roles: OWNER_OR_MANAGER } },
       { path: 'classes/:classId', element: <ClassDetailsPage />, handle: { title: 'Class', roles: OWNER_OR_MANAGER } },
+      // OWNER and MANAGER — students (Owner: every branch; Manager: own branch, enrollment) and promotions (Manager prepares; Owner reads)
+      { path: 'students', element: <StudentsPage />, handle: { title: 'Students', roles: OWNER_OR_MANAGER } },
+      { path: 'students/:studentId', element: <StudentProfilePage />, handle: { title: 'Student', roles: OWNER_OR_MANAGER } },
+      { path: 'promotions', element: <PromotionsPage />, handle: { title: 'Promotion', roles: OWNER_OR_MANAGER } },
+      { path: 'promotions/:batchId', element: <PromotionPage />, handle: { title: 'Promotion', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — attendance reports (read only; each role sees its own scope, decided by the API)
       { path: 'attendance', element: <AttendanceReportsPage />, handle: { title: 'Attendance', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — notification centre (each sees only their own notifications, decided by the API)
