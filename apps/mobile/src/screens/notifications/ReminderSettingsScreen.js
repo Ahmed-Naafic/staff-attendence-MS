@@ -27,6 +27,7 @@ const CATEGORY_LABELS = {
   STATUS: 'School and branch suspensions',
   ANNOUNCEMENT: 'EduTrack announcements',
   TRANSFER: 'Branch transfers',
+  STUDENT_ATTENDANCE: 'Lesson attendance reminders',
 };
 
 function Row({ label, description, value, onChange, disabled, testID }) {

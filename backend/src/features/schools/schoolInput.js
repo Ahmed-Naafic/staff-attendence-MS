@@ -98,6 +98,14 @@ export function readUpdate(body) {
   return values;
 }
 
+/** School features (Super Admin): { studentAttendance: boolean }. */
+export function readFeatures(body) {
+  const keys = Object.keys(body);
+  if (keys.some((k) => k !== 'studentAttendance')) throw badRequest(`Unknown fields: ${keys.filter((k) => k !== 'studentAttendance').join(', ')}.`);
+  if (typeof body.studentAttendance !== 'boolean') throw badRequest('Check the highlighted fields.', { studentAttendance: 'Must be true or false.' });
+  return { studentAttendance: body.studentAttendance };
+}
+
 /** Suspension reason: required, 3–500 characters. */
 export function readSuspension(body) {
   const keys = Object.keys(body);

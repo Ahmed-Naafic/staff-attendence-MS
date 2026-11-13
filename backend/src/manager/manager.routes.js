@@ -2,6 +2,24 @@ import { Router } from 'express';
 import { fromDbStatus } from '../common/listQuery.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { requireManagerBranch } from '../middleware/requireManagerBranch.js';
+import { readCurriculum, readSubjectCreation, readSubjectListQuery, readSubjectUpdate } from '../features/subjects/subjectInput.js';
+import { createSubject, deactivateSubject, getCurriculum, getSubject, listSubjects, reactivateSubject, setCurriculum, updateSubject } from '../features/subjects/subjects.service.js';
+import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuery } from '../features/teaching/teachingInput.js';
+import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
+import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
+import { assignTeaching, cancelAssignment, eligibleTeachers, listTeachingAssignments, sectionTeaching, setAssignmentEnd } from '../features/teaching/teaching.service.js';
+import { readEntryCreation, readEntryUpdate, readSchoolDaysQuery, readWeekdayPolicy, readWeekdaysChange } from '../features/academic-calendar/calendarInput.js';
+import {
+  calendarToday,
+  cancelEntry,
+  cancelWeekdays,
+  createEntry,
+  getCalendar,
+  listSchoolDays,
+  saveWeekdays,
+  setBranchWeekdaysAllowed,
+  updateEntry,
+} from '../features/academic-calendar/calendar.service.js';
 import { readListQuery } from '../common/listQuery.js';
 import { jsonBody } from '../common/validate.js';
 import { attendanceOptions, attendanceRecords, attendanceSummary, reportToday } from '../features/attendance/attendanceReports.service.js';
@@ -83,6 +101,76 @@ managerRouter.get('/branch', (req, res) => {
 managerRouter.get('/academic-years', async (req, res) => {
   res.json(await listAcademicYears(req.branch.school));
 });
+
+// ---- Academic calendar (docs/business-rules.md → Academic calendar): weekly school days and the
+// calendar's holidays, closures and reopenings. A Manager reads the school calendar and manages their own branch's school days (when the year allows it), closures and reopenings.
+const calendarScope = (req) => {
+  const { school, ...branch } = req.branch;
+  return { school, branch };
+};
+
+managerRouter.get('/academic-years/:id/calendar', async (req, res) => {
+  res.json(await getCalendar(calendarScope(req), req.params.id));
+});
+managerRouter.put('/academic-years/:id/weekdays', async (req, res) => {
+  res.json(await saveWeekdays(calendarScope(req), req.params.id, readWeekdaysChange(jsonBody(req), { role: 'MANAGER' }), req.user, req));
+});
+managerRouter.post('/academic-years/:id/weekdays/:versionId/cancel', async (req, res) => {
+  res.json(await cancelWeekdays(calendarScope(req), req.params.id, req.params.versionId, req.user, req));
+});
+managerRouter.post('/academic-years/:id/calendar-entries', async (req, res) => {
+  res.status(201).json({ entry: await createEntry(calendarScope(req), req.params.id, readEntryCreation(jsonBody(req), { role: 'MANAGER' }), req.user, req) });
+});
+managerRouter.patch('/calendar-entries/:id', async (req, res) => {
+  res.json({ entry: await updateEntry(calendarScope(req), req.params.id, readEntryUpdate(jsonBody(req)), req.user, req) });
+});
+managerRouter.post('/calendar-entries/:id/cancel', async (req, res) => {
+  res.json({ entry: await cancelEntry(calendarScope(req), req.params.id, req.user, req) });
+});
+// Whether the branch has school on each day from..to (at most 366 days).
+managerRouter.get('/calendar/days', async (req, res) => {
+  res.json(await listSchoolDays(calendarScope(req), readSchoolDaysQuery(req.query, { role: 'MANAGER', today: await calendarToday() })));
+});
+
+// ---- Subjects and class curricula (School Owner manages; Managers read) and teaching
+// assignments (docs/business-rules.md → Subjects; Teaching assignments).
+const teachingScope = calendarScope;
+
+managerRouter.get('/subjects', async (req, res) => {
+  res.json(await listSubjects(req.branch.school, readSubjectListQuery(req.query)));
+});
+managerRouter.get('/subjects/:id', async (req, res) => {
+  res.json({ subject: await getSubject(req.branch.school, req.params.id) });
+});
+managerRouter.get('/classes/:id/subjects', async (req, res) => {
+  res.json(await getCurriculum(req.branch.school, req.params.id));
+});
+managerRouter.get('/teaching-assignments', async (req, res) => {
+  res.json(await listTeachingAssignments(teachingScope(req), readAssignmentQuery(req.query, { role: 'MANAGER' })));
+});
+managerRouter.post('/teaching-assignments', async (req, res) => {
+  res.status(201).json({ assignment: await assignTeaching(teachingScope(req), readAssignment(jsonBody(req)), req.user, req) });
+});
+managerRouter.post('/teaching-assignments/:id/end', async (req, res) => {
+  res.json({ assignment: await setAssignmentEnd(teachingScope(req), req.params.id, readAssignmentEnd(jsonBody(req)), req.user, req) });
+});
+managerRouter.post('/teaching-assignments/:id/cancel', async (req, res) => {
+  res.json({ assignment: await cancelAssignment(teachingScope(req), req.params.id, req.user, req) });
+});
+managerRouter.get('/sections/:id/teaching', async (req, res) => {
+  res.json(await sectionTeaching(teachingScope(req), req.params.id));
+});
+// Staff who can be given teaching (active staff of the branch), suggested teachers first.
+managerRouter.get('/teaching/teachers', async (req, res) => {
+  res.json(await eligibleTeachers(teachingScope(req), { ...readTeacherQuery(req.query), academicYear: typeof req.query.academicYear === 'string' && req.query.academicYear ? req.query.academicYear : 'current' }));
+});
+
+// ---- Bell schedules and section timetables (docs/business-rules.md → Bell schedules; Timetables).
+mountTimetableRoutes(managerRouter, teachingScope, 'MANAGER');
+
+// ---- Student attendance (docs/business-rules.md → Student attendance): settings, half-day sessions,
+// marks and excuses of the Manager's branch.
+mountStudentAttendanceRoutes(managerRouter, teachingScope, 'MANAGER');
 
 // ---- Classes (read only; the School Owner manages them) and the sections of the Manager's branch ----
 const classScope = (req) => {

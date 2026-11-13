@@ -31,8 +31,17 @@ import { platformLimits, platformNotificationSettings, updatePlatformNotificatio
 import { readOwnerCreation, readOwnerSuspension, readOwnerUpdate } from '../features/school-owners/ownerInput.js';
 import { createOwner, getOwner, listOwners, reactivateOwner, suspendOwner, updateOwner } from '../features/school-owners/owners.service.js';
 import { backupsRouter } from '../features/backups/backups.routes.js';
-import { readRegistration, readSuspension, readUpdate } from '../features/schools/schoolInput.js';
-import { getSchool, listSchools, reactivateSchool, registerSchool, suggestCode, suspendSchool, updateSchool } from '../features/schools/schools.service.js';
+import { readFeatures, readRegistration, readSuspension, readUpdate } from '../features/schools/schoolInput.js';
+import {
+  getSchool,
+  listSchools,
+  reactivateSchool,
+  registerSchool,
+  suggestCode,
+  suspendSchool,
+  updateSchool,
+  updateSchoolFeatures,
+} from '../features/schools/schools.service.js';
 
 /**
  * Super Admin platform API (/api/platform). Every route requires a signed-in SUPER_ADMIN:
@@ -81,6 +90,10 @@ platformRouter.post('/schools', async (req, res) => {
 });
 platformRouter.patch('/schools/:id', async (req, res) => {
   res.json({ school: await updateSchool(req.params.id, readUpdate(jsonBody(req)), req.user, req) });
+});
+// Features turned on per school (Student Attendance): { studentAttendance: boolean }.
+platformRouter.put('/schools/:id/features', async (req, res) => {
+  res.json({ school: await updateSchoolFeatures(req.params.id, readFeatures(jsonBody(req)), req.user, req) });
 });
 platformRouter.post('/schools/:id/suspend', async (req, res) => {
   res.json({ school: await suspendSchool(req.params.id, readSuspension(jsonBody(req)), req.user, req) });

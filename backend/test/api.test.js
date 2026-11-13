@@ -250,7 +250,7 @@ describe('platform data (Super Admin)', () => {
     assert.ok(res.body.locations.length > 0);
     const dates = res.body.items.map((s) => s.registeredAt);
     assert.deepEqual(dates, [...dates].sort().reverse(), 'newest first');
-    assert.deepEqual(Object.keys(res.body.items[0]).sort(), ['address', 'code', 'description', 'email', 'id', 'location', 'name', 'ownerId', 'ownerName', 'phone', 'registeredAt', 'status', 'suspendedAt', 'suspensionReason', 'website']);
+    assert.deepEqual(Object.keys(res.body.items[0]).sort(), ['address', 'code', 'description', 'email', 'features', 'id', 'location', 'name', 'ownerId', 'ownerName', 'phone', 'registeredAt', 'status', 'suspendedAt', 'suspensionReason', 'website']);
   });
 
   test('schools: search, filters combine, clamping, details', async () => {

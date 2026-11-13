@@ -27,6 +27,7 @@ import { useApiData } from '../../../hooks/useApiData.js';
 import { formatUtc } from '../../branches';
 import { dayList, whenText } from '../../schedules/utils/scheduleRules.js';
 import { StaffStatusBadge } from '../../staff/components/StaffTable.jsx';
+import { TeachingList } from '../../teaching';
 import { TransferModal } from '../components/TransferModal.jsx';
 import { cancelTransfer, loadSchoolBranches, loadSchoolStaff, loadSchoolStaffMember, PAGE_SIZE } from '../data/transfersApi.js';
 import { TRANSFER_STATES } from '../utils/transferRules.js';
@@ -119,6 +120,13 @@ function StaffDetails({ id, onClose, onTransfer, onChanged, version }) {
               </p>
             </div>
           )}
+          <section aria-labelledby="staff-teaching" className="flex flex-col gap-3">
+            <h3 id="staff-teaching" className="text-card-title text-fg">
+              Teaching
+            </h3>
+            <TeachingList items={staff.teaching} empty="No teaching assigned. Teaching is given under Teaching, in any branch of the school." />
+            {staff.teaching?.length > 0 && <p className="text-small text-fg-muted">Teaching stays with the teacher if they move to another branch; end it under Teaching if it should not.</p>}
+          </section>
           <section aria-labelledby="transfer-history" className="flex flex-col gap-3">
             <h3 id="transfer-history" className="text-card-title text-fg">
               Transfer history

@@ -76,3 +76,27 @@ export function checkEventResponse(data) {
   checkEvent(data.event);
   return data;
 }
+
+// ---- teachers' lesson attendance (backend/src/features/student-attendance/lessonAttendance.service.js) ----
+
+function checkLesson(l) {
+  check(
+    isObject(l) && isString(l.key) && isDay(l.date) && isNumber(l.period) && isTime(l.start) && isTime(l.end) && isObject(l.section) && isString(l.section.id) && isObject(l.subject) && isString(l.subject.name) && isString(l.state) && isInstant(l.deadlineAt) && isInstant(l.uploadUntil) && Array.isArray(l.students),
+    'lesson',
+  );
+  for (const s of l.students) check(isObject(s) && isString(s.id) && isString(s.name) && (s.status === null || isString(s.status)) && isString(s.effective), 'lesson student');
+  return l;
+}
+
+export function checkLessons(data) {
+  check(isObject(data) && isDay(data.date) && Array.isArray(data.lessons), 'lessons');
+  data.lessons.forEach(checkLesson);
+  return data;
+}
+
+export function checkLessonMarks(data) {
+  check(isObject(data) && Array.isArray(data.results), 'lesson marks');
+  for (const r of data.results) check(isObject(r) && isString(r.student) && (r.result === 'recorded' || r.result === 'refused'), 'lesson mark result');
+  if (data.lesson) checkLesson(data.lesson);
+  return data;
+}

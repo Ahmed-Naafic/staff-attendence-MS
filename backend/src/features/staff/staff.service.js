@@ -13,6 +13,7 @@ import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, toTime } from '../schedules/scheduleInput.js';
 import { addDays, BRANCH_TX, lastDayBefore, localDate, lockOperatingBranch, MAX_AHEAD_DAYS, scheduleAt, scheduleOn } from '../schedules/schedules.service.js';
 import { phoneKey } from '../schools/schoolInput.js';
+import { liveTeachingOf } from '../teaching/teaching.service.js';
 import { transferSummary } from './transfers.service.js';
 
 /*
@@ -204,6 +205,8 @@ export async function getStaff(branch, id, client = getPrisma()) {
       scheduled: await toAssignment(scheduled, client),
     },
     transfer: await transferSummary(branch, staff.id, client),
+    // What they teach, in any branch of the school (read only here; managed under Teaching).
+    teaching: await liveTeachingOf(staff.id, client),
     branchShifts: {
       current: scheduleNow ? { effectiveFrom: fromDbDate(scheduleNow.effectiveFrom), effectiveTime: localDateTime(scheduleNow.effectiveAt, scheduleNow.timeZone).time, shifts: shiftOptions(scheduleNow) } : null,
       scheduled: scheduleNext ? { effectiveFrom: fromDbDate(scheduleNext.effectiveFrom), effectiveTime: localDateTime(scheduleNext.effectiveAt, scheduleNext.timeZone).time, shifts: shiftOptions(scheduleNext) } : null,

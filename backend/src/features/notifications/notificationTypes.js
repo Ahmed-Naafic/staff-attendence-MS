@@ -26,15 +26,16 @@ export const CATEGORIES = [
   'STATUS',
   'ANNOUNCEMENT',
   'TRANSFER',
+  'STUDENT_ATTENDANCE',
 ];
 export const MANDATORY_CATEGORIES = ['STATUS', 'MANAGER_ASSIGNMENT', 'ANNOUNCEMENT', 'TRANSFER'];
 export const isMandatory = (category) => MANDATORY_CATEGORIES.includes(category);
 
 /** The categories each role can receive (and so can see in its preferences). */
 export const ROLE_CATEGORIES = {
-  STAFF: ['MISSING_CHECK_OUT', 'ASSIGNMENT', 'SCHEDULE', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT'],
-  MANAGER: ['ATTENDANCE', 'DIGEST', 'BRANCH_SETUP', 'MANAGER_ASSIGNMENT', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT'],
-  OWNER: ['DIGEST', 'BRANCH_SETUP', 'STATUS', 'ANNOUNCEMENT'],
+  STAFF: ['MISSING_CHECK_OUT', 'ASSIGNMENT', 'SCHEDULE', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE'],
+  MANAGER: ['ATTENDANCE', 'DIGEST', 'BRANCH_SETUP', 'MANAGER_ASSIGNMENT', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE'],
+  OWNER: ['DIGEST', 'BRANCH_SETUP', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE'],
 };
 
 /** Notification type → category. The 11 approved Phase 1 events (N3) plus the digests (N6–N8). */
@@ -57,6 +58,9 @@ export const NOTIFICATION_TYPES = {
   STAFF_TRANSFERRED: 'TRANSFER', // T9 (the staff member: their transfer is scheduled)
   STAFF_TRANSFER_IN: 'TRANSFER', // T9 (the destination branch's Managers)
   STAFF_TRANSFER_CANCELLED: 'TRANSFER', // T9 (the staff member and the destination Managers)
+  LESSON_ATTENDANCE_MISSING: 'STUDENT_ATTENDANCE', // the lesson's teacher: attendance not taken by the deadline
+  STUDENT_ATTENDANCE_INCOMPLETE: 'STUDENT_ATTENDANCE', // the branch's Managers: a day's attendance incomplete
+  STUDENT_ATTENDANCE_SUMMARY: 'STUDENT_ATTENDANCE', // the Owner: a day's student attendance across branches
 };
 export const categoryOf = (type) => NOTIFICATION_TYPES[type];
 

@@ -119,51 +119,67 @@ model User {
   pushMessages           PushMessage[]
   announcementReads      AnnouncementRead[]
   staffTransfers         StaffTransfer[]
+  /// STAFF only: what they teach (TeachingAssignment), in any branch of their school.
+  teachingAssignments    TeachingAssignment[]
+  /// STAFF only: timetable lessons naming them as the teacher.
+  timetableSlots         TimetableSlot[]
 
   @@index([role, status])
   @@index([branchId])
 }
 
 model School {
-  id               String       @id @default(uuid())
+  id                       String       @id @default(uuid())
   /// School Code, e.g. JHA-001. Unique; cannot change after registration.
-  code             String       @unique
+  code                     String       @unique
   /// Not unique: two schools may share a name.
-  name             String
+  name                     String
   /// City.
-  location         String
-  status           SchoolStatus @default(ACTIVE)
-  description      String?
+  location                 String
+  status                   SchoolStatus @default(ACTIVE)
+  description              String?
   /// Required when registering or editing through the API; empty on records created before them.
-  phone            String?
-  address          String?
-  email            String?
-  website          String?
+  phone                    String?
+  address                  String?
+  email                    String?
+  website                  String?
   /// Set while SUSPENDED (cleared on reactivation); every change is also in the audit log.
-  suspensionReason String?
-  suspendedAt      DateTime?
-  registeredAt     DateTime     @default(now())
+  suspensionReason         String?
+  suspendedAt              DateTime?
+  registeredAt             DateTime     @default(now())
   /// One owner per school; an owner owns one school.
-  ownerId          String?      @unique
-  owner            User?        @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  ownerId                  String?      @unique
+  owner                    User?        @relation("SchoolOwner", fields: [ownerId], references: [id], onDelete: Restrict)
   /// The last branch number given in this school. Raised only by the update that creates a branch
   /// (which locks this row), so branch codes are never repeated or reused.
-  branchSequence   Int          @default(0)
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  branchSequence           Int          @default(0)
+  /// Student Attendance is available to this school (Super Admin; off by default). Changes are in the audit log.
+  studentAttendanceEnabled Boolean      @default(false)
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
 
-  auditEvents       AuditEvent[]
-  branches          Branch[]
-  suspensionPeriods SuspensionPeriod[]
-  notifications     Notification[]
-  announcements     AnnouncementSchool[]
-  staffTransfers    StaffTransfer[]
-  academicYears     AcademicYear[]
-  classes           SchoolClass[]
-  sections          Section[]
-  students          Student[]
-  enrollments       Enrollment[]
-  promotionBatches  PromotionBatch[]
+  auditEvents               AuditEvent[]
+  branches                  Branch[]
+  suspensionPeriods         SuspensionPeriod[]
+  notifications             Notification[]
+  announcements             AnnouncementSchool[]
+  staffTransfers            StaffTransfer[]
+  academicYears             AcademicYear[]
+  classes                   SchoolClass[]
+  sections                  Section[]
+  students                  Student[]
+  enrollments               Enrollment[]
+  promotionBatches          PromotionBatch[]
+  academicWeekdays          AcademicWeekdays[]
+  calendarEntries           CalendarEntry[]
+  subjects                  Subject[]
+  classSubjects             ClassSubject[]
+  teachingAssignments       TeachingAssignment[]
+  bellSchedules             BellSchedule[]
+  timetableVersions         TimetableVersion[]
+  studentAttendanceSettings StudentAttendanceSettings[]
+  studentAttendanceSessions StudentAttendanceSession[]
+  studentExcuses            StudentExcuse[]
 
   @@index([status])
   @@index([location])
@@ -198,21 +214,29 @@ model Branch {
   createdAt        DateTime     @default(now())
   updatedAt        DateTime     @updatedAt
 
-  locations          BranchLocation[]
-  managers           User[]                  @relation("BranchManagers")
-  managerAssignments ManagerAssignment[]
-  schedules          BranchSchedule[]
-  staffAssignments   StaffAssignment[]
-  suspensionPeriods  SuspensionPeriod[]
-  attendanceEvents   AttendanceEvent[]
-  notifications      Notification[]
-  reminderSettings   BranchReminderSettings?
-  transfersOut       StaffTransfer[]         @relation("TransferFrom")
-  transfersIn        StaffTransfer[]         @relation("TransferTo")
-  sections           Section[]
-  students           Student[]
-  enrollments        Enrollment[]
-  promotionBatches   PromotionBatch[]
+  locations                 BranchLocation[]
+  managers                  User[]                     @relation("BranchManagers")
+  managerAssignments        ManagerAssignment[]
+  schedules                 BranchSchedule[]
+  staffAssignments          StaffAssignment[]
+  suspensionPeriods         SuspensionPeriod[]
+  attendanceEvents          AttendanceEvent[]
+  notifications             Notification[]
+  reminderSettings          BranchReminderSettings?
+  transfersOut              StaffTransfer[]            @relation("TransferFrom")
+  transfersIn               StaffTransfer[]            @relation("TransferTo")
+  sections                  Section[]
+  students                  Student[]
+  enrollments               Enrollment[]
+  promotionBatches          PromotionBatch[]
+  academicWeekdays          AcademicWeekdays[]
+  calendarEntries           CalendarEntry[]
+  teachingAssignments       TeachingAssignment[]
+  bellSchedules             BellSchedule[]
+  timetableVersions         TimetableVersion[]
+  studentAttendanceSettings StudentAttendanceSettings?
+  studentAttendanceSessions StudentAttendanceSession[]
+  studentExcuses            StudentExcuse[]
 
   @@unique([schoolId, number])
   @@unique([schoolId, code])
@@ -495,6 +519,7 @@ enum NotificationCategory {
   STATUS // school and branch suspension and reactivation (mandatory)
   ANNOUNCEMENT // platform announcements (mandatory)
   TRANSFER // a staff member's own branch transfer, and staff joining a Manager's branch (mandatory)
+  STUDENT_ATTENDANCE // student attendance not taken (teachers, Managers) and daily summaries (Owners)
 }
 
 /// DRAFT (not visible), PUBLISHED (visible from publishAt until expiresAt; "scheduled" while
@@ -878,25 +903,33 @@ enum AcademicYearStatus {
 /// of one school's years never overlap (partial unique index and exclusion constraint in the
 /// migration). A CLOSED year is read only; only a PLANNED year can be deleted.
 model AcademicYear {
-  id             String             @id @default(uuid())
-  schoolId       String
-  school         School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  id                        String                     @id @default(uuid())
+  schoolId                  String
+  school                    School                     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   /// e.g. "2026/2027". At most 40 characters; unique in the school regardless of capitalization.
-  name           String
+  name                      String
   /// The name compared for uniqueness (same folding as branch names; computed by the API).
-  nameKey        String
+  nameKey                   String
   /// Calendar dates (no time, no time zone). Both inclusive; endDate after startDate.
-  startDate      DateTime           @db.Date
-  endDate        DateTime           @db.Date
-  status         AcademicYearStatus @default(PLANNED)
-  startedAt      DateTime?
-  closedAt       DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  sections       Section[]
-  enrollments    Enrollment[]
-  promotionsFrom PromotionBatch[]   @relation("PromotionFrom")
-  promotionsTo   PromotionBatch[]   @relation("PromotionTo")
+  startDate                 DateTime                   @db.Date
+  endDate                   DateTime                   @db.Date
+  status                    AcademicYearStatus         @default(PLANNED)
+  /// Whether the school's Managers may set their own branch's school days for this year (School
+  /// Owner). Turning it off returns every branch to the school's days from the next day.
+  branchWeekdaysAllowed     Boolean                    @default(false)
+  startedAt                 DateTime?
+  closedAt                  DateTime?
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+  sections                  Section[]
+  enrollments               Enrollment[]
+  promotionsFrom            PromotionBatch[]           @relation("PromotionFrom")
+  promotionsTo              PromotionBatch[]           @relation("PromotionTo")
+  weekdays                  AcademicWeekdays[]
+  calendarEntries           CalendarEntry[]
+  teachingAssignments       TeachingAssignment[]
+  timetableVersions         TimetableVersion[]
+  studentAttendanceSessions StudentAttendanceSession[]
 
   @@unique([schoolId, nameKey])
   @@index([schoolId, startDate])
@@ -927,6 +960,7 @@ model SchoolClass {
   updatedAt     DateTime    @updatedAt
 
   sections Section[]
+  subjects ClassSubject[]
 
   @@unique([schoolId, nameKey])
   @@unique([schoolId, sequence])
@@ -956,9 +990,12 @@ model Section {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  enrollments      Enrollment[]
-  promotionsFrom   PromotionItem[] @relation("PromotionItemFrom")
-  promotionsTarget PromotionItem[] @relation("PromotionItemTarget")
+  enrollments         Enrollment[]
+  teachingAssignments TeachingAssignment[]
+  timetableVersions   TimetableVersion[]
+  promotionsFrom      PromotionItem[]            @relation("PromotionItemFrom")
+  promotionsTarget    PromotionItem[]            @relation("PromotionItemTarget")
+  attendanceSessions  StudentAttendanceSession[]
 
   @@unique([classId, academicYearId, branchId, nameKey])
   @@index([schoolId, academicYearId])
@@ -1010,8 +1047,10 @@ model Student {
   createdAt             DateTime      @default(now())
   updatedAt             DateTime      @updatedAt
 
-  enrollments    Enrollment[]
-  promotionItems PromotionItem[]
+  enrollments       Enrollment[]
+  promotionItems    PromotionItem[]
+  attendanceEntries StudentAttendanceEntry[]
+  excuses           StudentExcuse[]
 
   @@index([schoolId, branchId, status])
   @@index([schoolId, nameKey, dateOfBirth])
@@ -1065,8 +1104,9 @@ model Enrollment {
   createdAt            DateTime          @default(now())
   updatedAt            DateTime          @updatedAt
 
-  promotionItemsFrom   PromotionItem[] @relation("PromotionItemFromEnrollment")
-  promotionItemsResult PromotionItem[] @relation("PromotionItemResultEnrollment")
+  promotionItemsFrom   PromotionItem[]          @relation("PromotionItemFromEnrollment")
+  promotionItemsResult PromotionItem[]          @relation("PromotionItemResultEnrollment")
+  attendanceEntries    StudentAttendanceEntry[]
 
   @@unique([studentId, academicYearId])
   @@index([sectionId, status])
@@ -1154,4 +1194,520 @@ model PromotionItem {
 
   @@unique([batchId, fromEnrollmentId])
   @@index([batchId, status])
+}
+
+// ---- Academic calendar (docs/business-rules.md → Academic calendar) ---------------------------
+// When students have school: the weekly school days of an academic year (school default, optional
+// branch override) and the calendar's exceptions (school holidays, branch closures, branch
+// reopenings of a holiday). Independent of staff schedules (BranchSchedule / BranchShift), which
+// say when staff work. Suspensions stay in SuspensionPeriod. Dates are calendar dates in the
+// platform time zone. Rows are never deleted: changes that never took effect are cancelled.
+
+/// The weekly school days of one academic year, for the whole school (branchId null; School Owner)
+/// or one branch (its Manager, while the year allows branch school days). Versioned like
+/// BranchSchedule: a version applies from effectiveFrom until the next one of the same level; it is
+/// never edited; a version that had not started yet can be cancelled (cancelledAt). A branch
+/// version with followsSchool returns the branch to the school's days from its date. At most one
+/// non-cancelled version per level and date (partial unique indexes in the migration).
+model AcademicWeekdays {
+  id             String       @id @default(uuid())
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  /// Null: the school's default days. Set: that branch's own days (a branch of the same school).
+  branchId       String?
+  branch         Branch?      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// MON…SUN, at least one (empty only for a followsSchool version; database check).
+  days           Weekday[]
+  followsSchool  Boolean      @default(false)
+  effectiveFrom  DateTime     @db.Date
+  recordedAt     DateTime     @default(now())
+  cancelledAt    DateTime?
+
+  @@index([academicYearId, branchId, effectiveFrom])
+  @@index([schoolId])
+}
+
+enum CalendarEntryType {
+  /// School-wide day(s) without school (School Owner).
+  HOLIDAY
+  /// One branch closed (its Manager, or the School Owner).
+  CLOSURE
+  /// One branch has school during part of a school holiday that allows it (its Manager, or the School Owner).
+  REOPENING
+  /// Extra school day(s) following one weekday's timetable (timetableDay): a make-up day on a day
+  /// without school, or a timetable swap on a school day. School level (School Owner) or one branch
+  /// (its Manager, or the School Owner). Closures and holidays still win.
+  SCHOOL_DAY
+}
+
+/// An exception in the academic calendar, from startDate to endDate (both inclusive), inside one
+/// academic year of the school. HOLIDAY: school level (no branch). CLOSURE and REOPENING: one branch;
+/// a REOPENING belongs to the HOLIDAY it reopens and lies within it. Days before today are fixed: an
+/// entry that had not started can be cancelled (cancelledAt), a running one only ends early. Active
+/// entries of one type never overlap at the same level (exclusion constraints in the migration).
+model CalendarEntry {
+  id                   String            @id @default(uuid())
+  schoolId             String
+  school               School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId       String
+  academicYear         AcademicYear      @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  branchId             String?
+  branch               Branch?           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  type                 CalendarEntryType
+  /// e.g. "Eid al-Fitr", "Closed: road flooding". 2–80 characters.
+  name                 String
+  /// Optional details, at most 300 characters.
+  note                 String?
+  startDate            DateTime          @db.Date
+  endDate              DateTime          @db.Date
+  /// HOLIDAY only: whether the school's Managers may reopen it for their branch.
+  allowBranchReopening Boolean           @default(false)
+  /// SCHOOL_DAY only: the weekday whose timetable and bell times the day follows.
+  timetableDay         Weekday?
+  /// REOPENING only: the holiday it reopens.
+  holidayId            String?
+  holiday              CalendarEntry?    @relation("HolidayReopenings", fields: [holidayId], references: [id], onDelete: Restrict)
+  reopenings           CalendarEntry[]   @relation("HolidayReopenings")
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  cancelledAt          DateTime?
+
+  @@index([schoolId, academicYearId, startDate])
+  @@index([branchId, startDate])
+  @@index([holidayId])
+}
+
+// ---- Subjects and teaching (docs/business-rules.md → Subjects; Teaching assignments) ------------
+// What is taught and who teaches it. A staff member keeps their one home branch (User.branchId:
+// Staff ID, check-in, shifts, transfers); teaching assignments say which sections of their school
+// (any branch) they teach. Teaching permissions come from these assignments, never from the job title.
+
+/// A subject of a school (e.g. "Mathematics"), created once by the School Owner and used every year.
+/// Never deleted: deactivated instead (ClassStatus).
+model Subject {
+  id            String      @id @default(uuid())
+  schoolId      String
+  school        School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  /// At most 60 characters; unique in the school regardless of capitalization.
+  name          String
+  nameKey       String
+  /// Optional short code (e.g. "MATH"), at most 12 characters, unique in the school when given.
+  code          String?
+  description   String?
+  status        ClassStatus @default(ACTIVE)
+  deactivatedAt DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  classes             ClassSubject[]
+  teachingAssignments TeachingAssignment[]
+  timetableSlots      TimetableSlot[]
+  attendanceSessions  StudentAttendanceSession[]
+
+  @@unique([schoolId, nameKey])
+  @@index([schoolId, status])
+}
+
+/// A class's curriculum (School Owner): the subjects a class studies, with an optional number of
+/// lessons per week (used by timetables). Applies every year. A class without any is open to every
+/// active subject of the school.
+model ClassSubject {
+  id            String      @id @default(uuid())
+  schoolId      String
+  school        School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  classId       String
+  class         SchoolClass @relation(fields: [classId], references: [id], onDelete: Restrict)
+  subjectId     String
+  subject       Subject     @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  /// Lessons per week (1–40), or null when not planned.
+  weeklyLessons Int?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([classId, subjectId])
+  @@index([schoolId])
+  @@index([subjectId])
+}
+
+enum TeachingRole {
+  /// Teaches one subject to a section: may take that subject's lesson attendance.
+  SUBJECT_TEACHER
+  /// Responsible for a section as a whole (homeroom). Does not by itself allow taking any lesson's attendance.
+  CLASS_TEACHER
+}
+
+/// A staff member's teaching in one section of one academic year, from startDate to endDate (both
+/// inclusive; endDate null: until the year ends). SUBJECT_TEACHER names a subject; CLASS_TEACHER does
+/// not. The section may be in any branch of the teacher's school. Never deleted: one that has not
+/// started can be cancelled (cancelledAt), a running one ends early. The database keeps one active
+/// class teacher per section at a time, and never the same teacher twice for a section's subject at
+/// once (exclusion constraints in the migration).
+model TeachingAssignment {
+  id             String       @id @default(uuid())
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  /// The section's branch (stored for scoping: a Manager sees their branch's).
+  branchId       String
+  branch         Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  sectionId      String
+  section        Section      @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  teacherId      String
+  teacher        User         @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  role           TeachingRole
+  subjectId      String?
+  subject        Subject?     @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  startDate      DateTime     @db.Date
+  endDate        DateTime?    @db.Date
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  cancelledAt    DateTime?
+
+  @@index([sectionId, role])
+  @@index([teacherId, academicYearId])
+  @@index([schoolId, academicYearId, branchId])
+  @@index([subjectId])
+}
+
+// ---- Bell schedules and timetables (docs/business-rules.md → Bell schedules; Timetables) --------
+// When lessons happen. A bell schedule gives the times of a school day's lessons (numbered periods)
+// and breaks; one break may be the main break that splits the day into two halves (Manager
+// attendance before and after the break). A section's timetable names its bell schedule and which
+// subject (and teacher) each period of each weekday has. Both are versioned by date like the
+// school days: never edited, never deleted; a version that had not started can be cancelled.
+// Whether there is school on a date is still decided only by the academic calendar.
+
+/// A named bell schedule (e.g. "Morning", "Afternoon"), for the whole school (branchId null; School
+/// Owner) or one branch (its Manager, or the School Owner). Not tied to an academic year: its
+/// versions say from when each set of times applies. Never deleted: deactivated instead.
+model BellSchedule {
+  id            String      @id @default(uuid())
+  schoolId      String
+  school        School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId      String?
+  branch        Branch?     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// At most 60 characters; unique per level (the school's, each branch's) regardless of capitalization.
+  name          String
+  nameKey       String
+  description   String?
+  status        ClassStatus @default(ACTIVE)
+  deactivatedAt DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  versions   BellScheduleVersion[]
+  timetables TimetableVersion[]
+
+  @@index([schoolId, status])
+  @@index([branchId])
+}
+
+/// The times of a bell schedule from effectiveFrom until its next version. At most one non-cancelled
+/// version per schedule and date (partial unique index in the migration).
+model BellScheduleVersion {
+  id             String       @id @default(uuid())
+  bellScheduleId String
+  bellSchedule   BellSchedule @relation(fields: [bellScheduleId], references: [id], onDelete: Restrict)
+  effectiveFrom  DateTime     @db.Date
+  recordedAt     DateTime     @default(now())
+  cancelledAt    DateTime?
+  periods        BellPeriod[]
+
+  @@index([bellScheduleId, effectiveFrom])
+}
+
+enum BellPeriodKind {
+  /// A numbered lesson period (1, 2, …) that timetables fill.
+  LESSON
+  BREAK
+}
+
+/// One lesson period or break of a bell schedule version on the given weekdays, from startMinute to
+/// endMinute (minutes after midnight, same day). On each weekday the version's periods do not
+/// overlap, lesson numbers are unique and follow the time order, and at most one break is the main
+/// break, with lessons before and after it (checked by the API).
+model BellPeriod {
+  id          String              @id @default(uuid())
+  versionId   String
+  version     BellScheduleVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  kind        BellPeriodKind
+  /// LESSON: 1–20. BREAK: null.
+  number      Int?
+  /// Optional label, e.g. "Break", "Lunch".
+  name        String?
+  days        Weekday[]
+  startMinute Int
+  endMinute   Int
+  /// BREAK only: splits the day into the half before and the half after it.
+  mainBreak   Boolean             @default(false)
+
+  @@index([versionId])
+}
+
+/// A section's timetable from effectiveFrom until its next version: its bell schedule and its
+/// lessons. A version without lessons still gives the section its bell schedule. At most one
+/// non-cancelled version per section and date (partial unique index in the migration).
+model TimetableVersion {
+  id             String          @id @default(uuid())
+  schoolId       String
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  /// The section's branch (stored for scoping).
+  branchId       String
+  branch         Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  sectionId      String
+  section        Section         @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  bellScheduleId String
+  bellSchedule   BellSchedule    @relation(fields: [bellScheduleId], references: [id], onDelete: Restrict)
+  effectiveFrom  DateTime        @db.Date
+  recordedAt     DateTime        @default(now())
+  cancelledAt    DateTime?
+  slots          TimetableSlot[]
+
+  @@index([sectionId, effectiveFrom])
+  @@index([schoolId, academicYearId, branchId])
+  @@index([bellScheduleId])
+}
+
+/// One lesson of a timetable version: a weekday's numbered period, its subject and, optionally, the
+/// teacher who takes it (null: any of the section's teachers of that subject). One lesson per period.
+model TimetableSlot {
+  id           String           @id @default(uuid())
+  versionId    String
+  version      TimetableVersion @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  weekday      Weekday
+  periodNumber Int
+  subjectId    String
+  subject      Subject          @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  teacherId    String?
+  teacher      User?            @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  /// Optional room for this lesson (otherwise the section's room), at most 40 characters.
+  room         String?
+
+  @@unique([versionId, weekday, periodNumber])
+  @@index([teacherId])
+  @@index([subjectId])
+}
+
+// ---- Student attendance (docs/business-rules.md → Student attendance) ----------------------------
+// Switched on per school by the Super Admin (School.studentAttendanceEnabled). A Manager takes
+// attendance of each section once or twice a school day (before and after the main break); teachers
+// take lesson attendance (Phase 5). Each session keeps the class list it had when it was opened (its
+// entries), each entry the current mark, and every mark and change is kept in the change history.
+// Nothing here is ever deleted. Excuses are kept apart and applied when attendance is read.
+
+/// How often a Manager takes a section's attendance on a school day.
+enum AttendanceFrequency {
+  /// Once: one session for the whole day.
+  ONCE_DAILY
+  /// Twice: before and after the main break (one session on days without a main break).
+  TWICE_DAILY
+}
+
+enum StudentAttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  /// Managers only, with a reason.
+  EXCUSED
+}
+
+enum AttendanceSessionKind {
+  /// A Manager's session for a half of the day (or the whole day).
+  HALF_DAY
+  /// A teacher's lesson (Phase 5).
+  LESSON
+}
+
+enum DayHalf {
+  WHOLE_DAY
+  BEFORE_BREAK
+  AFTER_BREAK
+}
+
+enum AttendanceMarkSource {
+  WEB
+  MOBILE
+}
+
+/// Student attendance settings: the school's defaults (branchId null; School Owner) and a branch's
+/// own values (its Manager, only for the settings the school lets branches change). Null: not set
+/// here (the branch follows the school, the school the platform default). Read only through
+/// backend/src/features/student-attendance/settings.js (effective settings). Limits are database checks.
+model StudentAttendanceSettings {
+  id                          String               @id @default(uuid())
+  schoolId                    String
+  school                      School               @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  /// Null: the school's defaults (one per school). Set: that branch's own values (one per branch).
+  branchId                    String?              @unique
+  branch                      Branch?              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  halfDayFrequency            AttendanceFrequency?
+  /// Minutes before a half starts that its attendance can be taken (0–240).
+  halfDayOpensBeforeMinutes   Int?
+  /// Minutes after a half ends until its attendance is due (0–1440). Later marks count as late entries.
+  halfDayDeadlineAfterMinutes Int?
+  /// Days after a date that a Manager can still take or correct its attendance (0–90).
+  managerEditDays             Int?
+  /// Whether changing a mark after the deadline needs a reason.
+  correctionReasonRequired    Boolean?
+  /// Teacher lesson attendance (Phase 5): window before a lesson starts (0–60) and after it ends (0–720).
+  lessonOpensBeforeMinutes    Int?
+  lessonDeadlineAfterMinutes  Int?
+  /// Teacher lesson attendance (Phase 5): minutes after marking that a teacher may correct their own marks (0–1440).
+  teacherCorrectionMinutes    Int?
+  /// Offline marks recorded inside the window may be uploaded this many minutes after the deadline (0–4320).
+  offlineGraceMinutes         Int?
+  /// Notifications: remind teachers of lessons whose attendance was not taken by the deadline.
+  teacherReminders            Boolean?
+  /// Notifications: tell the branch's Managers when a day's attendance is incomplete.
+  managerAlerts               Boolean?
+  /// School row only: the settings the school's Managers may change for their branch.
+  branchOverridable           String[]             @default([])
+  updatedById                 String?
+  updatedByName               String?
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+
+  @@index([schoolId])
+}
+
+/// One attendance session of a section on a date: a Manager's half of the day (HALF_DAY), or a
+/// teacher's lesson (LESSON, Phase 5). Created when it is opened, with the class list of that moment
+/// (entries) and its times and deadline fixed then (later settings or bell time changes do not move
+/// them). At most one HALF_DAY session per section, date and half, and never a whole-day session
+/// beside half-day ones (database constraints).
+model StudentAttendanceSession {
+  id             String                    @id @default(uuid())
+  schoolId       String
+  school         School                    @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId       String
+  branch         Branch                    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear              @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  sectionId      String
+  section        Section                   @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  kind           AttendanceSessionKind     @default(HALF_DAY)
+  date           DateTime                  @db.Date
+  /// HALF_DAY: the half the session covers. LESSON: the half of the day the lesson is in (null: no main break).
+  half           DayHalf?
+  /// LESSON only: the timetable period and its subject.
+  periodNumber   Int?
+  subjectId      String?
+  subject        Subject?                  @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  /// The weekday whose timetable and bell times the day followed.
+  timetableDay   Weekday?
+  /// The half's times; null when the section had no bell times that day.
+  startsAt       DateTime?
+  endsAt         DateTime?
+  /// From when marks can be taken, and when they are due.
+  opensAt        DateTime
+  deadlineAt     DateTime
+  openedAt       DateTime                  @default(now())
+  openedById     String?
+  openedByName   String
+  entries        StudentAttendanceEntry[]
+  changes        StudentAttendanceChange[]
+
+  @@index([branchId, date])
+  @@index([sectionId, date])
+  @@index([schoolId, date])
+}
+
+/// A student on a session's class list and their current mark (status null: not marked yet). The
+/// list is fixed when the session opens; students enrolled later can be added. Every mark and change
+/// is also kept in StudentAttendanceChange. `version` rises with each change (stale edits are refused).
+model StudentAttendanceEntry {
+  id           String                    @id @default(uuid())
+  sessionId    String
+  session      StudentAttendanceSession  @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  schoolId     String
+  branchId     String
+  studentId    String
+  student      Student                   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  enrollmentId String
+  enrollment   Enrollment                @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  /// Added to the list after the session opened.
+  addedLate    Boolean                   @default(false)
+  addedAt      DateTime                  @default(now())
+  status       StudentAttendanceStatus?
+  /// Required for EXCUSED (and for corrections after the deadline when the school requires it).
+  reason       String?
+  note         String?
+  markedAt     DateTime?
+  markedById   String?
+  markedByName String?
+  /// The role of who set the current mark (a teacher cannot change a Manager's).
+  markedByRole Role?
+  /// When the mark was taken (on the device for offline marks); syncedAt when it reached the server.
+  occurredAt   DateTime?
+  syncedAt     DateTime?
+  source       AttendanceMarkSource?
+  version      Int                       @default(0)
+  changes      StudentAttendanceChange[]
+
+  @@unique([sessionId, studentId])
+  @@index([studentId])
+  @@index([enrollmentId])
+}
+
+/// Every mark and change of a student's attendance in a session: from what to what, by whom, when
+/// and why. Never edited or deleted.
+model StudentAttendanceChange {
+  id            String                   @id @default(uuid())
+  entryId       String
+  entry         StudentAttendanceEntry   @relation(fields: [entryId], references: [id], onDelete: Restrict)
+  sessionId     String
+  session       StudentAttendanceSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  studentId     String
+  fromStatus    StudentAttendanceStatus?
+  toStatus      StudentAttendanceStatus
+  reason        String?
+  note          String?
+  actorId       String?
+  actorName     String
+  actorRole     Role
+  source        AttendanceMarkSource
+  occurredAt    DateTime
+  recordedAt    DateTime                 @default(now())
+  /// Recorded after the session's deadline.
+  afterDeadline Boolean                  @default(false)
+
+  @@index([sessionId, recordedAt])
+  @@index([entryId])
+}
+
+/// A student's excuse (Manager), from startDate to endDate (both inclusive): whole days, one half of
+/// each day (half), or some lessons of each day (periods, Phase 5). Kept apart from the marks and
+/// applied when attendance is read: an absent or unmarked student counts as excused. Never deleted:
+/// cancelled instead.
+model StudentExcuse {
+  id              String    @id @default(uuid())
+  schoolId        String
+  school          School    @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId        String
+  branch          Branch    @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  studentId       String
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  startDate       DateTime  @db.Date
+  endDate         DateTime  @db.Date
+  /// Null: whole days (unless periods are given). BEFORE_BREAK / AFTER_BREAK: that half of each day.
+  half            DayHalf?
+  /// Lesson periods of each day (1–20); empty: not limited to lessons.
+  periods         Int[]     @default([])
+  reason          String
+  note            String?
+  createdById     String?
+  createdByName   String
+  createdAt       DateTime  @default(now())
+  cancelledAt     DateTime?
+  cancelledById   String?
+  cancelledByName String?
+
+  @@index([studentId, startDate])
+  @@index([branchId, startDate])
+  @@index([schoolId])
 }

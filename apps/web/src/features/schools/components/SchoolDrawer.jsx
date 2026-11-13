@@ -1,5 +1,5 @@
 import { CalendarDays, FileText, Globe, Hash, Landmark, Mail, MapPin, Phone, UserRound } from 'lucide-react';
-import { Button, Drawer } from '../../../components/ui';
+import { Button, Drawer, Switch } from '../../../components/ui';
 import { formatDate } from '../../../lib/format.js';
 import { SchoolStatusBadge } from './SchoolStatusBadge.jsx';
 
@@ -19,7 +19,7 @@ function Detail({ icon: Icon, label, children, wide = false }) {
  * School details side panel (Overview). Super Admins edit the school and suspend or reactivate it
  * from here (the actions open their own dialogs). Owner management is not part of this panel.
  */
-export function SchoolDrawer({ school, open, onClose, onEdit, onSuspend, onReactivate }) {
+export function SchoolDrawer({ school, open, onClose, onEdit, onSuspend, onReactivate, onFeature }) {
   if (!school) return <Drawer open={false} onClose={onClose} title="" />;
   const suspended = school.status === 'suspended';
 
@@ -101,6 +101,17 @@ export function SchoolDrawer({ school, open, onClose, onEdit, onSuspend, onReact
           {school.description && <span className="whitespace-pre-line">{school.description}</span>}
         </Detail>
       </dl>
+      {school.features && onFeature && (
+        <>
+          <h3 className="mt-6 mb-3 text-card-title text-fg">Features</h3>
+          <Switch
+            label="Student Attendance"
+            description="Lets the school take student attendance. Off by default; turning it off keeps everything already recorded."
+            checked={school.features.studentAttendance}
+            onChange={(next) => onFeature(school, next)}
+          />
+        </>
+      )}
     </Drawer>
   );
 }

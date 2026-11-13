@@ -10,6 +10,7 @@ import { platformNotificationSettings } from './notificationSettings.service.js'
 import { noScheduleItems, processPendingEvents } from './outbox.js';
 import { checkPushReceipts, sendPendingPush } from './push.js';
 import { settleDueTransfers } from '../staff/transfers.service.js';
+import { studentAttendanceNotifications } from '../student-attendance/completion.js';
 
 /*
  * The scheduled notification job (docs/notifications/notification-architecture.md → Background
@@ -252,6 +253,7 @@ export async function runNotificationJobs({ now = new Date(), budgetMs = 45_000,
     ['missingCheckOuts', () => notifyMissingCheckOuts({ now })],
     ['branchesWithoutSchedule', () => notifyBranchesWithoutSchedule({ now })],
     ['digests', () => createDigests({ now })],
+    ['studentAttendance', () => studentAttendanceNotifications({ now })],
     ['announcementPush', () => queueAnnouncementPush({ now })],
     ['push', () => sendPendingPush({ now, stop, ...(send && { send }) })],
     ['pushReceipts', () => checkPushReceipts({ now, ...(getReceipts && { getReceipts }) })],

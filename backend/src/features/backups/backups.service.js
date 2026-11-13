@@ -21,6 +21,8 @@ import * as neon from './neon.js';
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Text ending with exactly one full stop. */
+const sentence = (text) => `${String(text).replace(/[.\s]+$/, '')}.`;
 
 /** Neon failures → API errors (the provider's message, never a secret). */
 export function providerHttpError(error) {
@@ -256,8 +258,8 @@ export async function getOverview({ now = new Date() } = {}) {
   if (scheduleOverdue(state.schedule, lastScheduled?.createdAt, now)) {
     alerts.push({ level: 'error', code: 'OVERDUE', text: `The scheduled backup is overdue: the latest one is from ${lastScheduled.createdAt}.` });
   }
-  if (lastCreate?.status === 'FAILED') alerts.push({ level: 'error', code: 'LAST_BACKUP_FAILED', text: `The latest manual backup failed: ${lastCreate.errorMessage ?? 'see Backup History'}.` });
-  if (lastRestore?.status === 'FAILED') alerts.push({ level: 'error', code: 'RESTORE_FAILED', text: `The latest restore failed: ${lastRestore.errorMessage ?? 'see Restore Management'}.` });
+  if (lastCreate?.status === 'FAILED') alerts.push({ level: 'error', code: 'LAST_BACKUP_FAILED', text: `The latest manual backup failed: ${sentence(lastCreate.errorMessage ?? 'see Backup History')}` });
+  if (lastRestore?.status === 'FAILED') alerts.push({ level: 'error', code: 'RESTORE_FAILED', text: `The latest restore failed: ${sentence(lastRestore.errorMessage ?? 'see Restore Management')}` });
   if (activeRestore?.status === 'VERIFIED' && now - activeRestore.startedAt > DAY_MS) {
     alerts.push({ level: 'warning', code: 'RESTORE_WAITING', text: 'A staged restore has been waiting for a decision for more than a day. Restore production from it or discard it.' });
   }

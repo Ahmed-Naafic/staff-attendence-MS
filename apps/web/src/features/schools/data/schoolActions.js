@@ -16,6 +16,10 @@ export const updateSchool = async (id, values) =>
 export const suspendSchool = async (id, reason) =>
   (await apiRequest(`/platform/schools/${encodeURIComponent(id)}/suspend`, { method: 'POST', body: { reason } })).school;
 
+/** Features per school: { studentAttendance: boolean } → the school. */
+export const updateSchoolFeatures = async (id, features) =>
+  (await apiRequest(`/platform/schools/${encodeURIComponent(id)}/features`, { method: 'PUT', body: features })).school;
+
 export const reactivateSchool = async (id) =>
   (await apiRequest(`/platform/schools/${encodeURIComponent(id)}/reactivate`, { method: 'POST' })).school;
 

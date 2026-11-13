@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { Alert, Button, Checkbox, Input, Modal, Select, Spinner } from '../../../components/ui';
 import { dayList, earliestText, effectiveTimeHint, effectiveTimeProblem, nextQuarter, WEEKDAYS } from '../../schedules/utils/scheduleRules.js';
+import { TeachingList } from '../../teaching';
 import { loadBranchShifts, scheduleTransfer } from '../data/transfersApi.js';
 import { destinationOptions, emptyTransfer, overlapProblems, shiftSummary, toggleDay, toggleShift, toTransferBody, validateTransfer } from '../utils/transferRules.js';
 
@@ -141,6 +142,12 @@ export function TransferModal({ staff, branches, onClose, onDone }) {
               {staff.branch.name} ({staff.branch.code})
             </span>
           </div>
+          {staff.teaching?.length > 0 && (
+            <Alert variant="warning" title={`${staff.name} teaches ${staff.teaching.length} class${staff.teaching.length === 1 ? '' : 'es'}`}>
+              <p className="mb-2">A transfer does not change their teaching: they keep these assignments in every branch. Review them under Teaching if they should end.</p>
+              <TeachingList items={staff.teaching} />
+            </Alert>
+          )}
           {!options.length && <Alert variant="warning">Your school has no other active branch to transfer to.</Alert>}
           <Select
             label="Destination branch"

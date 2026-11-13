@@ -129,6 +129,35 @@ const SO = {
   }),
 };
 
+// Student attendance (docs/business-rules.md → Student attendance → Completion and notifications).
+// Approved labels: Xadirey (present), Daahay (late); Maqan (absent), Fasax (excused).
+SO.LESSON_ATTENDANCE_MISSING = (p) => ({
+  title: 'Imaanshaha casharka lama qaadin',
+  body: [
+    `Fasalka: ${p.section} · Maaddada: ${p.subject}`,
+    `Xiisadda ${p.period} (${p.start}–${p.end}), ${p.date}`,
+    p.uploadUntil ? `Haddii aad imaanshaha ku qaadday taleefanka adigoo aan internet haysan, soo dir ka hor ${p.uploadUntil}.` : 'Fadlan la xiriir maamulahaaga si uu u diiwaangeliyo.',
+  ].join('\n'),
+});
+SO.STUDENT_ATTENDANCE_INCOMPLETE = (p) => ({
+  title: `Imaanshaha ardayda lama dhammaystirin: ${p.date}`,
+  body: [
+    `Laanta: ${branchLabel(p.branch)}`,
+    `Kalfadhiyada maamulaha: ${p.halves.due} · La dhammaystiray: ${p.halves.complete} · Aan la qaadin: ${p.halves.missing} · Aan la dhammaystirin: ${p.halves.incomplete}`,
+    `Casharrada: ${p.lessons.due} · La qaaday: ${p.lessons.taken} · Aan la qaadin: ${p.lessons.missing}`,
+    ...(p.sections?.length ? [`Fasallada: ${p.sections.join(', ')}${p.moreSections ? ` iyo ${p.moreSections} kale` : ''}`] : []),
+  ].join('\n'),
+});
+SO.STUDENT_ATTENDANCE_SUMMARY = (p) => ({
+  title: `Warbixinta imaanshaha ardayda ee ${p.date}`,
+  body: [
+    `Dugsiga: ${p.schoolName} · Laamaha: ${p.branches?.length ?? 0}`,
+    `Kalfadhiyada maamulaha: ${p.halves.due} · La dhammaystiray: ${p.halves.complete} · Aan la qaadin: ${p.halves.missing}`,
+    `Casharrada: ${p.lessons.due} · La qaaday: ${p.lessons.taken} · Aan la qaadin: ${p.lessons.missing}`,
+    `Ardayda: Xadirey ${p.students.present} · Maqan ${p.students.absent} · Daahay ${p.students.late} · Fasax ${p.students.excused} · Aan la calaamadin ${p.students.notMarked}`,
+  ].join('\n'),
+});
+
 const TEMPLATES = { so: SO };
 
 /** Generic push texts (N21): never a name, time, status, branch or reason on the lock screen. */

@@ -7,6 +7,7 @@ import { env } from './config/env.js';
 import { getPublicBranding } from './features/platform-settings/settings.service.js';
 import { platformRouter } from './platform/platform.routes.js';
 import { attendanceRouter } from './attendance/attendance.routes.js';
+import { teacherRouter } from './teacher/teacher.routes.js';
 import { managerRouter } from './manager/manager.routes.js';
 import { ownerRouter } from './owner/owner.routes.js';
 import { notificationJobHandler, notificationsRouter } from './features/notifications/notifications.routes.js';
@@ -18,7 +19,11 @@ app.disable('x-powered-by');
 // address. Trust that one hop so req.ip (sign-in rate limiting, audit IP) is the client, not the
 // proxy. Elsewhere (local development) the header is ignored, so it cannot be spoofed.
 if (env.onVercel) app.set('trust proxy', 1);
-app.use(express.json({ limit: '10kb' }));
+const smallJson = express.json({ limit: '10kb' });
+// Student attendance marks for a whole class (up to 300 students) need more room than other requests.
+const marksJson = express.json({ limit: '64kb' });
+const MARKS_PATH = /^\/api\/(teacher\/lessons\/marks|manager\/student-attendance\/sessions\/[^/]+\/marks)$/;
+app.use((req, res, next) => (MARKS_PATH.test(req.path) ? marksJson : smallJson)(req, res, next));
 // Responses carry private data: never cache them in shared caches.
 app.use('/api', (req, res, next) => {
   res.set('Cache-Control', 'no-store');
@@ -40,6 +45,7 @@ app.use('/api/platform', platformRouter);
 app.use('/api/owner', ownerRouter);
 app.use('/api/manager', managerRouter);
 app.use('/api/attendance', attendanceRouter);
+app.use('/api/teacher', teacherRouter);
 app.use('/api/notifications', notificationsRouter);
 // Scheduled notification job (Vercel Cron or another scheduler; Bearer CRON_SECRET).
 app.get('/api/internal/jobs/notifications', notificationJobHandler);

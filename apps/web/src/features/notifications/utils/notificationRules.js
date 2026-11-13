@@ -18,6 +18,7 @@ export const CATEGORY_LABELS = {
   STATUS: 'Suspensions and reactivations',
   ANNOUNCEMENT: 'Platform announcements',
   TRANSFER: 'Staff transfers',
+  STUDENT_ATTENDANCE: 'Student attendance',
 };
 
 export const CATEGORY_DESCRIPTIONS = {
@@ -31,6 +32,7 @@ export const CATEGORY_DESCRIPTIONS = {
   STATUS: 'Your school or branch was suspended or reactivated.',
   ANNOUNCEMENT: 'Messages from the EduTrack platform team.',
   TRANSFER: 'A staff member is joining your branch, or a transfer was cancelled.',
+  STUDENT_ATTENDANCE: 'Student attendance not taken or incomplete (Managers), and each day’s summary across branches (Owners).',
 };
 
 /** Owner and Manager pages show absolute times in UTC, labelled (docs/business-rules.md → Owner date display). */
@@ -60,6 +62,7 @@ export function linkTarget(item, role) {
   }
   if (link.kind === 'schedule' && role === 'MANAGER') return '/schedule';
   if (link.kind === 'managers' && role === 'OWNER') return '/managers';
+  if (link.kind === 'studentAttendanceCompletion' && (role === 'MANAGER' || role === 'OWNER')) return `/student-attendance/completion${link.date ? `?from=${link.date}&to=${link.date}` : ''}`;
   return null;
 }
 

@@ -1,7 +1,7 @@
 /*
  * The API routes the Staff app uses (docs/architecture.md → API). Each returns checked data.
  */
-import { checkEventResponse, checkHistory, checkLogin, checkProfile, checkSession, checkToday, checkUser } from './contracts';
+import { checkEventResponse, checkHistory, checkLessonMarks, checkLessons, checkLogin, checkProfile, checkSession, checkToday, checkUser } from './contracts';
 
 export const signIn = (api, { phone, password }) =>
   api
@@ -27,3 +27,12 @@ export const fetchHistory = (api, { from, to }, options) =>
 /** POST an attendance event: { created (201) or false (200, already recorded), event }. */
 export const postEvent = (api, body) =>
   api.request('/api/attendance/events', { method: 'POST', body }).then(({ status, data }) => ({ created: status === 201, event: checkEventResponse(data).event }));
+
+// ---- teachers' lesson attendance (/api/teacher) ----
+
+/** The teacher's lessons of a day with class lists: { date, serverTime, lessons: [...] }. */
+export const fetchLessons = (api, date, options) =>
+  api.request(`/api/teacher/lessons${date ? `?date=${date}` : ''}`, options).then(({ data }) => checkLessons(data));
+
+/** PUT one lesson's marks: { section, date, period, sentAt, marks: [{ student, status, occurredAt }] } → { results, lesson }. */
+export const putLessonMarks = (api, body) => api.request('/api/teacher/lessons/marks', { method: 'PUT', body }).then(({ data }) => checkLessonMarks(data));

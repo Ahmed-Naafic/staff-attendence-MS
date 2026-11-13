@@ -4,6 +4,24 @@ import { badRequest } from '../common/httpError.js';
 import { isUuid, jsonBody, optionalDay, optionalInt, optionalString } from '../common/validate.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { requireOwnerSchool } from '../middleware/requireOwnerSchool.js';
+import { readCurriculum, readSubjectCreation, readSubjectListQuery, readSubjectUpdate } from '../features/subjects/subjectInput.js';
+import { createSubject, deactivateSubject, getCurriculum, getSubject, listSubjects, reactivateSubject, setCurriculum, updateSubject } from '../features/subjects/subjects.service.js';
+import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuery } from '../features/teaching/teachingInput.js';
+import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
+import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
+import { assignTeaching, cancelAssignment, eligibleTeachers, listTeachingAssignments, sectionTeaching, setAssignmentEnd } from '../features/teaching/teaching.service.js';
+import { readEntryCreation, readEntryUpdate, readSchoolDaysQuery, readWeekdayPolicy, readWeekdaysChange } from '../features/academic-calendar/calendarInput.js';
+import {
+  calendarToday,
+  cancelEntry,
+  cancelWeekdays,
+  createEntry,
+  getCalendar,
+  listSchoolDays,
+  saveWeekdays,
+  setBranchWeekdaysAllowed,
+  updateEntry,
+} from '../features/academic-calendar/calendar.service.js';
 import { readTransfer } from '../features/staff/staffInput.js';
 import { STAFF_STATUSES } from '../features/staff/staff.service.js';
 import { branchShiftsOn, cancelTransfer, getSchoolStaff, listSchoolStaff, scheduleTransfer } from '../features/staff/transfers.service.js';
@@ -191,6 +209,91 @@ ownerRouter.delete('/academic-years/:id', async (req, res) => {
   await deleteAcademicYear(req.school, req.params.id, req.user, req);
   res.status(204).end();
 });
+
+// ---- Academic calendar (docs/business-rules.md → Academic calendar): weekly school days and the
+// calendar's holidays, closures and reopenings. The School Owner sets the school's days, holidays, and closures and reopenings of any branch.
+const calendarScope = (req) => ({ school: req.school, branch: null });
+
+ownerRouter.get('/academic-years/:id/calendar', async (req, res) => {
+  res.json(await getCalendar(calendarScope(req), req.params.id));
+});
+ownerRouter.put('/academic-years/:id/weekdays', async (req, res) => {
+  res.json(await saveWeekdays(calendarScope(req), req.params.id, readWeekdaysChange(jsonBody(req), { role: 'OWNER' }), req.user, req));
+});
+ownerRouter.post('/academic-years/:id/weekdays/:versionId/cancel', async (req, res) => {
+  res.json(await cancelWeekdays(calendarScope(req), req.params.id, req.params.versionId, req.user, req));
+});
+ownerRouter.put('/academic-years/:id/weekday-policy', async (req, res) => {
+  res.json(await setBranchWeekdaysAllowed(req.school, req.params.id, readWeekdayPolicy(jsonBody(req)), req.user, req));
+});
+ownerRouter.post('/academic-years/:id/calendar-entries', async (req, res) => {
+  res.status(201).json({ entry: await createEntry(calendarScope(req), req.params.id, readEntryCreation(jsonBody(req), { role: 'OWNER' }), req.user, req) });
+});
+ownerRouter.patch('/calendar-entries/:id', async (req, res) => {
+  res.json({ entry: await updateEntry(calendarScope(req), req.params.id, readEntryUpdate(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/calendar-entries/:id/cancel', async (req, res) => {
+  res.json({ entry: await cancelEntry(calendarScope(req), req.params.id, req.user, req) });
+});
+// Whether a branch has school on each day from..to (at most 366 days); branch is required.
+ownerRouter.get('/calendar/days', async (req, res) => {
+  res.json(await listSchoolDays(calendarScope(req), readSchoolDaysQuery(req.query, { role: 'OWNER', today: await calendarToday() })));
+});
+
+// ---- Subjects and class curricula (School Owner manages; Managers read) and teaching
+// assignments (docs/business-rules.md → Subjects; Teaching assignments).
+const teachingScope = (req) => ({ school: req.school, branch: null });
+
+ownerRouter.get('/subjects', async (req, res) => {
+  res.json(await listSubjects(req.school, readSubjectListQuery(req.query)));
+});
+ownerRouter.get('/subjects/:id', async (req, res) => {
+  res.json({ subject: await getSubject(req.school, req.params.id) });
+});
+ownerRouter.post('/subjects', async (req, res) => {
+  res.status(201).json({ subject: await createSubject(req.school, readSubjectCreation(jsonBody(req)), req.user, req) });
+});
+ownerRouter.patch('/subjects/:id', async (req, res) => {
+  res.json({ subject: await updateSubject(req.school, req.params.id, readSubjectUpdate(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/subjects/:id/deactivate', async (req, res) => {
+  res.json({ subject: await deactivateSubject(req.school, req.params.id, req.user, req) });
+});
+ownerRouter.post('/subjects/:id/reactivate', async (req, res) => {
+  res.json({ subject: await reactivateSubject(req.school, req.params.id, req.user, req) });
+});
+ownerRouter.put('/classes/:id/subjects', async (req, res) => {
+  res.json(await setCurriculum(req.school, req.params.id, readCurriculum(jsonBody(req)), req.user, req));
+});
+ownerRouter.get('/classes/:id/subjects', async (req, res) => {
+  res.json(await getCurriculum(req.school, req.params.id));
+});
+ownerRouter.get('/teaching-assignments', async (req, res) => {
+  res.json(await listTeachingAssignments(teachingScope(req), readAssignmentQuery(req.query, { role: 'OWNER' })));
+});
+ownerRouter.post('/teaching-assignments', async (req, res) => {
+  res.status(201).json({ assignment: await assignTeaching(teachingScope(req), readAssignment(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/teaching-assignments/:id/end', async (req, res) => {
+  res.json({ assignment: await setAssignmentEnd(teachingScope(req), req.params.id, readAssignmentEnd(jsonBody(req)), req.user, req) });
+});
+ownerRouter.post('/teaching-assignments/:id/cancel', async (req, res) => {
+  res.json({ assignment: await cancelAssignment(teachingScope(req), req.params.id, req.user, req) });
+});
+ownerRouter.get('/sections/:id/teaching', async (req, res) => {
+  res.json(await sectionTeaching(teachingScope(req), req.params.id));
+});
+// Staff who can be given teaching (any active staff of the school), suggested teachers first.
+ownerRouter.get('/teaching/teachers', async (req, res) => {
+  res.json(await eligibleTeachers(teachingScope(req), { ...readTeacherQuery(req.query), academicYear: typeof req.query.academicYear === 'string' && req.query.academicYear ? req.query.academicYear : 'current' }));
+});
+
+// ---- Bell schedules and section timetables (docs/business-rules.md → Bell schedules; Timetables).
+mountTimetableRoutes(ownerRouter, teachingScope, 'OWNER');
+
+// ---- Student attendance (docs/business-rules.md → Student attendance): the school's settings and
+// what branches may change; every branch's attendance and excuses (read only).
+mountStudentAttendanceRoutes(ownerRouter, teachingScope, 'OWNER');
 
 // ---- Classes (School Owner) and sections of every branch of the school ----
 const classScope = (req) => ({ school: req.school, branch: null });

@@ -18,6 +18,8 @@ import { deriveDay } from './dayState';
 import { branchLocationAt, checkPosition, POSITION_MESSAGES } from './geo';
 import { countPending, dismissRejected, enqueue, getItem, itemsSince, outstandingFor } from './queue';
 import { syncPending } from './sync';
+import { countPendingMarks } from '../lessons/lessonQueue';
+import { syncLessonMarks } from '../lessons/lessonSync';
 
 const AttendanceContext = createContext(null);
 
@@ -36,6 +38,7 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
   const [items, setItems] = useState([]);
   const [outstanding, setOutstanding] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
+  const [lessonPendingCount, setLessonPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const todayRef = useRef(null);
@@ -48,10 +51,11 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
     if (!userId) return;
     const db = await openDatabase();
     const since = new Date(clock().getTime() - 48 * 60 * 60 * 1000).toISOString();
-    const [recent, open, count] = await Promise.all([itemsSince(db, userId, since), outstandingFor(db, userId), countPending(db, userId)]);
+    const [recent, open, count, lessonCount] = await Promise.all([itemsSince(db, userId, since), outstandingFor(db, userId), countPending(db, userId), countPendingMarks(db, userId)]);
     setItems(recent);
     setOutstanding(open);
     setPendingCount(count);
+    setLessonPendingCount(lessonCount);
   }, [openDatabase, userId, clock]);
 
   const refresh = useCallback(async () => {
@@ -84,6 +88,8 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
     setSyncing(true);
     try {
       const result = await syncPending({ db, api, userId, clock });
+      // Teachers' lesson marks waiting on this phone (no request when there are none).
+      if (await countPendingMarks(db, userId)) await syncLessonMarks({ db, api, userId, clock }).catch(() => {});
       setLastSync({ at: clock().toISOString(), ...summary(result) });
       if (result.recorded.length) refresh().catch(() => {});
       return result;
@@ -195,8 +201,8 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
   const day = useMemo(() => deriveDay(today, items, clock()), [today, items, clock]);
 
   const value = useMemo(
-    () => ({ today, profile, loading, loadError, online, day, items, outstanding, pendingCount, syncing, lastSync, refresh, syncNow, record, dismiss, reloadQueue }),
-    [today, profile, loading, loadError, online, day, items, outstanding, pendingCount, syncing, lastSync, refresh, syncNow, record, dismiss, reloadQueue],
+    () => ({ today, profile, loading, loadError, online, day, items, outstanding, pendingCount, lessonPendingCount, syncing, lastSync, refresh, syncNow, record, dismiss, reloadQueue, openDatabase, clock }),
+    [today, profile, loading, loadError, online, day, items, outstanding, pendingCount, lessonPendingCount, syncing, lastSync, refresh, syncNow, record, dismiss, reloadQueue, openDatabase, clock],
   );
   return <AttendanceContext.Provider value={value}>{children}</AttendanceContext.Provider>;
 }

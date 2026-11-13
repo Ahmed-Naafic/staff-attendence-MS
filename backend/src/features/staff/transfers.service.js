@@ -12,6 +12,7 @@ import { effectiveDateFields, effectiveText, resolveEffective, schedulingPolicy 
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { dayList, toTime } from '../schedules/scheduleInput.js';
 import { addDays, localDate, MAX_AHEAD_DAYS, scheduleAt, scheduleOn } from '../schedules/schedules.service.js';
+import { liveTeachingOf } from '../teaching/teaching.service.js';
 import { assignedShiftErrors } from './staff.service.js';
 
 /*
@@ -214,7 +215,10 @@ export async function getSchoolStaff(school, id, client = getPrisma()) {
   const items = [];
   for (const t of transfers) items.push(await toTransfer(t, client));
   const { earliestEffectiveDate: earliestTransferDate, ...dates } = effectiveDateFields(policy, { timeZone, today, now });
-  return { ...toOwnerStaff(staff), transfers: items, timeZone, ...dates, earliestTransferDate, latestTransferDate: addDays(today, MAX_AHEAD_DAYS) };
+  // Teaching (any branch of the school) stays with the teacher through a transfer: shown so the Owner
+  // can review it before moving them (docs/business-rules.md → Teaching assignments).
+  const teaching = await liveTeachingOf(staff.id, client);
+  return { ...toOwnerStaff(staff), transfers: items, teaching, timeZone, ...dates, earliestTransferDate, latestTransferDate: addDays(today, MAX_AHEAD_DAYS) };
 }
 
 /** The shifts of one of the Owner's branches in the schedule in effect on a date (for choosing destination shifts). */

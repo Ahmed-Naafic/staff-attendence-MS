@@ -22,6 +22,7 @@ const schoolSelect = {
   website: true,
   suspensionReason: true,
   suspendedAt: true,
+  studentAttendanceEnabled: true,
   owner: { select: { id: true, name: true } },
 };
 
@@ -42,6 +43,8 @@ export const toSchool = (school) => ({
   website: school.website ?? '',
   suspensionReason: school.suspensionReason ?? null,
   suspendedAt: school.suspendedAt?.toISOString() ?? null,
+  // Features the Super Admin turns on per school (off by default).
+  features: { studentAttendance: school.studentAttendanceEnabled === true },
 });
 
 /** Search (name, code, owner, location), status, location, registration-date and no-owner filters, newest first. */
@@ -147,6 +150,31 @@ export async function updateSchool(id, values, user, req) {
       schoolId: updated.id,
       // Field names only: the values themselves stay in the school record.
       description: `School details updated: ${changed.join(', ')}.`,
+      req,
+    });
+    return updated;
+  });
+  return toSchool(school);
+}
+
+/**
+ * Turns features on or off for a school (Super Admin): { studentAttendance }. Unchanged → no audit
+ * event. Allowed whatever the school's status. Turning Student Attendance off hides it from the school;
+ * nothing recorded is deleted.
+ */
+export async function updateSchoolFeatures(id, { studentAttendance }, user, req) {
+  const school = await getPrisma().$transaction(async (tx) => {
+    const current = await findOrFail(tx, id);
+    if (current.studentAttendanceEnabled === studentAttendance) return current;
+    const updated = await tx.school.update({ where: { id: current.id }, data: { studentAttendanceEnabled: studentAttendance }, select: schoolSelect });
+    await recordAuditEvent({
+      client: tx,
+      action: AUDIT_ACTIONS.SCHOOL_FEATURES_UPDATED,
+      actor: actorOf(user),
+      target: auditTarget(updated),
+      schoolId: updated.id,
+      description: `Student Attendance turned ${studentAttendance ? 'on' : 'off'} for the school.`,
+      change: { field: 'Student Attendance', from: current.studentAttendanceEnabled ? 'On' : 'Off', to: studentAttendance ? 'On' : 'Off' },
       req,
     });
     return updated;

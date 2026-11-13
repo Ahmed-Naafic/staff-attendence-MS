@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Modal, Textarea } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
-import { reactivateSchool, suspendSchool } from '../data/schoolActions.js';
+import { reactivateSchool, suspendSchool, updateSchoolFeatures } from '../data/schoolActions.js';
 import { validateReason } from '../utils/schoolValidation.js';
 
 const failure = (error, verb) =>
@@ -151,6 +151,62 @@ export function ReactivateSchoolModal({ school, open, onClose, onDone }) {
         <strong className="text-fg">{school?.name}</strong> will become active again.
       </p>
       {school?.suspensionReason && <p className="mt-3 text-small text-fg-muted">Suspended because: {school.suspensionReason}</p>}
+    </Modal>
+  );
+}
+
+/** Confirm turning Student Attendance on or off for a school (`enable`). */
+export function SchoolFeatureModal({ school, enable, open, onClose, onDone }) {
+  const formId = useId();
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveOnce] = useState(createSingleFlight);
+
+  useEffect(() => {
+    if (!open) return;
+    setFormError('');
+    setSaving(false);
+  }, [open]);
+
+  async function save() {
+    setFormError('');
+    setSaving(true);
+    try {
+      const updated = await updateSchoolFeatures(school.id, { studentAttendance: enable });
+      setSaving(false);
+      onDone(updated);
+    } catch (failed) {
+      setSaving(false);
+      setFormError(failed.status === 404 || failed.status === 0 ? failed.message : 'The feature could not be changed. Try again.');
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={enable ? 'Turn on Student Attendance' : 'Turn off Student Attendance'}
+      description={school?.name}
+      loading={saving}
+      error={formError}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="submit" form={formId} variant={enable ? 'secondary' : 'danger'} loading={saving}>
+            {enable ? 'Turn on' : 'Turn off'}
+          </Button>
+        </>
+      }
+    >
+      <form id={formId} noValidate onSubmit={(event) => { event.preventDefault(); saveOnce(save); }}>
+        <p className="text-body text-fg-secondary">
+          {enable
+            ? 'The school’s Owner and Managers can then use Student Attendance.'
+            : 'The school can no longer use Student Attendance. Nothing already recorded is deleted, and turning it on again brings it back.'}
+        </p>
+      </form>
     </Modal>
   );
 }
