@@ -174,6 +174,20 @@ export async function lockActiveSchool(tx, school) {
   if (!row || row.status !== 'ACTIVE') throw SCHOOL_SUSPENDED();
 }
 
+/**
+ * Locks a Manager's school and branch rows (FOR SHARE) for a write: both must be ACTIVE, else 409
+ * BRANCH_NOT_OPERATING ("… Its <what> can be viewed but not changed …"). `scope`: { school, branch }.
+ */
+export async function lockOperatingBranch(tx, scope, what) {
+  const [school] = await tx.$queryRaw`SELECT "status"::text AS "status" FROM "School" WHERE "id" = ${scope.school.id} FOR SHARE`;
+  const [branch] = await tx.$queryRaw`SELECT "status"::text AS "status" FROM "Branch" WHERE "id" = ${scope.branch.id} FOR SHARE`;
+  const { operating, reasons } = operatingState(branch ?? { status: 'SUSPENDED' }, school ?? { status: 'SUSPENDED' });
+  if (!operating) {
+    const whose = reasons.includes('school_suspended') ? 'Your school is suspended' : 'Your branch is suspended';
+    throw conflict('BRANCH_NOT_OPERATING', `${whose}. Its ${what} can be viewed but not changed until it is reactivated.`, { reasons });
+  }
+}
+
 async function lockBranch(tx, school, id) {
   if (!isUuid(id)) throw notFound('Branch not found.');
   const [row] = await tx.$queryRaw`SELECT "id" FROM "Branch" WHERE "id" = ${id} AND "schoolId" = ${school.id} FOR UPDATE`;

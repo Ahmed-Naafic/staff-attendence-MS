@@ -5,6 +5,7 @@ export { Badge } from './Badge.jsx';
 export { Button, buttonClassName } from './Button.jsx';
 export { Card, CardContent, CardFooter, CardHeader } from './Card.jsx';
 export { Checkbox } from './Checkbox.jsx';
+export { ConfirmModal } from './ConfirmModal.jsx';
 export { Drawer } from './Drawer.jsx';
 export { DropdownMenu } from './DropdownMenu.jsx';
 export { FieldError, FormField } from './FormField.jsx';

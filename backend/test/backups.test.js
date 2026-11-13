@@ -88,6 +88,8 @@ async function neonHandler(req, res) {
   };
   neonState.calls.push({ method: req.method, path: url.pathname, query: Object.fromEntries(url.searchParams), body: json, auth: req.headers.authorization });
   if (req.headers.authorization !== `Bearer ${KEY}`) return send(401, { message: 'authentication required' });
+  // A key scoped to another project: Neon answers every request with 404 "project not found".
+  if (neonState.keyForOtherProject) return send(404, { message: 'project not found' });
   for (const [key, [status, message]] of neonState.failNext) {
     const [method, prefix] = key.split(' ');
     if (req.method === method && url.pathname.startsWith(prefix)) {
@@ -480,6 +482,18 @@ describe('restore', () => {
     assert.ok(history.body.items.some((b) => b.id === `snap-${tag}-r`), 'backups taken before the restore are still listed');
     Object.assign(env, { neonBranchId: stagedBranchId });
     assert.ok(!(await admin('/api/platform/backups/overview')).body.alerts.some((a) => a.code === 'BRANCH_CHANGED'), 'no warning once NEON_BRANCH_ID is updated');
+  });
+
+  test('a key scoped to another Neon project is reported as such, and nothing is created', async () => {
+    neonState.keyForOtherProject = true;
+    const overview = await admin('/api/platform/backups/overview');
+    assert.ok(overview.body.alerts.some((a) => a.code === 'PROVIDER_ERROR' && /cannot access project .*scoped to another project/.test(a.text)), JSON.stringify(overview.body.alerts));
+    const create = await admin('/api/platform/backups', { method: 'POST', body: { confirm: true } });
+    assert.equal(create.status, 502);
+    assert.equal(create.body.code, 'PROVIDER_UNAUTHORIZED');
+    const failed = await admin('/api/platform/backups/overview');
+    const alert = failed.body.alerts.find((a) => a.code === 'LAST_BACKUP_FAILED');
+    assert.ok(alert && !alert.text.includes('..'), 'one full stop');
   });
 
   test("a database that is not a compute of the Neon project is reported, and nothing is created", async () => {

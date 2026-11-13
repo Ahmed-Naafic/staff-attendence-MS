@@ -257,6 +257,11 @@ export async function deleteAcademicYear(school, id, user, req) {
     if (sections) {
       throw conflict('YEAR_IN_USE', `${year.name} has ${sections} section${sections === 1 ? '' : 's'}. A year with sections is kept; it cannot be deleted.`, { sections });
     }
+    // Its calendar (school days, holidays, closures) is history too: such a year is kept.
+    const [weekdays, entries] = await Promise.all([tx.academicWeekdays.count({ where: { academicYearId: year.id } }), tx.calendarEntry.count({ where: { academicYearId: year.id } })]);
+    if (weekdays || entries) {
+      throw conflict('YEAR_IN_USE', `${year.name} has a calendar (school days or calendar entries). A year with a calendar is kept; it cannot be deleted.`, { weekdays, entries });
+    }
     await tx.academicYear.delete({ where: { id: year.id } });
     await audit(tx, AUDIT_ACTIONS.ACADEMIC_YEAR_DELETED, year, {
       school,

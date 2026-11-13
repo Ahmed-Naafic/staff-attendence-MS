@@ -6,6 +6,7 @@ import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { formatUtc } from '../../branches';
 import { dayList, whenText } from '../../schedules/utils/scheduleRules.js';
 import { cancelScheduledAssignments, loadAssignmentHistory } from '../data/staffApi.js';
+import { TeachingList } from '../../teaching';
 import { StaffStatusBadge } from './StaffTable.jsx';
 
 const STATES = {
@@ -228,6 +229,15 @@ export function StaffDrawer({ staff, open, onClose, readOnly, version, onEdit, o
                 ))}
               </ul>
             )}
+          </section>
+        )}
+
+        {staff.teaching && (
+          <section aria-labelledby="staff-teaching" className="mb-8 flex flex-col gap-3">
+            <h3 id="staff-teaching" className="text-card-title text-fg">
+              Teaching
+            </h3>
+            <TeachingList items={staff.teaching} empty="No teaching assigned. Assign it under Teaching." />
           </section>
         )}
 

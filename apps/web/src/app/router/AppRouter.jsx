@@ -1,5 +1,9 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AcademicYearsPage } from '../../features/academic-years';
+import { AcademicCalendarPage } from '../../features/academic-calendar';
+import { SubjectsPage, TeachingPage } from '../../features/teaching';
+import { BellSchedulesPage, TimetablesPage } from '../../features/timetable';
+import { AttendanceCompletionPage, AttendanceSessionPage, AttendanceSettingsPage, StudentAttendancePage, StudentAttendanceReportsPage, StudentExcusesPage } from '../../features/student-attendance';
 import { AttendanceReportsPage } from '../../features/attendance-reports';
 import { ClassDetailsPage, ClassesPage } from '../../features/classes';
 import { PromotionPage, PromotionsPage, StudentProfilePage, StudentsPage } from '../../features/students';
@@ -110,6 +114,11 @@ const routes = [
 
       // OWNER and MANAGER — academic years (school level: the Owner manages them, Managers read them; enforced by the API)
       { path: 'academic-years', element: <AcademicYearsPage />, handle: { title: 'Academic Years', roles: OWNER_OR_MANAGER } },
+      { path: 'academic-calendar', element: <AcademicCalendarPage />, handle: { title: 'Academic Calendar', roles: OWNER_OR_MANAGER } },
+      { path: 'subjects', element: <SubjectsPage />, handle: { title: 'Subjects', roles: OWNER_OR_MANAGER } },
+      { path: 'teaching', element: <TeachingPage />, handle: { title: 'Teaching', roles: OWNER_OR_MANAGER } },
+      { path: 'bell-schedules', element: <BellSchedulesPage />, handle: { title: 'Bell Schedules', roles: OWNER_OR_MANAGER } },
+      { path: 'timetables', element: <TimetablesPage />, handle: { title: 'Timetables', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — classes (Owner manages; Managers read) and sections (Owner: any branch; Manager: own branch)
       { path: 'classes', element: <ClassesPage />, handle: { title: 'Class Management', roles: OWNER_OR_MANAGER } },
       { path: 'classes/:classId', element: <ClassDetailsPage />, handle: { title: 'Class', roles: OWNER_OR_MANAGER } },
@@ -119,7 +128,13 @@ const routes = [
       { path: 'promotions', element: <PromotionsPage />, handle: { title: 'Promotion', roles: OWNER_OR_MANAGER } },
       { path: 'promotions/:batchId', element: <PromotionPage />, handle: { title: 'Promotion', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — attendance reports (read only; each role sees its own scope, decided by the API)
-      { path: 'attendance', element: <AttendanceReportsPage />, handle: { title: 'Attendance', roles: OWNER_OR_MANAGER } },
+      { path: 'attendance', element: <AttendanceReportsPage />, handle: { title: 'Staff Attendance', roles: OWNER_OR_MANAGER } },
+      { path: 'student-attendance', element: <StudentAttendancePage />, handle: { title: 'Student Attendance', roles: OWNER_OR_MANAGER } },
+      { path: 'student-attendance/reports', element: <StudentAttendanceReportsPage />, handle: { title: 'Student Attendance Reports', roles: OWNER_OR_MANAGER } },
+      { path: 'student-attendance/completion', element: <AttendanceCompletionPage />, handle: { title: 'Attendance Completion', roles: OWNER_OR_MANAGER } },
+      { path: 'student-attendance/settings', element: <AttendanceSettingsPage />, handle: { title: 'Attendance Settings', roles: OWNER_OR_MANAGER } },
+      { path: 'student-attendance/sessions/:sessionId', element: <AttendanceSessionPage />, handle: { title: 'Student Attendance', roles: OWNER_OR_MANAGER } },
+      { path: 'student-excuses', element: <StudentExcusesPage />, handle: { title: 'Student Excuses', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — notification centre (each sees only their own notifications, decided by the API)
       { path: 'notifications', element: <NotificationsPage />, handle: { title: 'Notifications', roles: OWNER_OR_MANAGER } },
 

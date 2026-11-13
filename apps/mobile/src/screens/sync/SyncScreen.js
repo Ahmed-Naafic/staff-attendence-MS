@@ -4,10 +4,12 @@
  * their stored ids. A not-accepted event is final; it can only be dismissed from this list (it is
  * kept on the phone).
  */
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { refusalTitle } from '../../api/errors';
 import { useAttendance } from '../../attendance/AttendanceProvider';
+import { useSession } from '../../auth/SessionProvider';
+import { dismissRejectedMark, outstandingMarks } from '../../lessons/lessonQueue';
 import { AppText, Badge, Button, Card, ConfirmDialog, EmptyState, Icon, Notice, Screen, ScreenHeader } from '../../components/ui';
 import { formatDayTime, formatDuration } from '../../lib/format';
 import { useNow } from '../../lib/useNow';
@@ -17,8 +19,18 @@ import { space } from '../../theme/tokens';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export default function SyncScreen({ navigation }) {
-  const { online, outstanding, syncing, syncNow, dismiss, today, lastSync } = useAttendance();
+  const { online, outstanding, syncing, syncNow, dismiss, today, lastSync, lessonPendingCount, openDatabase, clock } = useAttendance();
+  const { user } = useSession();
+  const { colors } = useTheme();
   const [dismissing, setDismissing] = useState(null);
+  const [lessonMarks, setLessonMarks] = useState([]);
+  const loadLessonMarks = useCallback(async () => setLessonMarks(await outstandingMarks(await openDatabase(), user.id)), [openDatabase, user.id]);
+  useEffect(() => {
+    // State is set only after the device database answers (asynchronously).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadLessonMarks().catch(() => {});
+  }, [loadLessonMarks, lessonPendingCount, syncing]);
+  const refusedMarks = lessonMarks.filter((m) => m.state === 'rejected');
   const zone = today?.timeZone ?? 'UTC';
   const pending = outstanding.filter((i) => i.state === 'pending');
   const rejected = outstanding.filter((i) => i.state === 'rejected');
@@ -41,6 +53,27 @@ export default function SyncScreen({ navigation }) {
               <Notice tone="error" title="Check your phone’s clock" message="Your phone’s time differs from the server by more than 5 minutes. Set the date and time to automatic, then tap Sync now." />
             ) : null}
             {lastSync?.stopped && online && !clockProblem ? <Notice tone="warning" message={`Last upload stopped: ${lastSync.stopped}`} /> : null}
+            {lessonPendingCount ? <Notice tone="info" icon="book-outline" message={`${lessonPendingCount} lesson mark${lessonPendingCount === 1 ? '' : 's'} waiting to upload.`} /> : null}
+            {refusedMarks.length ? (
+              <Card>
+                <AppText variant="cardTitle">Lesson marks not accepted</AppText>
+                {refusedMarks.slice(0, 20).map((m) => (
+                  <AppText key={m.clientMarkId} variant="small" color={colors.errorFg} style={{ marginTop: space(1) }}>
+                    {m.date}, period {m.period}: {m.errorMessage}
+                  </AppText>
+                ))}
+                <Button
+                  title="Dismiss all"
+                  variant="ghost"
+                  onPress={async () => {
+                    const db = await openDatabase();
+                    for (const m of refusedMarks) await dismissRejectedMark(db, m.clientMarkId, clock());
+                    await loadLessonMarks();
+                  }}
+                  style={{ alignSelf: 'flex-start', paddingHorizontal: 0, minHeight: 40 }}
+                />
+              </Card>
+            ) : null}
             {pending.length ? (
               <View style={styles.sectionTitle}>
                 <AppText variant="cardTitle">Pending uploads</AppText>
@@ -52,7 +85,7 @@ export default function SyncScreen({ navigation }) {
         ListEmptyComponent={<EmptyState icon="cloud-done-outline" title="Everything is uploaded" message="No attendance is waiting on this phone." />}
         renderItem={({ item }) => (item.state === 'pending' ? <PendingRow item={item} zone={zone} /> : <RejectedRow item={item} zone={zone} onDismiss={() => setDismissing(item)} />)}
         ListFooterComponent={
-          pending.length ? (
+          pending.length || lessonPendingCount ? (
             <Button testID="sync-now" title="Sync now" icon="sync" variant="secondary" onPress={() => syncNow()} loading={syncing} disabled={!online} style={{ marginTop: space(5) }} />
           ) : null
         }

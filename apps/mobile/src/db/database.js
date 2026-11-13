@@ -1,5 +1,6 @@
 /*
- * The device database (expo-sqlite): the offline attendance queue and a small key-value table
+ * The device database (expo-sqlite): the offline attendance queue, teachers' lesson marks waiting to
+ * upload, and a small key-value table
  * (theme preference, last loaded day and profile for offline use). The session token is NOT kept
  * here; it is in secure storage (src/auth/tokenStore.js).
  */
@@ -27,6 +28,25 @@ const MIGRATIONS = [
    );
    CREATE INDEX IF NOT EXISTS attendance_queue_user_state ON attendance_queue (user_id, state, occurred_at);
    CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);`,
+  // 2: teachers' lesson marks waiting to upload (src/lessons/lessonQueue.js)
+  `CREATE TABLE IF NOT EXISTS lesson_mark_queue (
+     client_mark_id TEXT PRIMARY KEY NOT NULL,
+     user_id TEXT NOT NULL,
+     section_id TEXT NOT NULL,
+     lesson_date TEXT NOT NULL,
+     period INTEGER NOT NULL,
+     student_id TEXT NOT NULL,
+     status TEXT NOT NULL CHECK (status IN ('present', 'absent')),
+     occurred_at TEXT NOT NULL,
+     state TEXT NOT NULL CHECK (state IN ('pending', 'recorded', 'rejected')),
+     attempts INTEGER NOT NULL DEFAULT 0,
+     last_attempt_at TEXT,
+     error_code TEXT,
+     error_message TEXT,
+     created_at TEXT NOT NULL,
+     dismissed_at TEXT
+   );
+   CREATE INDEX IF NOT EXISTS lesson_mark_queue_user_state ON lesson_mark_queue (user_id, state, occurred_at);`,
 ];
 
 /** Brings a database to the latest version (PRAGMA user_version). */

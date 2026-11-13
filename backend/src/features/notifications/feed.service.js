@@ -66,6 +66,8 @@ function linkFor(n) {
   if (n.type === 'BRANCH_DIGEST' || n.type === 'SCHOOL_DIGEST') return { kind: 'digest' };
   if (n.type === 'BRANCH_NO_SCHEDULE') return { kind: 'schedule' };
   if (n.type === 'BRANCH_NO_MANAGER') return { kind: 'managers' };
+  if (n.type === 'STUDENT_ATTENDANCE_INCOMPLETE' || n.type === 'STUDENT_ATTENDANCE_SUMMARY') return { kind: 'studentAttendanceCompletion', date: p.date };
+  if (n.type === 'LESSON_ATTENDANCE_MISSING') return { kind: 'lessons', date: p.date };
   return null;
 }
 

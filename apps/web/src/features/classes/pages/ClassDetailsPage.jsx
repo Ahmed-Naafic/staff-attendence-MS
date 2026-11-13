@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
+import { ClassSubjectsCard } from '../../teaching';
 import { formatDateTime } from '../../../lib/format.js';
 import { loadAcademicYears, loadOwnerSchoolStatus } from '../../academic-years';
 import { useSession } from '../../auth';
@@ -164,6 +165,10 @@ export default function ClassDetailsPage() {
         <Alert variant="info" title={`${year.name} is closed`}>
           Its sections are kept as they were and cannot be changed. Choose a planned or current year to manage sections.
         </Alert>
+      )}
+
+      {cls && (
+        <ClassSubjectsCard role={role} classId={cls.id} readOnlyReason={schoolSuspended ? 'Your school is suspended.' : undefined} onSaved={setNotice} />
       )}
 
       <Card as="section" aria-label="Section filters" className="p-4">

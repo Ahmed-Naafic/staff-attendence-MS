@@ -80,6 +80,10 @@ export async function deploymentBranch({ fresh = false } = {}) {
     branchId = (await neon(`${project()}/endpoints/${encodeURIComponent(endpointId)}`))?.endpoint?.branch_id;
   } catch (error) {
     if (error.code !== 'NOT_FOUND') throw error;
+    // Neon answers "project not found" when the key cannot see the project (a key scoped to another project).
+    if (/project not found/i.test(error.message)) {
+      throw new ProviderError('PROVIDER_UNAUTHORIZED', `The Neon API key cannot access project ${env.neonProjectId}: it is probably scoped to another project. Use a key for this project (NEON_API_KEY), or check NEON_PROJECT_ID.`, 404);
+    }
   }
   if (!branchId) throw new ProviderError('NOT_CONFIGURED', `This server's database (${endpointId}) is not a compute of Neon project ${env.neonProjectId}. Check NEON_PROJECT_ID.`);
   branchCache = { value: { branchId, endpointId }, at: Date.now() };

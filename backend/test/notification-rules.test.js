@@ -48,6 +48,9 @@ const SAMPLE = {
     previous: { date: '2026-10-28', checkIns: 19, late: 4, missing: 2 },
     branches: [{ name: 'Hodan', code: 'X-B001' }],
   },
+  LESSON_ATTENDANCE_MISSING: { date: '2026-11-12', section: 'Grade 7A', subject: 'Xisaab', period: 3, start: '09:30', end: '10:15', uploadUntil: '2026-11-13 10:45' },
+  STUDENT_ATTENDANCE_INCOMPLETE: { date: '2026-11-12', branch: { name: 'Hodan', code: 'IFT-001-B001' }, halves: { due: 8, complete: 6, missing: 1, incomplete: 1 }, lessons: { due: 30, taken: 27, missing: 3 }, sections: ['Grade 7A', 'Grade 8B'], moreSections: 0 },
+  STUDENT_ATTENDANCE_SUMMARY: { date: '2026-11-12', schoolName: 'Iftiin', branches: [{}, {}], halves: { due: 16, complete: 15, missing: 1 }, lessons: { due: 60, taken: 58, missing: 2 }, students: { present: 400, absent: 12, late: 9, excused: 4, notMarked: 3 } },
 };
 
 test('every notification type has a Somali template; no English fallback and no other language', () => {

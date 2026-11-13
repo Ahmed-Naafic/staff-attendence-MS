@@ -1,7 +1,7 @@
 /*
  * Navigation by session state: splash while restoring, sign-in when signed out, only the password
- * change while a temporary password is in use, and the attendance screens for a ready STAFF
- * session. Signed-in screens are never mounted without a session.
+ * change while a temporary password is in use, and the attendance and lesson screens for a ready
+ * STAFF session. Signed-in screens are never mounted without a session.
  */
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -17,6 +17,8 @@ import SignInScreen from '../screens/auth/SignInScreen';
 import SplashScreen from '../screens/auth/SplashScreen';
 import HistoryScreen from '../screens/history/HistoryScreen';
 import HomeScreen from '../screens/home/HomeScreen';
+import LessonScreen from '../screens/lessons/LessonScreen';
+import LessonsScreen from '../screens/lessons/LessonsScreen';
 import NotificationDetailScreen from '../screens/notifications/NotificationDetailScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import ReminderSettingsScreen from '../screens/notifications/ReminderSettingsScreen';
@@ -31,7 +33,7 @@ import { radius } from '../theme/tokens';
 const Stack = createNativeStackNavigator();
 const Tabs = createBottomTabNavigator();
 
-const TAB_ICONS = { Home: 'home', History: 'time', Profile: 'person' };
+const TAB_ICONS = { Home: 'home', Lessons: 'book', History: 'time', Profile: 'person' };
 
 function TabIcon({ route, focused }) {
   const { colors } = useTheme();
@@ -58,6 +60,7 @@ function MainTabs() {
       })}
     >
       <Tabs.Screen name="Home" component={HomeScreen} />
+      <Tabs.Screen name="Lessons" component={LessonsScreen} />
       <Tabs.Screen name="History" component={HistoryScreen} />
       <Tabs.Screen name="Profile" component={ProfileScreen} />
     </Tabs.Navigator>
@@ -73,6 +76,7 @@ function SignedIn() {
           <Stack.Screen name="Tabs" component={MainTabs} />
           <Stack.Screen name="Attendance" component={AttendanceScreen} />
           <Stack.Screen name="AttendanceResult" component={AttendanceResultScreen} options={{ gestureEnabled: false }} />
+          <Stack.Screen name="Lesson" component={LessonScreen} />
           <Stack.Screen name="Sync" component={SyncScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="About" component={AboutScreen} />
