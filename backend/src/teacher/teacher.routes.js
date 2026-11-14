@@ -8,6 +8,7 @@ import { readLessonMarks, readTeacherDayQuery } from '../features/student-attend
 import { settleIfDue } from '../features/staff/transfers.service.js';
 import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { requireStudentAttendance } from '../middleware/requireStudentAttendance.js';
+import { myTimetable } from '../features/timetable-builder/views.service.js';
 
 /**
  * Teacher API (/api/teacher), used by the Staff mobile app (bearer token): a teacher's lessons and
@@ -31,6 +32,12 @@ teacherRouter.use(requireAuth, requireRole('STAFF'), async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+});
+// The teacher's own week (published timetables, every branch). Academic setup: not gated by the
+// Student Attendance switch, so it sits before it.
+teacherRouter.get('/timetable', async (req, res) => {
+  const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : undefined;
+  res.json(await myTimetable(req.teacher, { date }));
 });
 teacherRouter.use(requireStudentAttendance((req) => req.teacher.school.id));
 

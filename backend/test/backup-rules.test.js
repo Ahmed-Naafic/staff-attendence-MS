@@ -72,7 +72,7 @@ describe('restore check verdicts', () => {
   const fake = ({ tables = ['_prisma_migrations', 'User', 'School'], migrations = ['m1', 'm2'], unfinished = [], admins = 1 } = {}) => ({
     async $queryRawUnsafe(sql) {
       if (sql.includes('information_schema')) return tables.map((name) => ({ name }));
-      if (sql.includes('_prisma_migrations')) return [...migrations.map((name) => ({ name, ok: true })), ...unfinished.map((name) => ({ name, ok: false }))];
+      if (sql.includes('_prisma_migrations')) return [...migrations.map((name) => ({ name, finished: true, rolledBack: false })), ...unfinished.map((name) => ({ name, finished: false, rolledBack: false }))];
       if (sql.includes("'SUPER_ADMIN'")) return [{ n: admins }];
       return [{ n: 3 }];
     },
@@ -98,4 +98,18 @@ describe('restore check verdicts', () => {
     assert.equal((await check(fake({ tables: ['_prisma_migrations', 'User'] }))).ok, false);
     assert.equal((await check(fake({ tables: [], migrations: [] }))).ok, false);
   });
+});
+
+test('migration state as Prisma reads it: rolled-back attempts are resolved, a failed one blocks', async () => {
+  const { migrationState } = await import('../src/features/backups/verify.js');
+  const rows = [
+    { name: 'a', finished: true, rolledBack: false },
+    // Failed twice, rolled back each time, then applied: applied, nothing unfinished.
+    { name: 'b', finished: false, rolledBack: true },
+    { name: 'b', finished: false, rolledBack: true },
+    { name: 'b', finished: true, rolledBack: false },
+    // Failed and never resolved: blocks.
+    { name: 'c', finished: false, rolledBack: false },
+  ];
+  assert.deepEqual(migrationState(rows), { applied: ['a', 'b'], unfinished: ['c'] });
 });

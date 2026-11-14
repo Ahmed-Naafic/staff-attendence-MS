@@ -53,7 +53,7 @@ function translateDbError(error) {
   return error;
 }
 
-async function withTimetableLock(scope, what, work) {
+export async function withTimetableLock(scope, what, work) {
   try {
     return await getPrisma().$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`classes:${scope.school.id}`}))`;
@@ -437,7 +437,7 @@ const toClashVersion = (v) => ({
  * (version) => boolean — which versions changed and must be checked, clipFrom: dates before it are
  * not checked }. Only the timetables of the teachers involved are read (two to three queries).
  */
-async function assertNoClashes(tx, scope, { add = [], remove = new Set(), bells = new Map(), candidates, clipFrom, teacherIds }) {
+export async function assertNoClashes(tx, scope, { add = [], remove = new Set(), bells = new Map(), candidates, clipFrom, teacherIds }) {
   if (!teacherIds.size) return;
   const sectionRows = await tx.timetableVersion.findMany({
     where: { schoolId: scope.school.id, cancelledAt: null, slots: { some: { teacherId: { in: [...teacherIds] } } } },
@@ -723,132 +723,127 @@ const lessonKey = (l) => `${l.weekday}|${l.periodNumber}|${l.subjectId}|${l.teac
 const sameLessons = (a, b) => a.map(lessonKey).sort().join(';') === b.map(lessonKey).sort().join(';');
 
 /**
- * Sets a section's timetable from a date: its bell schedule (school-wide or the section's branch's,
- * active, with times on that date) and its lessons. Each lesson's period must be in the bell times
- * of that date and weekday; its subject active and on the class's list (when it has one); a named
- * teacher must teach that subject in the section during the version's dates (a teaching
- * assignment). Refused when a teacher would be in two places at once (409 TEACHER_CLASH).
- * → the timetable, with `warnings` (e.g. a teacher whose assignment ends before the timetable does).
+ * Checks a new timetable version of a section (inside the caller's transaction and class lock) and
+ * returns what to write, without writing: `{ unchanged: true }` when it equals the timetable it
+ * replaces, else `{ section, name, year, bell, from, replaced, base, candidate, teacherIds,
+ * warnings, write }`. `write(tx, user, req)` creates the version (replacing one for the same date)
+ * and audits it. Each lesson's period must be in the bell times of that date and weekday; its
+ * subject active and on the class's list (when it has one); a named teacher must teach that subject
+ * in the section during the version's dates (a teaching assignment). The caller checks teacher
+ * clashes. Used by the timetable editor (one section) and the timetable builder (every section of a
+ * branch at once).
  */
-export async function saveTimetable(scope, sectionId, values, user, req) {
-  const today = await calendarToday();
-  const result = await withTimetableLock(scope, 'timetables', async (tx) => {
-    const section = await findSection(tx, scope, sectionId);
-    const year = section.academicYear;
-    const name = sectionDisplayName(section.class.name, section.name);
-    if (year.status === 'CLOSED') throw YEAR_CLOSED(year);
-    if (section.status !== 'ACTIVE' || section.class.status !== 'ACTIVE') throw conflict('SECTION_INACTIVE', `${name} is inactive. Reactivate it before changing its timetable.`);
+export async function prepareTimetableVersion(tx, scope, sectionId, values, today, { auditAction = AUDIT_ACTIONS.TIMETABLE_CHANGED, note = '' } = {}) {
+  const section = await findSection(tx, scope, sectionId);
+  const year = section.academicYear;
+  const name = sectionDisplayName(section.class.name, section.name);
+  if (year.status === 'CLOSED') throw YEAR_CLOSED(year);
+  if (section.status !== 'ACTIVE' || section.class.status !== 'ACTIVE') throw conflict('SECTION_INACTIVE', `${name} is inactive. Reactivate it before changing its timetable.`);
 
-    const yearStart = toDay(year.startDate);
-    const yearEnd = toDay(year.endDate);
-    const existing = await tx.timetableVersion.findMany({ where: { sectionId: section.id, cancelledAt: null }, include: timetableInclude });
-    const active = plainVersions(existing);
-    const from = values.effectiveFrom;
-    const earliest = maxDay(earliestStart(active, today), yearStart);
-    if (from < earliest || from > yearEnd) {
-      throw invalid({
-        effectiveFrom:
-          from > yearEnd || from < yearStart
-            ? `Choose a date within ${year.name} (${yearStart} to ${yearEnd}).`
-            : earliest > today
-              ? `The timetable in effect today started earlier, so a change can start on ${earliest} at the earliest.`
-              : `Choose today (${today}) or a later date.`,
-      });
-    }
-
-    const bell = await tx.bellSchedule.findFirst({
-      where: { id: values.bellScheduleId, schoolId: scope.school.id, OR: [{ branchId: null }, { branchId: section.branchId }] },
-      include: { versions: { where: { cancelledAt: null }, include: { periods: true } } },
+  const yearStart = toDay(year.startDate);
+  const yearEnd = toDay(year.endDate);
+  const existing = await tx.timetableVersion.findMany({ where: { sectionId: section.id, cancelledAt: null }, include: timetableInclude });
+  const active = plainVersions(existing);
+  const from = values.effectiveFrom;
+  const earliest = maxDay(earliestStart(active, today), yearStart);
+  if (from < earliest || from > yearEnd) {
+    throw invalid({
+      effectiveFrom:
+        from > yearEnd || from < yearStart
+          ? `Choose a date within ${year.name} (${yearStart} to ${yearEnd}).`
+          : earliest > today
+            ? `The timetable of ${name} in effect today started earlier, so a change can start on ${earliest} at the earliest.`
+            : `Choose today (${today}) or a later date.`,
     });
-    if (!bell) throw notFound('Bell schedule not found.');
-    if (bell.status !== 'ACTIVE') throw conflict('BELL_SCHEDULE_INACTIVE', `${bell.name} is inactive. Choose another bell schedule or reactivate it.`);
-    const times = versionOn(plainVersions(bell.versions), from);
-    if (!times) throw conflict('BELL_TIMES_MISSING', `${bell.name} has no times on ${from}. Set its times first.`);
+  }
 
-    const replaced = active.find((v) => v.effectiveFrom === from) ?? null;
-    const others = active.filter((v) => v !== replaced);
-    const nextStart = others.filter((v) => v.effectiveFrom > from).sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0]?.effectiveFrom;
-    const to = nextStart ? addDays(nextStart, -1) : yearEnd;
-    const previous = versionOn(others, addDays(from, -1));
-    const base = replaced ?? previous;
-    if (base && base.bellScheduleId === bell.id && sameLessons(base.slots, values.lessons)) return { unchanged: true };
+  const bell = await tx.bellSchedule.findFirst({
+    where: { id: values.bellScheduleId, schoolId: scope.school.id, OR: [{ branchId: null }, { branchId: section.branchId }] },
+    include: { versions: { where: { cancelledAt: null }, include: { periods: true } } },
+  });
+  if (!bell) throw notFound('Bell schedule not found.');
+  if (bell.status !== 'ACTIVE') throw conflict('BELL_SCHEDULE_INACTIVE', `${bell.name} is inactive. Choose another bell schedule or reactivate it.`);
+  const times = versionOn(plainVersions(bell.versions), from);
+  if (!times) throw conflict('BELL_TIMES_MISSING', `${bell.name} has no times on ${from}. Set its times first.`);
 
-    // Periods, subjects and teachers.
-    const errors = {};
-    const numbers = lessonNumbersByDay(times.periods);
-    for (const l of values.lessons) {
-      if (!(numbers[l.weekday] ?? []).includes(l.periodNumber)) errors[`lessons.${l.index}`] = `${bell.name} has no period ${l.periodNumber} on ${DAY_LABELS[l.weekday]} (from ${from}).`;
-    }
-    const subjectIds = [...new Set(values.lessons.map((l) => l.subjectId))];
-    const teacherIds = [...new Set(values.lessons.map((l) => l.teacherId).filter(Boolean))];
-    const [subjects, curriculum, assignments, teachers] = await Promise.all([
-      subjectIds.length ? tx.subject.findMany({ where: { id: { in: subjectIds }, schoolId: scope.school.id } }) : [],
-      tx.classSubject.findMany({ where: { classId: section.classId }, select: { subjectId: true } }),
-      teacherIds.length
-        ? tx.teachingAssignment.findMany({
-            where: { sectionId: section.id, role: 'SUBJECT_TEACHER', cancelledAt: null, teacherId: { in: teacherIds }, startDate: { lte: asDbDay(to) }, OR: [{ endDate: null }, { endDate: { gte: asDbDay(from) } }] },
-          })
-        : [],
-      teacherIds.length ? tx.user.findMany({ where: { id: { in: teacherIds } }, select: { id: true, name: true } }) : [],
-    ]);
-    const subjectById = new Map(subjects.map((s) => [s.id, s]));
-    const teacherName = new Map(teachers.map((t) => [t.id, t.name]));
-    const listed = new Set(curriculum.map((c) => c.subjectId));
-    const warnings = [];
-    for (const l of values.lessons) {
-      const at = `lessons.${l.index}`;
-      if (errors[at]) continue;
-      const subject = subjectById.get(l.subjectId);
-      if (!subject) errors[at] = 'Subject not found.';
-      else if (subject.status !== 'ACTIVE') errors[at] = `${subject.name} is inactive.`;
-      else if (listed.size && !listed.has(subject.id)) errors[at] = `${subject.name} is not one of ${section.class.name}'s subjects.`;
-      else if (l.teacherId) {
-        const own = assignments.filter((a) => a.teacherId === l.teacherId && a.subjectId === l.subjectId);
-        if (!own.length) errors[at] = `${teacherName.get(l.teacherId) ?? 'This teacher'} does not teach ${subject.name} in ${name} on these dates. Assign the teaching first.`;
-        else if (!own.some((a) => toDay(a.startDate) <= from && (!a.endDate || toDay(a.endDate) >= to))) {
-          const key = `${l.teacherId}|${l.subjectId}`;
-          if (!warnings.some((w) => w.key === key)) {
-            warnings.push({ key, message: `${teacherName.get(l.teacherId)}'s ${subject.name} assignment does not cover every day of this timetable (${from} to ${to}); on the other days the lessons have no teacher.` });
-          }
+  const replaced = active.find((v) => v.effectiveFrom === from) ?? null;
+  const others = active.filter((v) => v !== replaced);
+  const nextStart = others.filter((v) => v.effectiveFrom > from).sort((a, b) => a.effectiveFrom.localeCompare(b.effectiveFrom))[0]?.effectiveFrom;
+  const to = nextStart ? addDays(nextStart, -1) : yearEnd;
+  const previous = versionOn(others, addDays(from, -1));
+  const base = replaced ?? previous;
+  if (base && base.bellScheduleId === bell.id && sameLessons(base.slots, values.lessons)) return { unchanged: true, section, name };
+
+  // Periods, subjects and teachers.
+  const errors = {};
+  const numbers = lessonNumbersByDay(times.periods);
+  for (const l of values.lessons) {
+    if (!(numbers[l.weekday] ?? []).includes(l.periodNumber)) errors[`lessons.${l.index}`] = `${bell.name} has no period ${l.periodNumber} on ${DAY_LABELS[l.weekday]} (from ${from}).`;
+  }
+  const subjectIds = [...new Set(values.lessons.map((l) => l.subjectId))];
+  const teacherIds = [...new Set(values.lessons.map((l) => l.teacherId).filter(Boolean))];
+  const [subjects, curriculum, assignments, teachers] = await Promise.all([
+    subjectIds.length ? tx.subject.findMany({ where: { id: { in: subjectIds }, schoolId: scope.school.id } }) : [],
+    tx.classSubject.findMany({ where: { classId: section.classId }, select: { subjectId: true } }),
+    teacherIds.length
+      ? tx.teachingAssignment.findMany({
+          where: { sectionId: section.id, role: 'SUBJECT_TEACHER', cancelledAt: null, teacherId: { in: teacherIds }, startDate: { lte: asDbDay(to) }, OR: [{ endDate: null }, { endDate: { gte: asDbDay(from) } }] },
+        })
+      : [],
+    teacherIds.length ? tx.user.findMany({ where: { id: { in: teacherIds } }, select: { id: true, name: true } }) : [],
+  ]);
+  const subjectById = new Map(subjects.map((s) => [s.id, s]));
+  const teacherName = new Map(teachers.map((t) => [t.id, t.name]));
+  const listed = new Set(curriculum.map((c) => c.subjectId));
+  const warnings = [];
+  for (const l of values.lessons) {
+    const at = `lessons.${l.index}`;
+    if (errors[at]) continue;
+    const subject = subjectById.get(l.subjectId);
+    if (!subject) errors[at] = 'Subject not found.';
+    else if (subject.status !== 'ACTIVE') errors[at] = `${subject.name} is inactive.`;
+    else if (listed.size && !listed.has(subject.id)) errors[at] = `${subject.name} is not one of ${section.class.name}'s subjects.`;
+    else if (l.teacherId) {
+      const own = assignments.filter((a) => a.teacherId === l.teacherId && a.subjectId === l.subjectId);
+      if (!own.length) errors[at] = `${teacherName.get(l.teacherId) ?? 'This teacher'} does not teach ${subject.name} in ${name} on these dates. Assign the teaching first.`;
+      else if (!own.some((a) => toDay(a.startDate) <= from && (!a.endDate || toDay(a.endDate) >= to))) {
+        const key = `${l.teacherId}|${l.subjectId}`;
+        if (!warnings.some((w) => w.key === key)) {
+          warnings.push({ key, message: `${teacherName.get(l.teacherId)}'s ${subject.name} assignment in ${name} does not cover every day of this timetable (${from} to ${to}); on the other days the lessons have no teacher.` });
         }
       }
     }
-    if (Object.keys(errors).length) throw invalid(errors);
+  }
+  if (Object.keys(errors).length) throw invalid(errors);
 
-    const candidate = {
-      id: 'new',
-      sectionId: section.id,
-      sectionName: name,
-      bellScheduleId: bell.id,
-      effectiveFrom: from,
-      yearEnd,
-      slots: values.lessons.map((l) => ({ weekday: l.weekday, periodNumber: l.periodNumber, teacherId: l.teacherId, teacherName: teacherName.get(l.teacherId), subjectName: subjectById.get(l.subjectId).name })),
-    };
-    await assertNoClashes(tx, scope, {
-      add: [candidate],
-      remove: new Set(replaced ? [replaced.id] : []),
-      candidates: (v) => v.id === 'new',
-      clipFrom: from,
-      teacherIds: new Set(teacherIds),
-    });
+  const candidate = {
+    id: `new:${section.id}`,
+    sectionId: section.id,
+    sectionName: name,
+    bellScheduleId: bell.id,
+    effectiveFrom: from,
+    yearEnd,
+    slots: values.lessons.map((l) => ({ weekday: l.weekday, periodNumber: l.periodNumber, teacherId: l.teacherId, teacherName: teacherName.get(l.teacherId), subjectName: subjectById.get(l.subjectId).name })),
+  };
 
-    if (replaced) await tx.timetableVersion.update({ where: { id: replaced.id }, data: { cancelledAt: new Date() } });
-    const version = await tx.timetableVersion.create({
+  async function write(client, user, req) {
+    if (replaced) await client.timetableVersion.update({ where: { id: replaced.id }, data: { cancelledAt: new Date() } });
+    const version = await client.timetableVersion.create({
       data: { schoolId: scope.school.id, academicYearId: year.id, branchId: section.branchId, sectionId: section.id, bellScheduleId: bell.id, effectiveFrom: asDbDay(from) },
     });
     if (values.lessons.length) {
-      await tx.timetableSlot.createMany({
+      await client.timetableSlot.createMany({
         data: values.lessons.map((l) => ({ versionId: version.id, weekday: l.weekday, periodNumber: l.periodNumber, subjectId: l.subjectId, teacherId: l.teacherId, room: l.room })),
       });
     }
     const before = base ? new Set(base.slots.map(lessonKey)) : new Set();
     const after = new Set(values.lessons.map(lessonKey));
     const changedLessons = [...after].filter((k) => !before.has(k)).length + [...before].filter((k) => !after.has(k)).length;
-    await audit(tx, AUDIT_ACTIONS.TIMETABLE_CHANGED, scope, {
+    await audit(client, auditAction, scope, {
       user,
       req,
       target: { type: 'timetable', id: section.id, name: `${name} (${year.name})` },
-      description: `Timetable of ${name} (${year.name}) from ${from}: ${bell.name}, ${values.lessons.length} lessons a week.${replaced ? ' Replaces the change scheduled for that date.' : ''}`,
+      description: `Timetable of ${name} (${year.name}) from ${from}: ${bell.name}, ${values.lessons.length} lessons a week.${replaced ? ' Replaces the change scheduled for that date.' : ''}${note}`,
       fields: [
         { field: 'Bell schedule', from: base?.bellSchedule?.name ?? null, to: bell.name },
         { field: 'Lessons a week', from: base ? String(base.slots.length) : null, to: String(values.lessons.length) },
@@ -857,7 +852,31 @@ export async function saveTimetable(scope, sectionId, values, user, req) {
       ],
       details: { academicYearId: year.id, branchId: section.branchId, sectionId: section.id, versionId: version.id, bellScheduleId: bell.id },
     });
-    return { versionId: version.id, warnings: warnings.map((w) => w.message) };
+    return version.id;
+  }
+
+  return { unchanged: false, section, name, year, bell, from, replaced, base, candidate, teacherIds, warnings: warnings.map((w) => w.message), write };
+}
+
+/**
+ * Sets a section's timetable from a date (the timetable editor): prepareTimetableVersion's checks,
+ * and refused when a teacher would be in two places at once (409 TEACHER_CLASH).
+ * → the timetable, with `warnings` (e.g. a teacher whose assignment ends before the timetable does).
+ */
+export async function saveTimetable(scope, sectionId, values, user, req) {
+  const today = await calendarToday();
+  const result = await withTimetableLock(scope, 'timetables', async (tx) => {
+    const plan = await prepareTimetableVersion(tx, scope, sectionId, values, today);
+    if (plan.unchanged) return { unchanged: true };
+    await assertNoClashes(tx, scope, {
+      add: [plan.candidate],
+      remove: new Set(plan.replaced ? [plan.replaced.id] : []),
+      candidates: (v) => v.id === plan.candidate.id,
+      clipFrom: plan.from,
+      teacherIds: new Set(plan.teacherIds),
+    });
+    const versionId = await plan.write(tx, user, req);
+    return { versionId, warnings: plan.warnings };
   });
   if (result.unchanged) return { ...(await getTimetable(scope, sectionId, {})), warnings: [], unchanged: true };
   return { ...(await getTimetable(scope, sectionId, { versionId: result.versionId })), warnings: result.warnings };

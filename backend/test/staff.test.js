@@ -313,6 +313,16 @@ describe('editing, suspension and reset', () => {
     const count = (await staffEvents(staff.id)).length;
     await mA1(`/api/manager/staff/${staff.id}`, { method: 'PATCH', body: { jobTitle: 'Head Teacher' } });
     assert.equal((await staffEvents(staff.id)).length, count, 'no change, no event');
+    await mA1(`/api/manager/staff/${staff.id}`, { method: 'PATCH', body: { jobTitle: '  head   TEACHER ' } });
+    assert.equal((await staffEvents(staff.id)).length, count, 'a standard title in other spelling is the same title: no change');
+  });
+
+  test('job titles: standard titles are saved in their standard spelling; other titles are kept as typed', async () => {
+    const created = await mA1('/api/manager/staff', { method: 'POST', body: valid({ jobTitle: 'security GUARD' }) });
+    assert.equal(created.status, 201);
+    assert.equal(created.body.staff.jobTitle, 'Security Guard');
+    const other = await mA1(`/api/manager/staff/${created.body.staff.id}`, { method: 'PATCH', body: { jobTitle: 'Gardener' } });
+    assert.equal(other.body.staff.jobTitle, 'Gardener');
   });
 
   test('suspension ends sessions and blocks sign-in; reactivation keeps earlier sessions ended', async () => {

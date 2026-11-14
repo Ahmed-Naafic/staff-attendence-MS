@@ -19,6 +19,7 @@ import HistoryScreen from '../screens/history/HistoryScreen';
 import HomeScreen from '../screens/home/HomeScreen';
 import LessonScreen from '../screens/lessons/LessonScreen';
 import LessonsScreen from '../screens/lessons/LessonsScreen';
+import MyTimetableScreen from '../screens/lessons/MyTimetableScreen';
 import NotificationDetailScreen from '../screens/notifications/NotificationDetailScreen';
 import NotificationsScreen from '../screens/notifications/NotificationsScreen';
 import ReminderSettingsScreen from '../screens/notifications/ReminderSettingsScreen';
@@ -77,6 +78,7 @@ function SignedIn() {
           <Stack.Screen name="Attendance" component={AttendanceScreen} />
           <Stack.Screen name="AttendanceResult" component={AttendanceResultScreen} options={{ gestureEnabled: false }} />
           <Stack.Screen name="Lesson" component={LessonScreen} />
+          <Stack.Screen name="Timetable" component={MyTimetableScreen} />
           <Stack.Screen name="Sync" component={SyncScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="About" component={AboutScreen} />

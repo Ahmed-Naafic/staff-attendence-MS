@@ -1,7 +1,7 @@
 /*
  * The API routes the Staff app uses (docs/architecture.md → API). Each returns checked data.
  */
-import { checkEventResponse, checkHistory, checkLessonMarks, checkLessons, checkLogin, checkProfile, checkSession, checkToday, checkUser } from './contracts';
+import { checkEventResponse, checkHistory, checkLessonMarks, checkLessons, checkLogin, checkProfile, checkSession, checkTimetable, checkToday, checkUser } from './contracts';
 
 export const signIn = (api, { phone, password }) =>
   api
@@ -36,3 +36,7 @@ export const fetchLessons = (api, date, options) =>
 
 /** PUT one lesson's marks: { section, date, period, sentAt, marks: [{ student, status, occurredAt }] } → { results, lesson }. */
 export const putLessonMarks = (api, body) => api.request('/api/teacher/lessons/marks', { method: 'PUT', body }).then(({ data }) => checkLessonMarks(data));
+
+/** The teacher's week (published timetables, every branch): see checkTimetable. */
+export const fetchMyTimetable = (api, date, options) =>
+  api.request(`/api/teacher/timetable${date ? `?date=${date}` : ''}`, options).then(({ data }) => checkTimetable(data));

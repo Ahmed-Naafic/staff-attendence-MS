@@ -6,6 +6,7 @@ import { readCurriculum, readSubjectCreation, readSubjectListQuery, readSubjectU
 import { createSubject, deactivateSubject, getCurriculum, getSubject, listSubjects, reactivateSubject, setCurriculum, updateSubject } from '../features/subjects/subjects.service.js';
 import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuery } from '../features/teaching/teachingInput.js';
 import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
+import { mountTimetableBuilderRoutes } from '../features/timetable-builder/builder.routes.js';
 import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
 import { assignTeaching, cancelAssignment, eligibleTeachers, listTeachingAssignments, sectionTeaching, setAssignmentEnd } from '../features/teaching/teaching.service.js';
 import { readEntryCreation, readEntryUpdate, readSchoolDaysQuery, readWeekdayPolicy, readWeekdaysChange } from '../features/academic-calendar/calendarInput.js';
@@ -167,6 +168,8 @@ managerRouter.get('/teaching/teachers', async (req, res) => {
 
 // ---- Bell schedules and section timetables (docs/business-rules.md → Bell schedules; Timetables).
 mountTimetableRoutes(managerRouter, teachingScope, 'MANAGER');
+// Timetable builder (setup, readiness, generate, review, publish) and the class / teacher / master views.
+mountTimetableBuilderRoutes(managerRouter, teachingScope, 'MANAGER');
 
 // ---- Student attendance (docs/business-rules.md → Student attendance): settings, half-day sessions,
 // marks and excuses of the Manager's branch.

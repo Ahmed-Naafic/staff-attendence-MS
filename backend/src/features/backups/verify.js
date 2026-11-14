@@ -13,10 +13,21 @@ import { getPrisma } from '../../config/prisma.js';
 /** Tables whose row counts are compared (the platform's main records). */
 export const COUNTED_TABLES = ['School', 'Branch', 'User', 'BranchSchedule', 'StaffAssignment', 'AttendanceEvent', 'AuditEvent'];
 
+/**
+ * Migration rows → { applied, unfinished } as Prisma reads them: a migration is applied when an
+ * attempt finished and was not rolled back; an attempt that failed and was never resolved (no finish,
+ * no roll-back) is unfinished and blocks migrations. Rolled-back attempts are resolved: ignored.
+ */
+export function migrationState(rows) {
+  const applied = [...new Set(rows.filter((r) => r.finished && !r.rolledBack).map((r) => r.name))];
+  const unfinished = [...new Set(rows.filter((r) => !r.finished && !r.rolledBack).map((r) => r.name))];
+  return { applied, unfinished };
+}
+
 async function snapshotOf(client) {
   const tables = (await client.$queryRawUnsafe(`SELECT table_name AS name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'`)).map((r) => r.name);
   const migrations = tables.includes('_prisma_migrations')
-    ? await client.$queryRawUnsafe(`SELECT migration_name AS name, finished_at IS NOT NULL AND rolled_back_at IS NULL AS ok FROM "_prisma_migrations"`)
+    ? await client.$queryRawUnsafe(`SELECT migration_name AS name, finished_at IS NOT NULL AS finished, rolled_back_at IS NOT NULL AS "rolledBack" FROM "_prisma_migrations"`)
     : [];
   const counts = {};
   for (const table of COUNTED_TABLES) {
@@ -28,8 +39,7 @@ async function snapshotOf(client) {
     : 0;
   return {
     tables,
-    applied: migrations.filter((m) => m.ok).map((m) => m.name),
-    unfinished: migrations.filter((m) => !m.ok).map((m) => m.name),
+    ...migrationState(migrations),
     counts,
     superAdmins,
   };

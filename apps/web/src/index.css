@@ -277,3 +277,14 @@
 dialog::backdrop {
   background-color: var(--color-overlay);
 }
+
+/* Timetable subject colours: each subject gets its own hue (builderRules.subjectHues); these set
+   saturation and lightness per theme so text stays readable in light and dark mode. */
+:root {
+  --subject-s: 78%;
+  --subject-l: 91%;
+}
+[data-theme='dark'] {
+  --subject-s: 32%;
+  --subject-l: 24%;
+}
