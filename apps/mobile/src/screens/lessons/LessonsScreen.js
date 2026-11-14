@@ -76,7 +76,7 @@ export default function LessonsScreen({ navigation }) {
         ItemSeparatorComponent={() => <View style={{ height: space(3) }} />}
         ListHeaderComponent={
           <View style={{ gap: space(3), marginBottom: space(4) }}>
-            <Header date={data?.date} />
+            <Header date={data?.date} onWeek={() => navigation.navigate('Timetable')} />
             {!data && error ? <Notice title="Lessons could not be loaded" message={userMessage(error)} onRetry={load} /> : null}
             {offlineCopy ? <Notice tone="warning" icon="wifi" title={online ? 'Showing saved lessons' : 'You’re offline'} message="Marks you take are saved on this phone and uploaded when you’re back online." /> : null}
             {lessonPendingCount ? (
@@ -118,13 +118,23 @@ export default function LessonsScreen({ navigation }) {
   );
 }
 
-function Header({ date }) {
+function Header({ date, onWeek }) {
   const { colors } = useTheme();
   return (
     <View style={{ paddingTop: space(4) }}>
-      <AppText variant="title" accessibilityRole="header">
-        My lessons
-      </AppText>
+      <View style={styles.row}>
+        <AppText variant="title" accessibilityRole="header">
+          My lessons
+        </AppText>
+        {onWeek ? (
+          <Pressable testID="open-timetable" accessibilityRole="button" accessibilityLabel="My week" onPress={onWeek} hitSlop={8} style={styles.week}>
+            <Icon name="calendar-outline" size={18} color={colors.interactive} />
+            <AppText variant="label" color={colors.interactive}>
+              My week
+            </AppText>
+          </Pressable>
+        ) : null}
+      </View>
       {date ? (
         <AppText variant="small" color={colors.fgSecondary}>
           {formatDay(date)}
@@ -136,4 +146,5 @@ function Header({ date }) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  week: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4 },
 });

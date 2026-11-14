@@ -88,4 +88,8 @@ export function readAssignmentQuery(query, { role }) {
 }
 
 /** Teacher search: q (name, Staff ID or phone). */
-export const readTeacherQuery = (query) => ({ q: optionalString(query, 'q', { max: 60 }) ?? '' });
+/** q (name, Staff ID, phone); show: 'teachers' (job title is a teaching one; default) | 'all' (every active staff member). */
+export const readTeacherQuery = (query) => ({
+  q: optionalString(query, 'q', { max: 60 }) ?? '',
+  show: query.show === 'all' ? 'all' : 'teachers',
+});

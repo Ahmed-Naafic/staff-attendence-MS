@@ -29,8 +29,11 @@ export const loadAssignments = (role, filters = {}) =>
   apiRequest(`${base(role)}/teaching-assignments`, { query: { ...filters, branch: role === 'OWNER' ? filters.branch : undefined } });
 /** One section: { section, curriculumSet, classTeachers, subjects: [{ subject, weeklyLessons, teachers }], today, firstEditableDate }. */
 export const loadSectionTeaching = (role, sectionId) => apiRequest(`${base(role)}/sections/${id(sectionId)}/teaching`);
-/** Staff who can teach (suggested teachers first): { items: [{ id, name, staffId, jobTitle, homeBranch, suggested, liveAssignments }] }. */
-export const loadTeachers = (role, { q, academicYear } = {}) => apiRequest(`${base(role)}/teaching/teachers`, { query: { q, academicYear } });
+/**
+ * Staff who can teach: show 'teachers' (job title is a teaching one; default) or 'all' (every active
+ * staff member, teachers first). { show, total, items: [{ id, name, staffId, jobTitle, homeBranch, suggested, liveAssignments }] } (at most 50).
+ */
+export const loadTeachers = (role, { q, academicYear, show } = {}) => apiRequest(`${base(role)}/teaching/teachers`, { query: { q, academicYear, show } });
 /** values: { role: 'subject' | 'class', teacher, section, subject?, startDate?, endDate? } → the assignment. */
 export const assignTeaching = async (role, values) => (await apiRequest(`${base(role)}/teaching-assignments`, { method: 'POST', body: values })).assignment;
 export const setAssignmentEnd = async (role, assignmentId, lastDay) =>

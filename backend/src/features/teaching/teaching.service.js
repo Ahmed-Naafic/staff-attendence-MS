@@ -8,6 +8,7 @@ import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { lockActiveSchool, lockOperatingBranch } from '../branches/branches.service.js';
 import { sectionDisplayName } from '../classes/classInput.js';
+import { isTeachingTitle, teachingTitleWhere } from '../staff/jobTitles.js';
 
 /*
  * Teaching assignments (docs/business-rules.md → Teaching assignments): who teaches which subject
@@ -225,29 +226,38 @@ export async function sectionTeaching(scope, sectionId) {
 
 /**
  * Staff who can be given teaching: active STAFF of the school (Owner) or of the Manager's branch.
- * Staff whose job title mentions teaching come first (a suggestion only; the title grants nothing),
- * then by name. Each with their live assignment count in the year, to balance loads. At most 50.
+ * `show: 'teachers'` (default) lists staff whose job title is a teaching one (staff/jobTitles.js);
+ * `show: 'all'` lists every active staff member, teachers first (the title grants nothing: anyone
+ * may be assigned). Then by name, each with their live assignment count in the year, to balance
+ * loads, and `total` (how many match before the 50 shown).
  */
-export async function eligibleTeachers(scope, { q, academicYear }) {
+export async function eligibleTeachers(scope, { q, academicYear, show = 'teachers' }) {
   const prisma = getPrisma();
   const today = await calendarToday();
   const year = academicYear ? await resolveYear(prisma, scope.school, academicYear) : null;
-  const rows = await prisma.user.findMany({
-    where: {
-      role: 'STAFF',
-      status: 'ACTIVE',
-      ...(scope.branch ? { branchId: scope.branch.id } : { branch: { schoolId: scope.school.id } }),
-      ...(q && { OR: [{ name: { contains: q, mode: 'insensitive' } }, { staffId: { contains: q, mode: 'insensitive' } }, { phone: { contains: q } }] }),
-    },
-    select: {
-      ...teacherSelect,
-      _count: { select: { teachingAssignments: { where: { ...stateWhere('live', today), ...(year && { academicYearId: year.id }) } } } },
-    },
-    take: 300,
-  });
-  const teaches = (t) => (/teach|macallin|bare/i.test(t.jobTitle ?? '') ? 0 : 1);
+  const where = {
+    role: 'STAFF',
+    status: 'ACTIVE',
+    ...(scope.branch ? { branchId: scope.branch.id } : { branch: { schoolId: scope.school.id } }),
+    AND: [
+      ...(q ? [{ OR: [{ name: { contains: q, mode: 'insensitive' } }, { staffId: { contains: q, mode: 'insensitive' } }, { phone: { contains: q } }] }] : []),
+      ...(show === 'all' ? [] : [teachingTitleWhere()]),
+    ],
+  };
+  const [rows, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        ...teacherSelect,
+        _count: { select: { teachingAssignments: { where: { ...stateWhere('live', today), ...(year && { academicYearId: year.id }) } } } },
+      },
+      take: 300,
+    }),
+    prisma.user.count({ where }),
+  ]);
+  const teaches = (t) => (isTeachingTitle(t.jobTitle) ? 0 : 1);
   rows.sort((a, b) => teaches(a) - teaches(b) || a.name.localeCompare(b.name));
-  return { items: rows.slice(0, 50).map((t) => ({ ...toTeacher(t), suggested: teaches(t) === 0, liveAssignments: t._count.teachingAssignments })) };
+  return { show, total, items: rows.slice(0, 50).map((t) => ({ ...toTeacher(t), suggested: teaches(t) === 0, liveAssignments: t._count.teachingAssignments })) };
 }
 
 /**

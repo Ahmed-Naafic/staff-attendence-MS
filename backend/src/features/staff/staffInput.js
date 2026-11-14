@@ -3,6 +3,7 @@ import { isUuid } from '../../common/validate.js';
 import { passwordProblem } from '../auth/password.js';
 import { WEEKDAYS, isDate, readEffectiveTime } from '../schedules/scheduleInput.js';
 import { isValidEmail, isValidPhone } from '../schools/schoolInput.js';
+import { canonicalJobTitle } from './jobTitles.js';
 
 /*
  * Validation for staff requests (approved rules: docs/business-rules.md → Staff accounts and shift
@@ -54,7 +55,8 @@ function readText(body, field, errors) {
   else if (CONTROL.test(value)) errors[field] = `${rule.label} cannot contain control characters.`;
   else if (field === 'email' && !isValidEmail(value)) errors[field] = 'Enter a valid email address.';
   else if (field === 'phone' && !isValidPhone(value)) errors[field] = 'Enter a valid phone number, e.g. +252 61 2345678.';
-  else return field === 'email' ? value.toLowerCase() : value;
+  else if (field === 'email') return value.toLowerCase();
+  else return field === 'jobTitle' ? canonicalJobTitle(value) : value;
   return undefined;
 }
 

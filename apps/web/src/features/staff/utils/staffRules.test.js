@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { cleanStaffValues, jobTitleFields, jobTitleFrom, OTHER_JOB_TITLE, shiftsOn, toRequestAssignments, validateAssignments, validateReason, validateStaff } from './staffRules.js';
+import * as api from '../../../../../../backend/src/features/staff/jobTitles.js';
+import { cleanStaffValues, isTeachingTitle, JOB_TITLES, jobTitleFields, jobTitleFrom, OTHER_JOB_TITLE, TEACHING_JOB_TITLES, shiftsOn, toRequestAssignments, validateAssignments, validateReason, validateStaff } from './staffRules.js';
 
 const FIELDS = ['name', 'phone', 'jobTitle', 'email'];
 
@@ -38,7 +39,7 @@ test('suspension reason: 3–500 characters', () => {
   assert.equal(validateReason('On leave'), null);
 });
 
-test('job title: Teacher and Accountant are choices; any other title is "Other" with the title typed', () => {
+test('job title: standard titles are choices; any other title is "Other" with the title typed', () => {
   assert.deepEqual(jobTitleFields('Teacher'), { jobTitleChoice: 'Teacher', jobTitleOther: '' });
   assert.deepEqual(jobTitleFields(' accountant '), { jobTitleChoice: 'Accountant', jobTitleOther: '' });
   assert.deepEqual(jobTitleFields('Guard'), { jobTitleChoice: OTHER_JOB_TITLE, jobTitleOther: 'Guard' });
@@ -47,4 +48,15 @@ test('job title: Teacher and Accountant are choices; any other title is "Other" 
   assert.equal(jobTitleFrom({ jobTitleChoice: OTHER_JOB_TITLE, jobTitleOther: 'Librarian' }), 'Librarian');
   assert.equal(jobTitleFrom({ jobTitleChoice: OTHER_JOB_TITLE, jobTitleOther: '' }), '');
   assert.equal(jobTitleFrom({ jobTitleChoice: '', jobTitleOther: '' }), '');
+});
+
+test('job titles: the same list and teaching rule as the API', () => {
+  assert.deepEqual(JOB_TITLES, api.JOB_TITLES);
+  assert.deepEqual(TEACHING_JOB_TITLES, api.TEACHING_JOB_TITLES);
+  assert.deepEqual(jobTitleFields('head teacher'), { jobTitleChoice: 'Head Teacher', jobTitleOther: '' });
+  for (const title of ['Teacher', 'Deputy Head Teacher', 'Math teacher', 'Macallin', 'Accountant', 'Driver', '', null]) {
+    assert.equal(isTeachingTitle(title), api.isTeachingTitle(title), String(title));
+  }
+  assert.equal(isTeachingTitle('Head Teacher'), true);
+  assert.equal(isTeachingTitle('Accountant'), false);
 });

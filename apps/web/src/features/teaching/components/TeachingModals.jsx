@@ -1,4 +1,5 @@
 import { useId, useState } from 'react';
+import { UserPlus } from 'lucide-react';
 import { Badge, Button, Checkbox, Input, Modal, RadioGroup, Select, Textarea } from '../../../components/ui';
 import { requestFailure, useDialogForm } from '../../../hooks/useDialogForm.js';
 import { useApiData } from '../../../hooks/useApiData.js';
@@ -118,14 +119,23 @@ export function CurriculumModal({ cls, curriculum, subjects, open, onClose, onSa
 /**
  * Give a staff member teaching in a section: a subject (subject teacher) or the whole section (class
  * teacher). `context`: { role (account), section, subjects: [{ id, name }], fixedRole?, fixedSubject?,
- * earliest, yearEnd }. The teacher list puts suggested teachers (by job title) first.
+ * earliest, yearEnd, teacher? (preselected) and teacherQuery? (its Staff ID), values? (the form as it was) }. The list shows staff
+ * whose job title is a teaching one; "Include other staff" shows everyone (a job title grants
+ * nothing). `onRegister(values)` (Managers) registers a new teacher as a staff member of the branch.
  */
-export function AssignModal({ context, open, onClose, onSaved }) {
+export function AssignModal({ context, open, onClose, onSaved, onRegister }) {
   const formId = useId();
-  const [q, setQ] = useState('');
-  const initial = { role: context.fixedRole ?? 'subject', subject: context.fixedSubject ?? '', teacher: '', startDate: context.earliest, endDate: '' };
+  // A teacher just registered is found by their Staff ID (the list shows at most 50).
+  const [q, setQ] = useState(context.teacherQuery ?? '');
+  const [everyone, setEveryone] = useState(false);
+  const initial = { role: context.fixedRole ?? 'subject', subject: context.fixedSubject ?? '', teacher: '', startDate: context.earliest, endDate: '', ...context.values, ...(context.teacher && { teacher: context.teacher }) };
   const form = useDialogForm(open, initial, failure);
-  const teachers = useApiData(() => (open ? loadTeachers(context.role, { q, academicYear: context.section.academicYear.id }) : Promise.resolve(null)), `teachers|${open}|${q}`, { delayMs: 250 });
+  const show = everyone ? 'all' : 'teachers';
+  const teachers = useApiData(
+    () => (open ? loadTeachers(context.role, { q, academicYear: context.section.academicYear.id, show }) : Promise.resolve(null)),
+    `teachers|${open}|${q}|${show}|${context.teacher ?? ''}`,
+    { delayMs: 250 },
+  );
   const v = form.values;
   const save = () => {
     const body = { role: v.role, teacher: v.teacher, section: context.section.id, ...(v.role === 'subject' && { subject: v.subject }), startDate: v.startDate, ...(v.endDate && { endDate: v.endDate }) };
@@ -177,7 +187,7 @@ export function AssignModal({ context, open, onClose, onSaved }) {
           required
           fieldClassName="sm:col-span-2"
           options={[
-            { value: '', label: teachers.status === 'loading' && !list.length ? 'Loading…' : list.length ? 'Choose a teacher' : 'No staff found' },
+            { value: '', label: teachers.status === 'loading' && !list.length ? 'Loading…' : list.length ? 'Choose a teacher' : everyone ? 'No staff found' : 'No teachers found' },
             ...list.map((t) => ({
               value: t.id,
               label: `${t.name} (${t.staffId})${t.jobTitle ? ` · ${t.jobTitle}` : ''}${context.role === 'OWNER' && t.homeBranch ? ` · ${t.homeBranch.name}` : ''} · ${t.liveAssignments} assignment${t.liveAssignments === 1 ? '' : 's'}`,
@@ -185,9 +195,22 @@ export function AssignModal({ context, open, onClose, onSaved }) {
           ]}
           value={v.teacher}
           error={form.errors.teacher}
-          hint={context.role === 'OWNER' ? 'Any active staff member of the school; their home branch does not change.' : 'Active staff of your branch. Teachers from other branches are assigned by your School Owner.'}
+          hint={
+            (everyone ? 'Every active staff member' : 'Staff whose job title is a teaching one (Teacher, Head Teacher…)') +
+            (context.role === 'OWNER' ? ' of the school; their home branch does not change.' : ' of your branch. Teachers from other branches are assigned by your School Owner.')
+          }
           onChange={(e) => form.set('teacher', e.target.value)}
         />
+        <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
+          <Checkbox label="Include staff who are not teachers" checked={everyone} onChange={(e) => setEveryone(e.target.checked)} />
+          {onRegister ? (
+            <Button size="sm" variant="ghost" leftIcon={UserPlus} onClick={() => onRegister(form.values)} disabled={form.saving}>
+              Register a new teacher
+            </Button>
+          ) : (
+            context.role === 'OWNER' && <span className="text-small text-fg-muted">New teachers are registered by branch Managers under Staff.</span>
+          )}
+        </div>
         <Input id={`${formId}-startDate`} label="First day" type="date" required min={context.earliest} max={context.yearEnd} value={v.startDate} error={form.errors.startDate} onChange={(e) => form.set('startDate', e.target.value)} />
         <Input id={`${formId}-endDate`} label="Last day" type="date" min={v.startDate || undefined} max={context.yearEnd} value={v.endDate} error={form.errors.endDate} hint="Optional: empty means until the year ends." onChange={(e) => form.set('endDate', e.target.value)} />
       </form>

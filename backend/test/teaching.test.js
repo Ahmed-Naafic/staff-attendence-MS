@@ -281,10 +281,16 @@ describe('teaching assignments', () => {
     assert.equal((await manager2(`/api/manager/sections/${sections.G1A1.id}/teaching`)).status, 404);
 
     const teachers = await manager1('/api/manager/teaching/teachers');
-    assert.deepEqual(teachers.body.items.map((t) => t.name).sort(), [`ACC ${tag}`, `T1 ${tag}`].sort(), 'active staff of the branch only');
+    assert.deepEqual(teachers.body.items.map((t) => t.name), [`T1 ${tag}`], 'by default: active staff of the branch whose job title is a teaching one');
+    assert.equal(teachers.body.total, 1);
+    const everyone = await manager1('/api/manager/teaching/teachers?show=all');
+    assert.deepEqual(everyone.body.items.map((t) => t.name).sort(), [`ACC ${tag}`, `T1 ${tag}`].sort(), 'show=all: every active staff member of the branch');
     const ownerTeachers = (await owner('/api/owner/teaching/teachers')).body.items;
-    assert.ok(ownerTeachers.some((t) => t.id === staff.T2.id) && !ownerTeachers.some((t) => t.id === staff.TB.id || t.id === staff.SUSP.id));
-    assert.equal(ownerTeachers.at(-1).name, `ACC ${tag}`, 'teachers first (a suggestion only)');
+    assert.ok(ownerTeachers.some((t) => t.id === staff.T2.id) && !ownerTeachers.some((t) => t.id === staff.TB.id || t.id === staff.SUSP.id || t.id === staff.ACC.id));
+    const ownerAll = (await owner('/api/owner/teaching/teachers?show=all')).body.items;
+    assert.equal(ownerAll.at(-1).name, `ACC ${tag}`, 'show=all: teachers first');
+    // The job title grants nothing: someone who is not a teacher can still be assigned (shown under show=all).
+    assert.equal(ownerAll.at(-1).suggested, false);
   });
 
   test('past days are fixed: scheduled ones cancel, running ones end from today on, ended ones stay', async () => {

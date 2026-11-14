@@ -13,9 +13,37 @@ export const STAFF_FIELDS = {
   email: { label: 'Email', max: 254, required: false },
 };
 
-/** Job titles offered in the staff form; "Other" asks for the title (the API accepts any 2–80 characters). */
-export const JOB_TITLES = ['Teacher', 'Accountant'];
+/*
+ * Job titles offered in the staff form (mirrors backend/src/features/staff/jobTitles.js); "Other"
+ * asks for the title (the API accepts any 2–80 characters and saves a standard title in its standard
+ * spelling). A job title grants nothing; teaching titles put the staff member on the Teaching page's
+ * teacher list.
+ */
+export const TEACHING_JOB_TITLES = ['Teacher', 'Head Teacher', 'Deputy Head Teacher'];
+export const JOB_TITLES = [
+  ...TEACHING_JOB_TITLES,
+  'Accountant',
+  'Cashier',
+  'Secretary',
+  'Administrator',
+  'Librarian',
+  'Lab Technician',
+  'IT Officer',
+  'Counselor',
+  'Nurse',
+  'Driver',
+  'Security Guard',
+  'Cleaner',
+  'Cook',
+];
 export const OTHER_JOB_TITLE = 'other';
+const TEACHING_WORDS = ['teach', 'macallin', 'bare'];
+
+/** Whether a job title is a teaching one (as the API decides: Teacher, Math Teacher, Macallin…). */
+export function isTeachingTitle(title) {
+  const value = (title ?? '').toLowerCase();
+  return TEACHING_WORDS.some((w) => value.includes(w));
+}
 
 /** A saved job title → the form's { jobTitleChoice, jobTitleOther }; a title not in the list is "Other". */
 export function jobTitleFields(title) {

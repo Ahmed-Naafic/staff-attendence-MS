@@ -13,9 +13,10 @@ const JOB_TITLE_OPTIONS = [...JOB_TITLES.map((t) => ({ value: t, label: t })), {
 /**
  * Add a staff member (mode "create": details and a temporary password; the account is active at
  * once and its Staff ID is generated) or edit one (mode "edit": details only). `onSaved(staff)` runs
- * after success.
+ * after success. `jobTitle` presets a new member's job title (the Teaching page registers teachers
+ * here: "Teacher"); `title`, `description` and `submitLabel` change the wording.
  */
-export function StaffFormModal({ mode, staff, open, onClose, onSaved }) {
+export function StaffFormModal({ mode, staff, open, onClose, onSaved, jobTitle, title, description, submitLabel }) {
   const formId = useId();
   const isCreate = mode === 'create';
   const [values, setValues] = useState(EMPTY);
@@ -26,11 +27,11 @@ export function StaffFormModal({ mode, staff, open, onClose, onSaved }) {
 
   useEffect(() => {
     if (!open) return;
-    setValues(isCreate || !staff ? EMPTY : fromStaff(staff));
+    setValues(isCreate || !staff ? { ...EMPTY, ...(jobTitle && jobTitleFields(jobTitle)) } : fromStaff(staff));
     setErrors({});
     setFormError('');
     setSaving(false);
-  }, [open, isCreate, staff]);
+  }, [open, isCreate, staff, jobTitle]);
 
   const isOther = values.jobTitleChoice === OTHER_JOB_TITLE;
   // The job title fields share the jobTitle error (the API reports it under that name).
@@ -85,8 +86,8 @@ export function StaffFormModal({ mode, staff, open, onClose, onSaved }) {
       open={open}
       onClose={onClose}
       size="lg"
-      title={isCreate ? 'Add Staff' : 'Edit Staff'}
-      description={isCreate ? 'The account is active at once. Its Staff ID is generated automatically.' : `Staff ID ${staff?.staffId ?? ''} cannot be changed.`}
+      title={title ?? (isCreate ? 'Add Staff' : 'Edit Staff')}
+      description={description ?? (isCreate ? 'The account is active at once. Its Staff ID is generated automatically.' : `Staff ID ${staff?.staffId ?? ''} cannot be changed.`)}
       loading={saving}
       loadingLabel={isCreate ? 'Adding…' : 'Saving…'}
       error={formError}
@@ -96,7 +97,7 @@ export function StaffFormModal({ mode, staff, open, onClose, onSaved }) {
             Cancel
           </Button>
           <Button type="submit" form={formId} loading={saving}>
-            {isCreate ? 'Add Staff' : 'Save Changes'}
+            {submitLabel ?? (isCreate ? 'Add Staff' : 'Save Changes')}
           </Button>
         </>
       }

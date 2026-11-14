@@ -123,6 +123,10 @@ model User {
   teachingAssignments    TeachingAssignment[]
   /// STAFF only: timetable lessons naming them as the teacher.
   timetableSlots         TimetableSlot[]
+  /// STAFF only: timetable builder limits and unavailable times, fixed and draft lessons naming them.
+  teacherTimetableProfiles TeacherTimetableProfile[]
+  timetableFixedLessons    TimetableFixedLesson[]
+  timetableDraftLessons    TimetableDraftLesson[]
 
   @@index([role, status])
   @@index([branchId])
@@ -177,6 +181,9 @@ model School {
   teachingAssignments       TeachingAssignment[]
   bellSchedules             BellSchedule[]
   timetableVersions         TimetableVersion[]
+  timetableSetups           TimetableSetup[]
+  teacherTimetableProfiles  TeacherTimetableProfile[]
+  timetableDrafts           TimetableDraft[]
   studentAttendanceSettings StudentAttendanceSettings[]
   studentAttendanceSessions StudentAttendanceSession[]
   studentExcuses            StudentExcuse[]
@@ -234,6 +241,8 @@ model Branch {
   teachingAssignments       TeachingAssignment[]
   bellSchedules             BellSchedule[]
   timetableVersions         TimetableVersion[]
+  timetableSetups           TimetableSetup[]
+  timetableDrafts           TimetableDraft[]
   studentAttendanceSettings StudentAttendanceSettings?
   studentAttendanceSessions StudentAttendanceSession[]
   studentExcuses            StudentExcuse[]
@@ -929,6 +938,9 @@ model AcademicYear {
   calendarEntries           CalendarEntry[]
   teachingAssignments       TeachingAssignment[]
   timetableVersions         TimetableVersion[]
+  timetableSetups           TimetableSetup[]
+  teacherTimetableProfiles  TeacherTimetableProfile[]
+  timetableDrafts           TimetableDraft[]
   studentAttendanceSessions StudentAttendanceSession[]
 
   @@unique([schoolId, nameKey])
@@ -993,6 +1005,8 @@ model Section {
   enrollments         Enrollment[]
   teachingAssignments TeachingAssignment[]
   timetableVersions   TimetableVersion[]
+  timetableFixedLessons TimetableFixedLesson[]
+  timetableDraftLessons TimetableDraftLesson[]
   promotionsFrom      PromotionItem[]            @relation("PromotionItemFrom")
   promotionsTarget    PromotionItem[]            @relation("PromotionItemTarget")
   attendanceSessions  StudentAttendanceSession[]
@@ -1304,6 +1318,8 @@ model Subject {
   classes             ClassSubject[]
   teachingAssignments TeachingAssignment[]
   timetableSlots      TimetableSlot[]
+  timetableFixedLessons TimetableFixedLesson[]
+  timetableDraftLessons TimetableDraftLesson[]
   attendanceSessions  StudentAttendanceSession[]
 
   @@unique([schoolId, nameKey])
@@ -1400,6 +1416,7 @@ model BellSchedule {
 
   versions   BellScheduleVersion[]
   timetables TimetableVersion[]
+  setupDefaults TimetableSetup[]
 
   @@index([schoolId, status])
   @@index([branchId])
@@ -1710,4 +1727,163 @@ model StudentExcuse {
   @@index([studentId, startDate])
   @@index([branchId, startDate])
   @@index([schoolId])
+}
+
+// ---- Timetable builder (docs/business-rules.md → Timetable builder) ------------------------------
+// Generated timetables are drafts until published; publishing writes ordinary TimetableVersion rows
+// (one per section, through the same checks as the timetable editor), so everything that reads
+// timetables (lessons of a day, student attendance, views) has one source.
+
+enum TimetableDraftStatus {
+  DRAFT
+  PUBLISHED
+  DISCARDED
+}
+
+/// The builder setup of one branch for one academic year: generation rules and each section's bell
+/// schedule. Limits are checked in the migration.
+model TimetableSetup {
+  id                    String        @id @default(uuid())
+  schoolId              String
+  school                School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId        String
+  academicYear          AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  branchId              String
+  branch                Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// Used for sections without their own choice (and without a timetable to take it from).
+  defaultBellScheduleId String?
+  defaultBellSchedule   BellSchedule? @relation(fields: [defaultBellScheduleId], references: [id], onDelete: Restrict)
+  /// { sectionId: bellScheduleId } for sections with their own bell schedule.
+  sectionBells          Json          @default("{}")
+  /// Sections left out of generation (their timetables are not changed).
+  excludedSectionIds    String[]      @default([])
+  /// Every lesson period of a class has a lesson: lessons a week must equal the lesson periods, and
+  /// a draft with an empty period cannot be published. Off: classes may have free periods (at the end of the day).
+  fillAllPeriods        Boolean       @default(true)
+  /// Most lessons of one subject in one section on one day (1–6).
+  maxSubjectPerDay      Int           @default(2)
+  /// Two lessons of a subject may follow each other (a double lesson).
+  allowDoubleLessons    Boolean       @default(true)
+  /// Spread each subject's lessons over the week.
+  spreadSubjects        Boolean       @default(true)
+  /// Keep teachers' free periods between lessons few.
+  avoidTeacherGaps      Boolean       @default(true)
+  /// Most lessons a teacher teaches on one day (all branches); null: no limit. A teacher's own limit wins.
+  teacherMaxPerDay      Int?
+  /// Subjects preferred before the main break (or early in the day).
+  morningSubjectIds     String[]      @default([])
+  /// How long the generator searches for a better timetable (5–60 seconds).
+  searchSeconds         Int           @default(10)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  fixedLessons TimetableFixedLesson[]
+  drafts       TimetableDraft[]
+
+  @@unique([branchId, academicYearId])
+  @@index([schoolId])
+  @@index([defaultBellScheduleId])
+}
+
+/// A teacher's limits and unavailable times for one academic year (every branch they teach in).
+model TeacherTimetableProfile {
+  id             String       @id @default(uuid())
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  teacherId      String
+  teacher        User         @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  /// Most lessons on one day; null: the setup's limit.
+  maxPerDay      Int?
+  /// Most lessons in a week; null: no limit.
+  maxPerWeek     Int?
+  /// [{ weekday, startMinute, endMinute }]: times they cannot teach (clock times, any bell schedule).
+  unavailable    Json         @default("[]")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([teacherId, academicYearId])
+  @@index([schoolId, academicYearId])
+}
+
+/// A lesson the generator must place exactly here (and never move).
+model TimetableFixedLesson {
+  id           String         @id @default(uuid())
+  setupId      String
+  setup        TimetableSetup @relation(fields: [setupId], references: [id], onDelete: Restrict)
+  sectionId    String
+  section      Section        @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  weekday      Weekday
+  periodNumber Int
+  subjectId    String
+  subject      Subject        @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  /// Null: the section's teacher of the subject (decided when generating).
+  teacherId    String?
+  teacher      User?          @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  createdAt    DateTime       @default(now())
+
+  @@unique([setupId, sectionId, weekday, periodNumber])
+  @@index([sectionId])
+  @@index([subjectId])
+  @@index([teacherId])
+}
+
+/// A generated timetable of a branch, reviewed and edited before it is published. At most one DRAFT
+/// per branch and year (partial unique index in the migration).
+model TimetableDraft {
+  id             String               @id @default(uuid())
+  schoolId       String
+  school         School               @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear         @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  branchId       String
+  branch         Branch               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  setupId        String
+  setup          TimetableSetup       @relation(fields: [setupId], references: [id], onDelete: Restrict)
+  status         TimetableDraftStatus @default(DRAFT)
+  /// The date whose bell times, teaching assignments and other timetables it was planned for.
+  planDate       DateTime             @db.Date
+  /// [{ sectionId, bellScheduleId }]: the sections it covers.
+  sections       Json
+  seed           Int
+  /// Increases with every change (stale edits are refused).
+  revision       Int                  @default(1)
+  /// { score, unplaced: [...], stats } of the last generation or edit.
+  report         Json
+  createdById    String
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  publishedAt    DateTime?
+  publishedById  String?
+  publishedFrom  DateTime?            @db.Date
+  discardedAt    DateTime?
+
+  lessons TimetableDraftLesson[]
+
+  @@index([schoolId, academicYearId, branchId])
+  @@index([setupId])
+}
+
+model TimetableDraftLesson {
+  id           String         @id @default(uuid())
+  draftId      String
+  draft        TimetableDraft @relation(fields: [draftId], references: [id], onDelete: Restrict)
+  sectionId    String
+  section      Section        @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  weekday      Weekday
+  periodNumber Int
+  subjectId    String
+  subject      Subject        @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  teacherId    String?
+  teacher      User?          @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  /// Kept in place when generating again (fixed lessons are always locked).
+  locked       Boolean        @default(false)
+  fixed        Boolean        @default(false)
+
+  @@unique([draftId, sectionId, weekday, periodNumber])
+  @@index([draftId, teacherId])
+  @@index([sectionId])
+  @@index([subjectId])
+  @@index([teacherId])
 }

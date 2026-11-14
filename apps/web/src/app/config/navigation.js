@@ -1,4 +1,4 @@
-import { ArrowRightLeft, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, Users } from 'lucide-react';
+import { ArrowRightLeft, CalendarCog, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, Users } from 'lucide-react';
 
 /*
  * Role-aware navigation. Each role gets its own identity and sidebar sections;
@@ -61,6 +61,8 @@ export const navigationByRole = {
         { to: '/subjects', label: 'Subjects', icon: BookOpen },
         { to: '/teaching', label: 'Teaching', icon: Presentation },
         { to: '/timetables', label: 'Timetables', icon: Clock },
+        { to: '/timetable-builder', label: 'Timetable Builder', icon: CalendarCog },
+        { to: '/timetable-views', label: 'Timetable Views', icon: LayoutGrid },
         { to: '/bell-schedules', label: 'Bell Schedules', icon: BellRing },
         { to: '/students', label: 'Students', icon: Backpack },
         { to: '/promotions', label: 'Promotion', icon: ArrowRightLeft },
@@ -84,6 +86,8 @@ export const navigationByRole = {
         { to: '/subjects', label: 'Subjects', icon: BookOpen },
         { to: '/teaching', label: 'Teaching', icon: Presentation },
         { to: '/timetables', label: 'Timetables', icon: Clock },
+        { to: '/timetable-builder', label: 'Timetable Builder', icon: CalendarCog },
+        { to: '/timetable-views', label: 'Timetable Views', icon: LayoutGrid },
         { to: '/bell-schedules', label: 'Bell Schedules', icon: BellRing },
         { to: '/students', label: 'Students', icon: Backpack },
         { to: '/promotions', label: 'Promotion', icon: ArrowRightLeft },

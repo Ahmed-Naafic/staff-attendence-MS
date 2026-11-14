@@ -100,3 +100,12 @@ export function checkLessonMarks(data) {
   if (data.lesson) checkLesson(data.lesson);
   return data;
 }
+
+/** The teacher's week: { date, days, rows, lessons: [{ weekday, period, start, end, section, subject }], perDay, total }. */
+export function checkTimetable(data) {
+  check(isObject(data) && isDay(data.date) && Array.isArray(data.days) && Array.isArray(data.lessons) && isNumber(data.total), 'timetable');
+  for (const l of data.lessons) {
+    check(isObject(l) && isString(l.weekday) && isTime(l.start) && isTime(l.end) && isObject(l.section) && isString(l.section.displayName) && isObject(l.subject) && isString(l.subject.name), 'timetable lesson');
+  }
+  return data;
+}
