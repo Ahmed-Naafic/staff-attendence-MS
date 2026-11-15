@@ -118,4 +118,14 @@ export function timetableGaps(view) {
   };
 }
 
+/**
+ * What to say about a timetable waiting to start (view.nextStart) → null, or { kind, date }:
+ * 'missing' when some classes (or the class) have no timetable on the date shown, else 'upcoming'.
+ */
+export function upcomingTimetable(view) {
+  if (!view?.nextStart || view.source === 'draft') return null;
+  const missing = view.kind === 'master' ? view.sections.some((s) => !s.lessons.length) : view.kind === 'section' ? !view.lessons.length : false;
+  return { kind: missing ? 'missing' : 'upcoming', date: view.nextStart };
+}
+
 export const unplacedTotal = (draft) => (draft?.unplaced ?? []).reduce((n, u) => n + u.count, 0);

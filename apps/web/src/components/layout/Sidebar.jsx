@@ -1,5 +1,7 @@
-import { NavLink } from 'react-router';
-import { BookOpen, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { NavLink, useLocation } from 'react-router';
+import { groupChildren, isWithin } from './groupChildren.js';
+import { BookOpen, ChevronDown, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react';
 import { cn } from '../../lib/cn.js';
 import { Tooltip } from '../ui/Tooltip.jsx';
 import { useDialog } from '../ui/useDialog.js';
@@ -11,7 +13,9 @@ import { useAppShell } from './AppShell.jsx';
  *
  * brand:    { name, subtitle, logo? }        e.g. { name: 'EduTrack', subtitle: 'Platform Administrator' }
  * roleLabel: string                           e.g. 'Super Admin'
- * sections: [{ label?, items: [{ to, label, icon, end? }] }]
+ * sections: [{ label?, items: [{ to, label, icon, end? } | { id, label, icon, children: [link] }] }]
+ *           A group opens and closes; it is open while one of its pages is shown. When the sidebar
+ *           is collapsed to icons, a group's pages show as icons of their own.
  */
 export function Sidebar({ brand, roleLabel, sections, footer }) {
   const { collapsed, toggleCollapsed, mobileNavOpen, closeMobileNav } = useAppShell();
@@ -117,11 +121,15 @@ function SidebarContent({ brand, roleLabel, sections, footer, collapsed = false,
               </p>
             )}
             <ul className="flex flex-col gap-1">
-              {section.items.map((item) => (
-                <li key={item.to}>
-                  <SidebarLink item={item} collapsed={collapsed} onNavigate={onNavigate} />
-                </li>
-              ))}
+              {section.items.map((item) =>
+                item.children ? (
+                  <SidebarGroup key={item.id ?? item.label} group={item} collapsed={collapsed} onNavigate={onNavigate} />
+                ) : (
+                  <li key={item.to}>
+                    <SidebarLink item={item} collapsed={collapsed} onNavigate={onNavigate} />
+                  </li>
+                ),
+              )}
             </ul>
           </div>
         ))}
@@ -132,7 +140,54 @@ function SidebarContent({ brand, roleLabel, sections, footer, collapsed = false,
   );
 }
 
-function SidebarLink({ item, collapsed, onNavigate }) {
+function SidebarGroup({ group, collapsed, onNavigate }) {
+  const { pathname } = useLocation();
+  const active = group.children.some((c) => isWithin(pathname, c.to));
+  const children = groupChildren(group.children, pathname);
+  const [open, setOpen] = useState(active);
+  const listId = useId();
+  // Opening one of its pages (a link elsewhere, the back button) opens the group.
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
+
+  if (collapsed) {
+    // Icons only: no room for a sub-menu, so each page keeps its own icon (and its tooltip).
+    return children.map((child) => (
+      <li key={child.to}>
+        <SidebarLink item={child} collapsed onNavigate={onNavigate} />
+      </li>
+    ));
+  }
+  const Icon = group.icon;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        aria-controls={listId}
+        className={cn(
+          'relative flex h-10 w-full items-center gap-3 rounded-md px-3 text-body font-medium transition-colors hover:bg-sidebar-hover',
+          active && !open ? 'bg-sidebar-active text-sidebar-active-fg' : 'text-sidebar-fg',
+        )}
+      >
+        {Icon && <Icon aria-hidden="true" className="size-[1.125rem] shrink-0" />}
+        <span className="flex-1 truncate text-left">{group.label}</span>
+        <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 text-sidebar-fg-muted transition-transform duration-200', open && 'rotate-180')} />
+      </button>
+      <ul id={listId} hidden={!open} className="mt-1 ml-5 flex flex-col gap-1 border-l border-sidebar-border pl-2">
+        {children.map((child) => (
+          <li key={child.to}>
+            <SidebarLink item={child} onNavigate={onNavigate} nested />
+          </li>
+        ))}
+      </ul>
+    </li>
+  );
+}
+
+function SidebarLink({ item, collapsed, onNavigate, nested = false }) {
   const Icon = item.icon;
   const link = (
     <NavLink
@@ -143,6 +198,7 @@ function SidebarLink({ item, collapsed, onNavigate }) {
       className={({ isActive }) =>
         cn(
           'relative flex h-10 items-center gap-3 rounded-md px-3 text-body font-medium transition-colors',
+          nested && 'h-9 text-small',
           collapsed && 'justify-center px-0',
           isActive
             ? 'bg-sidebar-active text-sidebar-active-fg before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-pill before:bg-accent'

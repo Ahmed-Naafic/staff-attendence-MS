@@ -1,4 +1,4 @@
-import { ArrowRightLeft, CalendarCog, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, Users } from 'lucide-react';
+import { ArrowRightLeft, CalendarCog, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, UserRound, Users } from 'lucide-react';
 
 /*
  * Role-aware navigation. Each role gets its own identity and sidebar sections;
@@ -27,7 +27,61 @@ export const roleProfiles = {
   },
 };
 
-/** Sidebar sections per role: [{ label?, items: [{ to, label, icon }] }]. */
+/**
+ * The school's schedule under one menu (School Owner and Manager), in the order it is set up: the
+ * year, its school days and holidays, the bell times, then the timetables (build and publish, view
+ * and print, edit one class by hand). Staff work shifts are the Manager's separate Staff Schedule.
+ */
+const scheduleGroup = {
+  id: 'school-schedule',
+  label: 'School Schedule',
+  icon: Table2,
+  children: [
+    { to: '/academic-years', label: 'Academic Years', icon: CalendarRange },
+    { to: '/academic-calendar', label: 'Academic Calendar', icon: CalendarDays },
+    { to: '/bell-schedules', label: 'Bell Schedules', icon: BellRing },
+    { to: '/timetable-builder', label: 'Timetable Builder', icon: CalendarCog },
+    { to: '/timetable-views', label: 'Timetable Views', icon: LayoutGrid },
+    { to: '/timetables', label: 'Class Timetables', icon: Clock },
+  ],
+};
+
+/**
+ * Everything about staff under one menu: the staff list, their work shifts (Staff Schedule,
+ * Manager only: shifts are set per branch) and their attendance reports.
+ */
+const staffGroup = (role) => ({
+  id: 'staff',
+  label: 'Staff',
+  icon: Users,
+  children: [
+    { to: '/staff', label: 'Staff List', icon: UserRound },
+    ...(role === 'MANAGER' ? [{ to: '/schedule', label: 'Staff Schedule', icon: CalendarClock }] : []),
+    { to: '/attendance', label: 'Staff Attendance', icon: ClipboardCheck },
+  ],
+});
+
+/**
+ * Everything about students under one menu (School Owner and Manager): the student list,
+ * promotion to the next year, daily attendance, excuses and attendance reports.
+ */
+const studentGroup = {
+  id: 'students',
+  label: 'Students',
+  icon: Backpack,
+  children: [
+    { to: '/students', label: 'Student List', icon: UserRound },
+    { to: '/promotions', label: 'Promotion', icon: ArrowRightLeft },
+    { to: '/student-attendance', label: 'Student Attendance', icon: UserCheck },
+    { to: '/student-excuses', label: 'Student Excuses', icon: FileCheck },
+    { to: '/student-attendance/reports', label: 'Student Reports', icon: FileChartColumn },
+  ],
+};
+
+/**
+ * Sidebar sections per role: [{ label?, items: [item] }], an item being a link { to, label, icon }
+ * or a group { id, label, icon, children: [link] } shown as a menu that opens and closes.
+ */
 export const navigationByRole = {
   // Platform scope only. Branches, Managers, Staff and Daily Attendance belong to
   // the Owner / Manager scopes and must not appear here.
@@ -54,22 +108,12 @@ export const navigationByRole = {
       items: [
         { to: '/branches', label: 'Branches', icon: Building2 },
         { to: '/managers', label: 'Managers', icon: UserCog },
-        { to: '/staff', label: 'Staff', icon: Users },
-        { to: '/academic-years', label: 'Academic Years', icon: CalendarRange },
-        { to: '/academic-calendar', label: 'Academic Calendar', icon: CalendarDays },
+        staffGroup('OWNER'),
+        scheduleGroup,
         { to: '/classes', label: 'Classes', icon: GraduationCap },
         { to: '/subjects', label: 'Subjects', icon: BookOpen },
         { to: '/teaching', label: 'Teaching', icon: Presentation },
-        { to: '/timetables', label: 'Timetables', icon: Clock },
-        { to: '/timetable-builder', label: 'Timetable Builder', icon: CalendarCog },
-        { to: '/timetable-views', label: 'Timetable Views', icon: LayoutGrid },
-        { to: '/bell-schedules', label: 'Bell Schedules', icon: BellRing },
-        { to: '/students', label: 'Students', icon: Backpack },
-        { to: '/promotions', label: 'Promotion', icon: ArrowRightLeft },
-        { to: '/student-attendance', label: 'Student Attendance', icon: UserCheck },
-        { to: '/student-excuses', label: 'Student Excuses', icon: FileCheck },
-        { to: '/student-attendance/reports', label: 'Student Reports', icon: FileChartColumn },
-        { to: '/attendance', label: 'Staff Attendance', icon: ClipboardCheck },
+        studentGroup,
       ],
     },
   ],
@@ -78,23 +122,12 @@ export const navigationByRole = {
     {
       items: [
         { to: '/my-branch', label: 'My Branch', icon: Building2 },
-        { to: '/schedule', label: 'Schedule', icon: CalendarClock },
-        { to: '/staff', label: 'Staff', icon: Users },
-        { to: '/academic-years', label: 'Academic Years', icon: CalendarRange },
-        { to: '/academic-calendar', label: 'Academic Calendar', icon: CalendarDays },
+        staffGroup('MANAGER'),
+        scheduleGroup,
         { to: '/classes', label: 'Classes', icon: GraduationCap },
         { to: '/subjects', label: 'Subjects', icon: BookOpen },
         { to: '/teaching', label: 'Teaching', icon: Presentation },
-        { to: '/timetables', label: 'Timetables', icon: Clock },
-        { to: '/timetable-builder', label: 'Timetable Builder', icon: CalendarCog },
-        { to: '/timetable-views', label: 'Timetable Views', icon: LayoutGrid },
-        { to: '/bell-schedules', label: 'Bell Schedules', icon: BellRing },
-        { to: '/students', label: 'Students', icon: Backpack },
-        { to: '/promotions', label: 'Promotion', icon: ArrowRightLeft },
-        { to: '/student-attendance', label: 'Student Attendance', icon: UserCheck },
-        { to: '/student-excuses', label: 'Student Excuses', icon: FileCheck },
-        { to: '/student-attendance/reports', label: 'Student Reports', icon: FileChartColumn },
-        { to: '/attendance', label: 'Staff Attendance', icon: ClipboardCheck },
+        studentGroup,
       ],
     },
   ],
