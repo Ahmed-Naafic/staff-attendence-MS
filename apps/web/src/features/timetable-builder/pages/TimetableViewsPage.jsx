@@ -12,7 +12,7 @@ import { pickYear } from '../../classes/utils/classRules.js';
 import { loadTeachers } from '../../teaching/data/teachingApi.js';
 import { ClassGrid, MasterGrid, TeacherGrid } from '../components/TimetableGrids.jsx';
 import { downloadView, loadMasterView, loadSectionView, loadTeacherView } from '../data/builderApi.js';
-import { DAY_NAMES, orderDays, timetableGaps } from '../utils/builderRules.js';
+import { DAY_NAMES, orderDays, timetableGaps, upcomingTimetable } from '../utils/builderRules.js';
 
 const KINDS = ['section', 'teacher', 'master'];
 
@@ -81,6 +81,9 @@ export default function TimetableViewsPage() {
   const days = v ? orderDays(v.days) : [];
   const activeDay = days.includes(day) ? day : days[0];
   const gaps = timetableGaps(v);
+  const upcoming = upcomingTimetable(v);
+  // Draft chosen but there is none (e.g. just published): say so instead of an error.
+  const noDraft = source === 'draft' && view.status === 'error' && view.error?.code === 'NOT_FOUND';
   return (
     <PageContainer>
       <PageHeader
@@ -144,7 +147,20 @@ export default function TimetableViewsPage() {
           {source === 'published' && <Input label="On" type="date" value={date || v?.date || ''} onChange={(e) => set('date', e.target.value)} />}
         </div>
       </Card>
-      {view.status === 'error' && !v && <ErrorState title="The timetable could not be loaded" description={view.error?.message} onRetry={view.retry} />}
+      {noDraft && !v && (
+        <Alert
+          variant="info"
+          title="There is no draft right now"
+          action={
+            <Button size="sm" variant="outline" onClick={() => set('source', '')}>
+              Show the published timetable
+            </Button>
+          }
+        >
+          A draft is made in the Timetable Builder (Generate) and is gone once it is published or discarded.
+        </Alert>
+      )}
+      {view.status === 'error' && !v && !noDraft && <ErrorState title="The timetable could not be loaded" description={view.error?.message} onRetry={view.retry} />}
       {!v && view.status !== 'error' && target && <Skeleton className="h-64" />}
       <TabPanel tabsId={tabsId} value={kind}>
         {v && (
@@ -165,17 +181,17 @@ export default function TimetableViewsPage() {
                 <Select label="Day" fieldClassName="w-48" options={days.map((d) => ({ value: d, label: DAY_NAMES[d] }))} value={activeDay} onChange={(e) => setDay(e.target.value)} />
               )}
             </div>
-            {v.nextStart && (
+            {upcoming && (
               <Alert
                 variant="info"
-                title={kind === 'master' && days.length ? 'Some classes have no timetable on this day' : `No timetable on ${v.date}`}
+                title={upcoming.kind === 'upcoming' ? `A new timetable starts on ${upcoming.date}` : kind === 'master' && days.length ? 'Some classes have no timetable on this day' : `No timetable on ${v.date}`}
                 action={
-                  <Button size="sm" variant="outline" onClick={() => set('date', v.nextStart)}>
-                    Show {v.nextStart}
+                  <Button size="sm" variant="outline" onClick={() => set('date', upcoming.date)}>
+                    Show {upcoming.date}
                   </Button>
                 }
               >
-                The published timetable starts on {v.nextStart}. Days before it keep the timetable they had.
+                {upcoming.kind === 'upcoming' ? `This is the timetable in effect on ${v.date}. The new one applies from ${upcoming.date}.` : `The published timetable starts on ${upcoming.date}. Days before it keep the timetable they had.`}
               </Alert>
             )}
             {gaps && (
@@ -190,7 +206,7 @@ export default function TimetableViewsPage() {
               >
                 {gaps.empty > 0 && `${gaps.empty} empty period${gaps.empty === 1 ? '' : 's'} in ${gaps.classes.length === 1 ? gaps.classes[0] : `${gaps.classes.length} classes`}. `}
                 {gaps.offDay > 0 && `${gaps.offDay} lesson${gaps.offDay === 1 ? ' is' : 's are'} on ${gaps.offDays.map((d) => DAY_NAMES[d]).join(', ')}, which ${gaps.offDays.length === 1 ? 'is' : 'are'} no longer a school day, and ${gaps.offDay === 1 ? 'is' : 'are'} not shown. `}
-                It was published before the school days, bell times or lessons per week changed. Generate and publish a new timetable in the Timetable Builder.
+                {upcoming ? `A new timetable starts on ${upcoming.date}; until then this one applies.` : 'It was published before the school days, bell times or lessons per week changed. Generate and publish a new timetable in the Timetable Builder.'}
               </Alert>
             )}
             {!days.length && !v.nextStart && <p className="text-body text-fg-secondary">No timetable {source === 'draft' ? 'in the draft' : 'on this day'}. Generate and publish one in the Timetable Builder.</p>}

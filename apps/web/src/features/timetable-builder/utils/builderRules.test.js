@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { checkUnavailable, classRows, fixLink, timetableGaps, lessonAt, limitValue, loadTone, masterColumns, orderDays, subjectHues, subjectStyle, teacherCells, unplacedTotal } from './builderRules.js';
+import { checkUnavailable, classRows, fixLink, timetableGaps, upcomingTimetable, lessonAt, limitValue, loadTone, masterColumns, orderDays, subjectHues, subjectStyle, teacherCells, unplacedTotal } from './builderRules.js';
 
 test('class rows: period numbers with the times of the first day that has them', () => {
   const periods = {
@@ -75,4 +75,13 @@ test('timetable gaps: a published timetable that no longer fits the school week 
   assert.equal(timetableGaps({ kind: 'section', source: 'published', section: { displayName: 'Grade 7B' }, gaps: full }), null);
   assert.equal(timetableGaps({ kind: 'section', source: 'published', section: { displayName: 'Grade 7B' }, gaps: null }), null);
   assert.equal(timetableGaps({ kind: 'teacher', source: 'published' }), null);
+});
+
+test('upcoming timetable: a new published timetable waiting to start is announced; missing classes are told apart', () => {
+  const sections = [{ lessons: [{}] }, { lessons: [{}] }];
+  assert.deepEqual(upcomingTimetable({ kind: 'master', source: 'published', nextStart: '2026-11-15', sections }), { kind: 'upcoming', date: '2026-11-15' });
+  assert.deepEqual(upcomingTimetable({ kind: 'master', source: 'published', nextStart: '2026-11-15', sections: [...sections, { lessons: [] }] }), { kind: 'missing', date: '2026-11-15' });
+  assert.deepEqual(upcomingTimetable({ kind: 'section', source: 'published', nextStart: '2026-11-15', lessons: [] }), { kind: 'missing', date: '2026-11-15' });
+  assert.equal(upcomingTimetable({ kind: 'master', source: 'published', nextStart: null, sections }), null);
+  assert.equal(upcomingTimetable({ kind: 'master', source: 'draft', nextStart: '2026-11-15', sections }), null);
 });

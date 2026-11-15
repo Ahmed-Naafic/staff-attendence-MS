@@ -27,6 +27,7 @@ import {
 import { useApiData } from '../../../hooks/useApiData.js';
 import { loadAcademicYears, loadOwnerSchoolStatus } from '../../academic-years';
 import { useSession } from '../../auth';
+import { TeacherLimitsPanel } from '../../timetable-builder';
 import { loadOwnerBranches, loadSections } from '../../classes/data/classesApi.js';
 import { pickYear } from '../../classes/utils/classRules.js';
 import { StaffFormModal } from '../../staff/components/StaffFormModal.jsx';
@@ -174,7 +175,7 @@ export default function TeachingPage() {
   // Assignments of one teacher ("View teaching" on the Teachers tab): { id, name } or null.
   const [teacher, setTeacher] = useState(null);
   const tabsId = useId();
-  const tab = params.get('tab') === 'teachers' ? 'teachers' : 'assignments';
+  const tab = ['teachers', 'limits'].includes(params.get('tab')) ? params.get('tab') : 'assignments';
 
   const years = useApiData(() => loadAcademicYears(role), `years|${role}`);
   const year = pickYear(years.data?.items ?? [], params.get('year'));
@@ -386,9 +387,10 @@ export default function TeachingPage() {
           tabs={[
             { value: 'assignments', label: 'Assignments' },
             { value: 'teachers', label: 'Teachers' },
+            { value: 'limits', label: 'Timetable Limits' },
           ]}
           value={tab}
-          onChange={(next) => set('tab', next === 'teachers' ? next : '')}
+          onChange={(next) => set('tab', next === 'assignments' ? '' : next)}
         />
       )}
       {!sectionId && year && tab === 'teachers' && (
@@ -405,6 +407,20 @@ export default function TeachingPage() {
               set('tab', '');
             }}
           />
+        </TabPanel>
+      )}
+      {!sectionId && year && tab === 'limits' && (
+        <TabPanel tabsId={tabsId} value="limits">
+          {owner && !branch ? (
+            <Alert variant="info" title="Choose a branch">
+              Timetable limits (most lessons a day or week, times a teacher cannot teach) are shown per branch, for the teachers of its classes. Choose a branch above.
+            </Alert>
+          ) : (
+            <TeacherLimitsPanel role={role} context={{ academicYear: year.id, branch }} academicYear={year.id} writable={writable} version={version} onChanged={(message) => {
+                setNotice(message);
+                setVersion((n) => n + 1);
+              }} />
+          )}
         </TabPanel>
       )}
       {!sectionId && year && tab === 'assignments' && teacher && (

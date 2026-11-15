@@ -347,7 +347,11 @@ function TeacherLimitsModal({ role, academicYear, teacher, days, open, onClose, 
   );
 }
 
-/** The branch's teachers: load, limits, unavailable times and lessons elsewhere. */
+/**
+ * The branch's teachers: load, limits, unavailable times and lessons elsewhere. Shown in the
+ * Timetable Builder (step 3) and on the Teaching page (Timetable Limits); `days` is optional, the
+ * school days come with the list.
+ */
 export function TeachersPanel({ role, context, days, academicYear, writable, version, onChanged }) {
   const [editing, setEditing] = useState(null);
   const list = useApiData(() => loadBuilderTeachers(role, context), `tteachers|${JSON.stringify(context)}|${version}`);
@@ -411,7 +415,7 @@ export function TeachersPanel({ role, context, days, academicYear, writable, ver
         role={role}
         academicYear={academicYear}
         teacher={editing}
-        days={orderDays(days)}
+        days={orderDays(list.data.weekdays ?? days ?? [])}
         open={Boolean(editing)}
         onClose={() => setEditing(null)}
         onSaved={() => {

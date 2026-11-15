@@ -182,7 +182,8 @@ export async function masterView(scope, { academicYear, branch: branchId, date, 
   return {
     kind: 'master',
     source,
-    nextStart: source === 'draft' ? null : await nextStartAfter(prisma, items.filter((s) => !s.lessons.length).map((s) => s.id), on),
+    // The next date any class of the branch gets a new timetable (a published one waiting to start).
+    nextStart: source === 'draft' ? null : await nextStartAfter(prisma, items.map((s) => s.id), on),
     date: source === 'draft' ? toDay(draft.planDate) : on,
     draft: draft && { id: draft.id, revision: draft.revision, planDate: toDay(draft.planDate) },
     academicYear: { id: year.id, name: year.name },
@@ -219,7 +220,7 @@ export async function sectionView(scope, sectionId, { date, source }) {
   return {
     kind: 'section',
     source,
-    nextStart: draft || grid?.lessons?.length ? null : await nextStartAfter(prisma, [section.id], on),
+    nextStart: draft ? null : await nextStartAfter(prisma, [section.id], on),
     date: draft ? toDay(draft.planDate) : on,
     academicYear: section.academicYear,
     branch: section.branch,

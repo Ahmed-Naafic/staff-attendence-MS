@@ -683,6 +683,8 @@ export async function listTeachers(scope, query) {
     academicYear: { id: year.id, name: year.name },
     branch: { id: branch.id, name: branch.name },
     defaultMaxPerDay: model.rules.teacherMaxPerDay,
+    // The school days on the plan date (the days an unavailable time can be set on).
+    weekdays: model.weekdays,
     items: model.loads
       .map((l) => {
         const t = model.teachers[l.teacherId];
