@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { CircleOff, Plus, Power, Users } from 'lucide-react';
+import { CalendarClock, CircleOff, FlaskConical, Plus, Power, Users } from 'lucide-react';
 import { PageContainer, PageHeader } from '../../../components/layout';
 import { Alert, Button, Card, ErrorState, Input, KpiCard, Select, Skeleton } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { loadMyBranch } from '../../my-branch/data/loadMyBranch.js';
 import { AssignmentEditorModal } from '../components/AssignmentEditorModal.jsx';
-import { ReactivateStaffModal, ResetStaffPasswordModal, SuspendStaffModal } from '../components/StaffActionModals.jsx';
+import { BulkAssignmentModal } from '../components/BulkAssignmentModal.jsx';
+import { ReactivateStaffModal, ResetStaffPasswordModal, SampleStaffModal, SuspendStaffModal } from '../components/StaffActionModals.jsx';
+import { loadSampleStaffStatus } from '../data/staffApi.js';
 import { StaffDrawer } from '../components/StaffDrawer.jsx';
 import { StaffFormModal } from '../components/StaffFormModal.jsx';
 import { staffStatuses, StaffTable } from '../components/StaffTable.jsx';
@@ -35,6 +37,8 @@ export default function StaffPage() {
   const branch = useApiData(loadMyBranch, `branch|${version}`);
   const { status, data, retry } = useStaffList(filters, page, version);
   const details = useStaffDetails(staffId, version);
+  // Sample staff: offered only where the server allows sample data (test systems).
+  const sample = useApiData(loadSampleStaffStatus, `sample|${version}`);
   const readOnly = branch.data ? !branch.data.branch.operating : false;
   const blocked = readOnly ? 'Your branch or school is suspended: staff cannot be added until it is reactivated.' : undefined;
   const closeDetails = () => navigate({ pathname: '/staff', search });
@@ -62,6 +66,18 @@ export default function StaffPage() {
       <PageHeader
         title="Staff"
         description={branch.data ? `Staff of ${branch.data.branch.name} (${branch.data.branch.code}).` : 'Staff of your branch.'}
+        secondaryActions={
+          <>
+            {sample.data?.enabled && (
+              <Button variant="outline" leftIcon={FlaskConical} onClick={() => open('sample')()} unavailableReason={blocked}>
+                Add Sample Staff
+              </Button>
+            )}
+            <Button variant="outline" leftIcon={CalendarClock} onClick={() => open('bulk')()} unavailableReason={blocked}>
+              Assign Shifts
+            </Button>
+          </>
+        }
         primaryAction={
           <Button leftIcon={Plus} onClick={() => open('create')()} unavailableReason={blocked}>
             Add Staff
@@ -191,6 +207,21 @@ export default function StaffPage() {
         open={dialog?.type === 'password'}
         onClose={closeDialog}
         onDone={done((s) => `A new temporary password was set for ${s.name}. They were signed out and must change it at the next sign-in.`)}
+      />
+      <BulkAssignmentModal
+        open={dialog?.type === 'bulk'}
+        onClose={closeDialog}
+        onDone={done(({ saved, skipped, failed }) => `Shifts assigned: ${saved} staff saved, ${skipped} skipped${failed ? `, ${failed} not saved (see the reasons when assigning again)` : ''}.`)}
+      />
+      <SampleStaffModal
+        sample={sample.data}
+        open={dialog?.type === 'sample'}
+        onClose={closeDialog}
+        onDone={done(({ created, skipped }) =>
+          created.length
+            ? `${created.length} sample staff were added (Staff IDs ${created[0].staffId} to ${created.at(-1).staffId})${skipped ? `; ${skipped} were already here` : ''}. They sign in with their phone number and the temporary password you chose.`
+            : 'All sample staff were already here; nothing was added.',
+        )}
       />
       <SuspendStaffModal staff={dialog?.staff} open={dialog?.type === 'suspend'} onClose={closeDialog} onDone={done((s) => `${s.name} was suspended and signed out.`)} />
       <ReactivateStaffModal staff={dialog?.staff} open={dialog?.type === 'reactivate'} onClose={closeDialog} onDone={done((s) => `${s.name} was reactivated and can sign in again.`)} />

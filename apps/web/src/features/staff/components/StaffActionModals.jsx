@@ -1,8 +1,8 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Input, Modal, Textarea } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
-import { passwordProblem } from '../../auth/passwordRules.js';
-import { reactivateStaff, resetStaffPassword, suspendStaff } from '../data/staffApi.js';
+import { PASSWORD_MIN, passwordProblem } from '../../auth/passwordRules.js';
+import { addSampleStaff, reactivateStaff, resetStaffPassword, suspendStaff } from '../data/staffApi.js';
 import { validateReason } from '../utils/staffRules.js';
 
 const failure = (error, verb) =>
@@ -207,7 +207,89 @@ export function ResetStaffPasswordModal({ staff, open, onClose, onDone }) {
             if (state.error) state.setError('');
           }}
           error={state.error}
-          hint="At least 12 characters. Give it to the staff member yourself; it is not shown again."
+          hint={`At least ${PASSWORD_MIN} characters. Give it to the staff member yourself; it is not shown again.`}
+        />
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Add the sample staff (test systems only): 20 staff of the branch, `sample.teachers` of them
+ * teachers, all with the temporary password chosen here. Only the missing ones are added.
+ */
+export function SampleStaffModal({ sample, open, onClose, onDone }) {
+  const formId = useId();
+  const state = useDialogState(open);
+  const missing = sample ? sample.total - sample.existing : 0;
+  async function save() {
+    state.setFormError('');
+    const problem = passwordProblem(state.value, { label: 'a temporary password' });
+    state.setError(problem ?? '');
+    if (problem) return document.getElementById(`${formId}-password`)?.focus();
+    state.setSaving(true);
+    try {
+      const result = await addSampleStaff(state.value);
+      state.setSaving(false);
+      state.setValue('');
+      onDone(result);
+    } catch (failed) {
+      state.setSaving(false);
+      if (failed.details?.password) state.setError(failed.details.password);
+      else state.setFormError(['BRANCH_NOT_OPERATING', 'FORBIDDEN'].includes(failed.code) || failed.status === 0 ? failed.message : 'The sample staff could not be added. Try again; staff already added are kept.');
+    }
+  }
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Add Sample Staff"
+      description="For trying the system on a test system."
+      loading={state.saving}
+      loadingLabel="Adding staff… this can take a minute."
+      error={state.formError}
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose} disabled={state.saving}>
+            Cancel
+          </Button>
+          <Button type="submit" form={formId} loading={state.saving} disabled={!missing}>
+            {missing ? `Add ${missing} Staff` : 'All Added'}
+          </Button>
+        </>
+      }
+    >
+      <form
+        id={formId}
+        noValidate
+        className="flex flex-col gap-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          return state.saveOnce(save);
+        }}
+      >
+        <p className="text-body text-fg-secondary">
+          {sample?.total} staff members: <strong className="text-fg">{sample?.teachers} teachers</strong> and {sample ? sample.total - sample.teachers : 0} others (Accountant, Secretary, Librarian, Security Guard, Cleaner). Each gets the next Staff ID, is active at once and signs in with their phone number and the temporary password below.
+        </p>
+        {sample?.existing > 0 && (
+          <p className="text-small text-fg-muted">
+            {sample.existing} of them {sample.existing === 1 ? 'is' : 'are'} already here; {missing ? `only the other ${missing} will be added` : 'nothing is left to add'}.
+          </p>
+        )}
+        <Input
+          id={`${formId}-password`}
+          label="Temporary password for all of them"
+          type="password"
+          required
+          autoComplete="new-password"
+          value={state.value}
+          disabled={!missing}
+          onChange={(event) => {
+            state.setValue(event.target.value);
+            state.setError('');
+          }}
+          error={state.error}
+          hint="They must choose their own password at the first sign-in."
         />
       </form>
     </Modal>

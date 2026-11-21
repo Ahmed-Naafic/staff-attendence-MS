@@ -8,7 +8,7 @@ import { useSession } from '../../auth';
 import { loadOwnerBranches } from '../../classes/data/classesApi.js';
 import { pickYear } from '../../classes/utils/classRules.js';
 import { FixedLessonsPanel, ReadinessPanel, RulesPanel, TeachersPanel } from '../components/BuilderPanels.jsx';
-import { DraftPanel } from '../components/DraftPanel.jsx';
+import { DraftPanel, PublishPanel } from '../components/DraftPanel.jsx';
 import { loadBuilder } from '../data/builderApi.js';
 
 const YEAR_SUFFIX = { current: ' (current)', planned: ' (planned)', closed: ' (closed)' };
@@ -18,8 +18,11 @@ const TABS = ['readiness', 'rules', 'teachers', 'fixed', 'draft'];
  * Timetable Builder: for one branch and academic year — 1. Readiness (what to fix first), 2. Rules
  * (and each class's bell schedule), 3. Teachers (limits and unavailable times), 4. Fixed lessons,
  * 5. Draft & publish (generate, review, edit, publish). School Owner: any branch; Manager: theirs.
+ * `embedded` (Timetable page): one `part` only ('readiness' | 'rules' | 'teachers' | 'fixed' |
+ * 'draft' | 'publish'), no header or tabs; the year and branch come from the address (the Timetable
+ * page sets them); `onTab(tab)` goes to another part.
  */
-export default function TimetableBuilderPage() {
+export default function TimetableBuilderPage({ embedded = false, part = null, onTab = null }) {
   const { user } = useSession();
   const role = user.role === 'OWNER' ? 'OWNER' : 'MANAGER';
   const owner = role === 'OWNER';
@@ -37,7 +40,8 @@ export default function TimetableBuilderPage() {
     );
   const [version, setVersion] = useState(0);
   const [notice, setNotice] = useState('');
-  const tab = TABS.includes(params.get('tab')) ? params.get('tab') : 'readiness';
+  const tab = part ?? (TABS.includes(params.get('tab')) ? params.get('tab') : 'readiness');
+  const goTab = onTab ?? ((t) => set('tab', t));
 
   const years = useApiData(() => loadAcademicYears(role), `years|${role}`);
   const year = pickYear(years.data?.items ?? [], params.get('year'));
@@ -56,24 +60,29 @@ export default function TimetableBuilderPage() {
 
   return (
     <PageContainer>
-      <PageHeader
-        title="Timetable Builder"
-        description="Generate the whole branch’s timetable at once: every class, every teacher, no clashes. Work through the tabs from left to right; nothing changes for anyone until you publish."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Timetable Builder"
+          description="Generate the whole branch’s timetable at once: every class, every teacher, no clashes. Work through the tabs from left to right; nothing changes for anyone until you publish."
+        />
+      )}
       {notice && (
         <Alert variant="success" onDismiss={() => setNotice('')}>
           {notice}
         </Alert>
       )}
+      {(!embedded || ['readiness', 'draft'].includes(tab)) && (
       <Card as="section" aria-label="What to build" className="p-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {!embedded && (
           <Select
             label="Academic year"
             options={(years.data?.items ?? []).length ? years.data.items.map((y) => ({ value: y.id, label: `${y.name}${YEAR_SUFFIX[y.status] ?? ''}` })) : [{ value: '', label: 'No academic years yet' }]}
             value={year?.id ?? ''}
             onChange={(e) => set('year', e.target.value)}
           />
-          {owner && (
+          )}
+          {owner && !embedded && (
             <Select label="Branch" options={(branches.data ?? []).map((x) => ({ value: x.id, label: `${x.name} (${x.code})` }))} value={branch} onChange={(e) => set('branch', e.target.value)} />
           )}
           <Input
@@ -87,13 +96,14 @@ export default function TimetableBuilderPage() {
           />
         </div>
       </Card>
+      )}
       {years.data && !year && <Alert variant="info" title="No academic year yet">The timetable belongs to an academic year and its classes.</Alert>}
       {year?.status === 'closed' && <Alert variant="info" title={`${year.name} is closed`}>Its timetables are kept as they are.</Alert>}
       {builder.status === 'error' && !b && <ErrorState title="The builder could not be loaded" description={builder.error?.message} onRetry={builder.retry} />}
       {canLoad && !b && builder.status !== 'error' && <Skeleton className="h-64" />}
       {b && (
         <>
-          <Tabs
+          {!embedded && <Tabs
             id={tabsId}
             label="Timetable builder steps"
             tabs={[
@@ -105,9 +115,9 @@ export default function TimetableBuilderPage() {
             ]}
             value={tab}
             onChange={(next) => set('tab', next === 'readiness' ? '' : next)}
-          />
+          />}
           <TabPanel tabsId={tabsId} value={tab}>
-            {tab === 'readiness' && <ReadinessPanel role={role} context={context} version={version} onTab={(t) => set('tab', t)} />}
+            {tab === 'readiness' && <ReadinessPanel role={role} context={context} version={version} onTab={goTab} builder={b} onChanged={changed} />}
             {tab === 'rules' && (
               <RulesPanel
                 key={b.setup.updatedAt ?? 'new'}
@@ -131,6 +141,7 @@ export default function TimetableBuilderPage() {
             )}
             {tab === 'fixed' && <FixedLessonsPanel role={role} context={context} builder={b} writable={writable} onChanged={changed} />}
             {tab === 'draft' && <DraftPanel role={role} context={context} builder={b} writable={writable} version={version} onChanged={changed} />}
+            {tab === 'publish' && <PublishPanel role={role} context={context} builder={b} writable={writable} version={version} onChanged={changed} />}
           </TabPanel>
         </>
       )}

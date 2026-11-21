@@ -505,6 +505,9 @@ model PlatformSettings {
   /// and transfers may start today or later at a chosen time (not in the past), without the delay.
   /// Null: no (the effective delay applies; changes start at 00:00).
   timedChanges             Boolean?
+  /// Whether changes of school days (Academic Calendar) also wait for the effective delay when school
+  /// days already apply today (unless timed changes are on). Null: no (tomorrow at the earliest).
+  schoolDaysFollowDelay    Boolean?
   updatedAt                DateTime @updatedAt
 }
 

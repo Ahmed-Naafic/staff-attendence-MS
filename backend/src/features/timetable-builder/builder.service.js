@@ -8,7 +8,10 @@ import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { lockActiveSchool, lockOperatingBranch } from '../branches/branches.service.js';
 import { sectionDisplayName } from '../classes/classInput.js';
+import { teachingTitleWhere } from '../staff/jobTitles.js';
 import { WEEKDAYS } from '../schedules/scheduleInput.js';
+import { schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
+import { lessonsOutside, staffWorkWindows, windowsText } from '../schedules/workWindows.js';
 import { dayPlan, minutesToTime } from '../timetable/bellTimes.js';
 import { assertNoClashes, prepareTimetableVersion } from '../timetable/timetable.service.js';
 import { generateTimetable, hardViolations } from './generator.js';
@@ -103,10 +106,13 @@ const actorOf = (user) => ({ id: user.id, name: user.name, role: user.role });
 const audit = (tx, action, scope, { user, req, target, description, fields = [], details = {} }) =>
   recordAuditEvent({ client: tx, action, actor: actorOf(user), target, schoolId: scope.school.id, description, change: { fields, ...details }, req });
 
-/** The first day a generated timetable can start by default: tomorrow (today is under way), within the year. */
-function defaultPlanDate(today, yearStart, yearEnd) {
-  const tomorrow = addDays(today, 1);
-  const day = tomorrow < yearStart ? yearStart : tomorrow;
+/**
+ * The first day a generated timetable can start by default, within the year: tomorrow (today is
+ * under way), or today when Platform Settings allow changes to take effect at their time.
+ */
+function defaultPlanDate(today, yearStart, yearEnd, policy = { timedChanges: false }) {
+  const first = policy.timedChanges ? today : addDays(today, 1);
+  const day = first < yearStart ? yearStart : first;
   return day > yearEnd ? null : day;
 }
 
@@ -243,7 +249,7 @@ export async function buildModel(client, scope, { year, branch, planDate, setup 
   for (const s of shapedSections) {
     const list = byClass.get(s.classId) ?? [];
     if (!list.length) {
-      if (!reportedClass.has(s.classId)) block('CLASS_NO_SUBJECTS', `${s.className} has no subject list with lessons per week. Your School Owner sets it on the class page (Classes → the class → Subjects).`, 'class-subjects', { classId: s.classId, className: s.className });
+      if (!reportedClass.has(s.classId)) block('CLASS_NO_SUBJECTS', `${s.className} has no subject list with lessons per week. Set it on the class page (Classes → the class → Subjects).`, 'class-subjects', { classId: s.classId, className: s.className });
       reportedClass.add(s.classId);
       continue;
     }
@@ -363,6 +369,33 @@ export async function buildModel(client, scope, { year, branch, planDate, setup 
   const away = teacherIds.filter((id) => teachers[id].homeBranch?.id !== branch.id || teachers[id].busy.length);
   if (away.length) warn('TEACHERS_ELSEWHERE', `${away.length} teacher${away.length === 1 ? ' also teaches' : 's also teach'} in other classes or branches; those lessons are kept free (${away.slice(0, 4).map((id) => teachers[id].name).join(', ')}${away.length > 4 ? ', …' : ''}).`, 'teachers');
 
+  // Lesson times outside the teachers' working hours (their shifts in Staff Schedule). A warning only:
+  // the generator may still give them lessons then; marking those times unavailable prevents it.
+  const work = await staffWorkWindows(teacherIds, planDate, client);
+  const byWeek = (a, b) => WEEKDAYS.indexOf(a.weekday) - WEEKDAYS.indexOf(b.weekday) || a.startMinute - b.startMinute;
+  for (const id of teacherIds) {
+    const windows = work.get(id);
+    if (!windows) continue;
+    const days = {};
+    for (const s of shapedSections) {
+      if (!units.some((u) => u.teacherId === id && u.sectionId === s.id)) continue;
+      for (const [d, list] of Object.entries(s.days)) days[d] = [...(days[d] ?? []), ...list];
+    }
+    const outside = lessonsOutside(days, windows).sort(byWeek);
+    if (!outside.length) continue;
+    const noShift = [...new Set(outside.filter((o) => o.reason === 'no_shift').map((o) => o.weekday))];
+    const late = outside.filter((o) => o.reason === 'outside');
+    const parts = [];
+    if (noShift.length) parts.push(`lessons on ${noShift.map((d) => DAY_LABELS[d]).join(', ')}, when they have no shift`);
+    if (late.length) parts.push(`lesson times ${late.slice(0, 3).map((o) => `${DAY_LABELS[o.weekday]} ${minutesToTime(o.startMinute)}–${minutesToTime(o.endMinute)}`).join(', ')}${late.length > 3 ? ` and ${late.length - 3} more` : ''} outside their shift`);
+    warn(
+      'TEACHER_OUTSIDE_SHIFT',
+      `${teachers[id].name}'s classes have ${parts.join(', and ')} (they work ${windowsText(windows, DAY_LABELS, WEEKDAYS) || 'no shift'}). They may be given lessons then. Mark those times as unavailable on the Teachers tab, or change their shift in Staff Schedule.`,
+      'teachers',
+      { teacherId: id, times: outside.length },
+    );
+  }
+
   // Fixed lessons of the setup.
   const fixed = [];
   const fixedCount = new Map();
@@ -475,7 +508,7 @@ export async function getBuilder(scope, query) {
   const prisma = getPrisma();
   const today = await calendarToday();
   const { year, branch, yearStart, yearEnd } = await resolveContext(prisma, scope, query);
-  const planDate = query.date ?? defaultPlanDate(today, yearStart, yearEnd) ?? yearEnd;
+  const planDate = query.date ?? defaultPlanDate(today, yearStart, yearEnd, await schedulingPolicy(prisma)) ?? yearEnd;
   const [setup, bells, sections, subjects, draft] = await Promise.all([
     loadSetup(prisma, branch.id, year.id),
     prisma.bellSchedule.findMany({ where: { schoolId: scope.school.id, OR: [{ branchId: null }, { branchId: branch.id }] }, include: { versions: { where: { cancelledAt: null }, include: { periods: true } } }, orderBy: { name: 'asc' } }),
@@ -521,7 +554,7 @@ export async function readiness(scope, query) {
   const prisma = getPrisma();
   const today = await calendarToday();
   const { year, branch, yearStart, yearEnd } = await resolveContext(prisma, scope, query);
-  const planDate = query.date ?? defaultPlanDate(today, yearStart, yearEnd) ?? yearEnd;
+  const planDate = query.date ?? defaultPlanDate(today, yearStart, yearEnd, await schedulingPolicy(prisma)) ?? yearEnd;
   const setup = await loadSetup(prisma, branch.id, year.id);
   const model = await buildModel(prisma, scope, { year, branch, planDate, setup });
   if (planDate < yearStart || planDate > yearEnd) model.blockers.unshift({ code: 'DATE_OUTSIDE_YEAR', message: `${planDate} is outside ${year.name} (${yearStart} to ${yearEnd}).`, fix: 'date' });
@@ -673,7 +706,7 @@ export async function listTeachers(scope, query) {
   const prisma = getPrisma();
   const today = await calendarToday();
   const { year, branch, yearStart, yearEnd } = await resolveContext(prisma, scope, query);
-  const planDate = query.date ?? defaultPlanDate(today, yearStart, yearEnd) ?? yearEnd;
+  const planDate = query.date ?? defaultPlanDate(today, yearStart, yearEnd, await schedulingPolicy(prisma)) ?? yearEnd;
   const setup = await loadSetup(prisma, branch.id, year.id);
   const model = await buildModel(prisma, scope, { year, branch, planDate, setup });
   const ids = model.loads.map((l) => l.teacherId);
@@ -791,7 +824,7 @@ export async function generate(scope, input, user) {
   const today = await calendarToday();
   const { year, branch, yearStart, yearEnd } = await resolveContext(prisma, scope, input);
   if (year.status === 'CLOSED') throw YEAR_CLOSED(year);
-  const planDate = input.date ?? defaultPlanDate(today, yearStart, yearEnd);
+  const planDate = input.date ?? defaultPlanDate(today, yearStart, yearEnd, await schedulingPolicy(prisma));
   if (!planDate || planDate < yearStart || planDate > yearEnd) throw badRequest('Check the highlighted fields.', { date: `Choose a date within ${year.name} (${yearStart} to ${yearEnd}).` });
   if (planDate < today) throw badRequest('Check the highlighted fields.', { date: `Choose today (${today}) or a later date.` });
   const [setup, open] = await Promise.all([
@@ -1149,4 +1182,81 @@ export async function publishDraft(scope, draftId, { revision, effectiveFrom }, 
     return { changed: plans.length, unchanged: sections.length - plans.length, warnings: plans.flatMap((p) => p.warnings).slice(0, 20) };
   }, PUBLISH_TX);
   return { published: true, effectiveFrom, ...result };
+}
+
+// ---- progress of the Timetable steps (School Schedule → Timetable) --------------------------------
+
+/** Which step of the Timetable page fixes each readiness problem. */
+const STEP_OF = {
+  YEAR_CLOSED: 'year',
+  DATE_OUTSIDE_YEAR: 'year',
+  NO_WEEKDAYS: 'school-days',
+  BELL_INACTIVE: 'bell-times',
+  BELL_NO_TIMES: 'bell-times',
+  BELL_NO_LESSONS: 'bell-times',
+  NO_SECTIONS: 'classes',
+  CLASS_NO_SUBJECTS: 'lessons',
+  SUBJECT_NO_WEEKLY: 'lessons',
+  SECTION_OVERLOAD: 'lessons',
+  SECTION_UNDERFILLED: 'lessons',
+  SUBJECT_DAILY_LIMIT: 'lessons',
+  SUBJECT_NO_TEACHER: 'assign',
+  TEACHER_OVERLOAD: 'limits',
+  SECTION_NO_BELL: 'rules',
+  FIXED_INVALID: 'fixed',
+  FIXED_CONFLICT: 'fixed',
+};
+export const PROGRESS_STEPS = ['year', 'school-days', 'bell-times', 'subjects', 'classes', 'lessons', 'teachers', 'assign', 'limits', 'rules', 'fixed', 'readiness', 'generate', 'publish', 'view'];
+
+/**
+ * Where a branch and year stand on the way to a timetable, step by step (read only): for each step
+ * of the Timetable page { state: 'done' | 'attention' | 'todo' | 'optional', note }. The readiness
+ * checks decide most of it (each problem belongs to the step where it is fixed); counts of subjects,
+ * sections, teachers, the open draft and published timetables decide the rest.
+ */
+export async function timetableProgress(scope, query) {
+  const prisma = getPrisma();
+  const steps = Object.fromEntries(PROGRESS_STEPS.map((k) => [k, { state: 'todo', note: '' }]));
+  let context;
+  try {
+    context = await resolveContext(prisma, scope, query);
+  } catch (error) {
+    if (error.status !== 404) throw error;
+    steps.year.note = error.message;
+    return { academicYear: null, branch: null, steps };
+  }
+  const { year, branch } = context;
+  const sectionWhere = { schoolId: scope.school.id, branchId: branch.id, academicYearId: year.id, status: 'ACTIVE' };
+  const [check, subjects, sections, teachers, draft, published] = await Promise.all([
+    readiness(scope, query),
+    prisma.subject.count({ where: { schoolId: scope.school.id, status: 'ACTIVE' } }),
+    prisma.section.count({ where: sectionWhere }),
+    prisma.user.count({ where: { role: 'STAFF', status: 'ACTIVE', branchId: branch.id, ...teachingTitleWhere() } }),
+    prisma.timetableDraft.findFirst({ where: { branchId: branch.id, academicYearId: year.id, status: 'DRAFT' }, select: { id: true, planDate: true } }),
+    prisma.timetableVersion.count({ where: { cancelledAt: null, section: sectionWhere } }),
+  ]);
+  const problems = {};
+  for (const b of check.blockers) (problems[STEP_OF[b.code] ?? 'readiness'] ??= []).push(b.message);
+  const set = (key, state, note) => (steps[key] = { state, note });
+  const fromChecks = (key, okNote) => (problems[key] ? set(key, 'attention', `${problems[key].length} to fix: ${problems[key][0]}`) : set(key, 'done', okNote));
+
+  fromChecks('year', `${year.name} (${year.status.toLowerCase()})`);
+  fromChecks('school-days', (check.summary.weekdays ?? []).map((d) => DAY_LABELS[d]).join(', '));
+  fromChecks('bell-times', `${check.summary.lessonPeriods} lesson periods a week in ${check.summary.classes} classes`);
+  set('subjects', subjects ? 'done' : 'todo', subjects ? `${subjects} active subjects` : 'No subjects yet');
+  if (problems.classes || !sections) set('classes', sections ? 'attention' : 'todo', problems.classes?.[0] ?? `No sections in ${branch.name} for ${year.name} yet`);
+  else set('classes', 'done', `${sections} sections in ${branch.name}`);
+  if (!sections) set('lessons', 'todo', 'Add classes and sections first');
+  else fromChecks('lessons', `${check.summary.lessons} lessons a week fit their periods`);
+  set('teachers', teachers ? 'done' : 'todo', teachers ? `${teachers} teachers in ${branch.name}` : 'No staff with a teacher job title yet');
+  if (!sections) set('assign', 'todo', 'Add sections first');
+  else fromChecks('assign', 'Every subject of every class has a teacher');
+  problems.limits ? fromChecks('limits') : set('limits', 'optional', 'Optional: most lessons a day or week, unavailable times');
+  problems.rules ? fromChecks('rules') : set('rules', 'optional', 'Optional: defaults are fine for most schools');
+  problems.fixed ? fromChecks('fixed') : set('fixed', 'optional', 'Optional: lessons that must be at an exact time');
+  set('readiness', check.ready ? 'done' : 'attention', check.ready ? 'Ready to generate' : `${check.blockers.length} thing${check.blockers.length === 1 ? '' : 's'} to fix before generating`);
+  set('generate', draft || published ? 'done' : 'todo', draft ? `Draft for ${toDay(draft.planDate)} ready to review` : published ? 'Published; generate again for a new timetable' : 'No draft yet');
+  set('publish', draft ? 'todo' : published ? 'done' : 'todo', draft ? 'The draft is not published yet' : published ? `${published} timetable version${published === 1 ? '' : 's'} published` : 'Nothing published yet');
+  set('view', published ? 'done' : 'todo', published ? 'Published timetables to view and print' : 'Publish a timetable first');
+  return { academicYear: { id: year.id, name: year.name, status: year.status.toLowerCase() }, branch: { id: branch.id, name: branch.name }, steps };
 }

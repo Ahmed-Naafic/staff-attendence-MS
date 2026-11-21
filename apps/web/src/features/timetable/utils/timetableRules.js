@@ -168,3 +168,73 @@ export function summaryText(summary) {
   }
   return [...groups.entries()].map(([text, days]) => `${days.join(', ')}: ${text}`).join(' · ') || 'No lessons';
 }
+
+// ---- the school week: school days (Academic Calendar) and staff shifts (Staff Schedule) -------------
+
+/** When nothing is known about the school week. */
+export const FALLBACK_DAYS = ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU'];
+const inWeekOrder = (days) => WEEK.filter((d) => days.includes(d));
+
+/** The days new bell rows start with: the school days in effect, else FALLBACK_DAYS. */
+export const defaultBellDays = (week) => (week?.schoolDays?.length ? inWeekOrder(week.schoolDays) : [...FALLBACK_DAYS]);
+
+/** How many lessons of `lessonMinutes` fit from `start` to `end`, with a break of `breakMinutes` after lesson `breakAfter` (0: none). */
+export function fitLessons({ start, end, lessonMinutes, breakAfter, breakMinutes }) {
+  const from = toMinutes(start);
+  const to = toMinutes(end);
+  if (from === null || to === null || !(lessonMinutes > 0) || to <= from) return 0;
+  let n = 0;
+  let at = from;
+  while (n < MAX_PERIOD_NUMBER && at + lessonMinutes <= to) {
+    n += 1;
+    at += lessonMinutes;
+    if (n === breakAfter && breakMinutes > 0) at += breakMinutes;
+  }
+  return n;
+}
+
+export const QUICK_FILL_DEFAULTS = { lessonMinutes: 45, breakAfter: 4, breakMinutes: 30 };
+
+/**
+ * Settings to start a bell schedule from a staff shift (a one-time copy, nothing stays linked):
+ * { name, start, lessons, breakAfter, days } — the shift's school days, lessons that fit in it.
+ */
+export function shiftSeed(shift, schoolDays = []) {
+  const days = inWeekOrder(schoolDays.length ? shift.days.filter((d) => schoolDays.includes(d)) : shift.days);
+  const { lessonMinutes, breakMinutes } = QUICK_FILL_DEFAULTS;
+  const lessons = fitLessons({ start: shift.start, end: shift.end, lessonMinutes, breakAfter: QUICK_FILL_DEFAULTS.breakAfter, breakMinutes });
+  return { name: shift.name, start: shift.start, end: shift.end, lessons, breakAfter: lessons > QUICK_FILL_DEFAULTS.breakAfter ? QUICK_FILL_DEFAULTS.breakAfter : 0, days: days.length ? days : inWeekOrder(shift.days) };
+}
+
+/** "Morning 07:00–13:30 · Sat–Wed" (with the branch when asked). */
+export const shiftLabel = (s, withBranch = false) => `${s.name} ${s.start}–${s.end} · ${inWeekOrder(s.days).map((d) => WEEKDAY_SHORT[d]).join(', ')}${withBranch && s.branch ? ` · ${s.branch.name}` : ''}`;
+
+/**
+ * Warnings for bell times (rows: { kind, number, days, start, end }) against the school week
+ * (`week`: { schoolDays, shifts }). Never blocks saving:
+ * - lessons on days that are not school days (they do not take place);
+ * - lessons outside every staff shift on their day (staff would not be at work).
+ */
+export function bellWeekWarnings(rows, week) {
+  if (!week) return [];
+  const warnings = [];
+  const schoolDays = week.schoolDays ?? [];
+  const lessons = (rows ?? []).filter((r) => r.kind === 'lesson' && toMinutes(r.start) !== null && toMinutes(r.end) !== null);
+  if (schoolDays.length) {
+    const off = inWeekOrder([...new Set(lessons.flatMap((r) => r.days.filter((d) => !schoolDays.includes(d))))]);
+    if (off.length) warnings.push(`Lessons are set on ${off.map((d) => WEEKDAY_SHORT[d]).join(', ')}, which ${off.length === 1 ? 'is' : 'are'} not a school day in the Academic Calendar; they will not take place.`);
+  }
+  const shifts = week.shifts ?? [];
+  if (shifts.length) {
+    const outside = [];
+    for (const r of lessons) {
+      const days = r.days.filter((d) => !schoolDays.length || schoolDays.includes(d));
+      const bad = days.filter((d) => !shifts.some((s) => s.days.includes(d) && toMinutes(s.start) <= toMinutes(r.start) && toMinutes(r.end) <= toMinutes(s.end)));
+      if (bad.length) outside.push(`Period ${r.number} (${r.start}–${r.end}) on ${inWeekOrder(bad).map((d) => WEEKDAY_SHORT[d]).join(', ')}`);
+    }
+    if (outside.length) {
+      warnings.push(`${outside.slice(0, 5).join('; ')}${outside.length > 5 ? `; and ${outside.length - 5} more` : ''}: outside every staff shift (${shifts.map((s) => shiftLabel(s)).join('; ')}). Staff would not be at work then; change the times or the shifts in Staff Schedule.`);
+    }
+  }
+  return warnings;
+}

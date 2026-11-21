@@ -2,14 +2,15 @@
 // scheduleInput.js) so problems show immediately. The API checks again and has the final say,
 // including the effective date against the server's clock.
 
+/** The school week, Saturday to Friday (the order days are shown and listed in). */
 export const WEEKDAYS = [
+  { value: 'SAT', label: 'Sat' },
+  { value: 'SUN', label: 'Sun' },
   { value: 'MON', label: 'Mon' },
   { value: 'TUE', label: 'Tue' },
   { value: 'WED', label: 'Wed' },
   { value: 'THU', label: 'Thu' },
   { value: 'FRI', label: 'Fri' },
-  { value: 'SAT', label: 'Sat' },
-  { value: 'SUN', label: 'Sun' },
 ];
 const ORDER = WEEKDAYS.map((d) => d.value);
 export const MAX_SHIFTS = 20;
@@ -22,11 +23,41 @@ export const toMinutes = (value) => {
 };
 export const dayList = (days) => ORDER.filter((d) => days.includes(d)).map((d) => WEEKDAYS.find((w) => w.value === d).label).join(', ');
 
+/**
+ * The shifts a schedule chooses from, with their default times (changeable for each schedule). One
+ * place to change or add them. Shifts saved earlier under another name keep it until it is changed.
+ */
+export const SHIFT_TEMPLATES = [
+  { name: 'Morning-Shift', start: '07:00', end: '12:20' },
+  { name: 'Afternoon-Shift', start: '13:00', end: '17:00' },
+  { name: 'Night-Shift', start: '18:40', end: '21:00' },
+];
+const TEMPLATE_NAMES = SHIFT_TEMPLATES.map((t) => t.name);
+
+/** Defaults of a new shift: late after 30 minutes, absent after 1 hour (changeable for each shift). */
+export const SHIFT_DEFAULTS = { graceMinutes: 30, absenceCutoffMinutes: 60 };
+
 /** An empty shift row for the editor (form values are strings). */
-export const emptyShift = () => ({ name: '', days: [], start: '', end: '', graceMinutes: '0', absenceCutoffMinutes: '' });
+export const emptyShift = () => ({ name: '', days: [], start: '', end: '', graceMinutes: String(SHIFT_DEFAULTS.graceMinutes), absenceCutoffMinutes: String(SHIFT_DEFAULTS.absenceCutoffMinutes) });
+
+/** A shift row named after a template, with its default times (other values kept). */
+export function applyShiftTemplate(row, name) {
+  const t = SHIFT_TEMPLATES.find((x) => x.name === name);
+  return t ? { ...row, name: t.name, start: t.start, end: t.end } : { ...row, name };
+}
+
+/** The next shift to add: the first template not used yet in `rows`, or null when all are used. */
+export function nextShift(rows) {
+  const used = new Set(rows.map((r) => r.name));
+  const t = SHIFT_TEMPLATES.find((x) => !used.has(x.name));
+  return t ? applyShiftTemplate(emptyShift(), t.name) : null;
+}
+
+/** The names a row can have: the templates, plus its saved name when that is not one of them. */
+export const shiftNameOptions = (row) => [...TEMPLATE_NAMES, ...(row.savedName && !TEMPLATE_NAMES.includes(row.savedName) ? [row.savedName] : [])];
 
 /** A saved shift → editor row (its key keeps the shift's identity, so staff assignments follow it). */
-export const toRow = (s) => ({ key: s.key, name: s.name, days: [...s.days], start: s.start, end: s.end, graceMinutes: String(s.graceMinutes), absenceCutoffMinutes: String(s.absenceCutoffMinutes) });
+export const toRow = (s) => ({ key: s.key, name: s.name, savedName: s.name, days: [...s.days], start: s.start, end: s.end, graceMinutes: String(s.graceMinutes), absenceCutoffMinutes: String(s.absenceCutoffMinutes) });
 
 const wholeMinutes = (value) => (/^\d+$/.test(String(value).trim()) ? Number(value) : null);
 
@@ -58,7 +89,8 @@ export function validateSchedule({ effectiveFrom, rows }, { earliest, latest }) 
   const names = new Map();
   shifts.forEach((s, i) => {
     const key = (field) => `shifts.${i}.${field}`;
-    if (!s.name) errors[key('name')] = 'Enter a shift name.';
+    if (!s.name) errors[key('name')] = 'Choose the shift.';
+    else if (!shiftNameOptions(rows[i]).includes(s.name)) errors[key('name')] = `Choose ${TEMPLATE_NAMES.slice(0, -1).join(', ')} or ${TEMPLATE_NAMES.at(-1)}.`;
     else if (s.name.length > 60) errors[key('name')] = 'The shift name must be at most 60 characters.';
     else if (CONTROL.test(s.name)) errors[key('name')] = 'The shift name cannot contain control characters.';
     else {
@@ -103,6 +135,21 @@ export const lateAfter = (shift) => {
   const minutes = toMinutes(shift.start) + shift.graceMinutes;
   return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
 };
+/**
+ * The clock times of an editor row (form strings): { late: '07:30' | null, absent: '08:00' | null } —
+ * null while the start or the minutes are not valid yet.
+ */
+export function rowClockTimes(row) {
+  const start = toMinutes(row.start);
+  const at = (value) => {
+    const m = /^\d+$/.test(String(value ?? '').trim()) ? Number(value) : null;
+    if (start === null || m === null || start + m >= 1440) return null;
+    const t = start + m;
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+  };
+  return { late: at(row.graceMinutes), absent: at(row.absenceCutoffMinutes) };
+}
+
 /** "09:00" — the absence cutoff time (start + cutoff). */
 export const absentAfter = (shift) => {
   const minutes = toMinutes(shift.start) + shift.absenceCutoffMinutes;
@@ -162,3 +209,45 @@ export function effectiveTimeProblem({ timed, date, time, now }) {
 /** The time field's hint with timed changes. */
 export const effectiveTimeHint = (what, timeZone) =>
   `Takes effect at this time (${timeZone}). Until then the current ${what === 'schedule' ? 'schedule stays' : what === 'transfer' ? 'branch stays' : 'assignments stay'} in effect.`;
+
+/**
+ * A preset checkbox ("All days", "Full-time", "Part-time"): ticked only when exactly its days are
+ * ticked, so choosing Full-time never shows All days as ticked. → { checked }
+ */
+export function presetState(picked, days) {
+  return { checked: days.length > 0 && picked.length === days.length && days.every((d) => picked.includes(d)) };
+}
+
+
+/**
+ * Quick choices of days shown above the day checkboxes: one place to change or add them.
+ * Full-time: Saturday to Wednesday; part-time: Thursday and Friday.
+ */
+export const DAY_PRESETS = [
+  { id: 'all', label: 'All days', days: ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI'] },
+  { id: 'fulltime', label: 'Full-time', days: ['SAT', 'SUN', 'MON', 'TUE', 'WED'] },
+  { id: 'parttime', label: 'Part-time', days: ['THU', 'FRI'] },
+];
+
+/**
+ * The presets that apply to a set of days (`available`, e.g. a shift's days): each limited to those
+ * days, left out when none of its days is available, and the same set shown once (the first label).
+ * → [{ id, label, days }]
+ */
+export function presetsFor(available, presets = DAY_PRESETS) {
+  const seen = new Set();
+  const result = [];
+  for (const p of presets) {
+    const days = p.days.filter((d) => available.includes(d));
+    const key = [...days].sort().join(',');
+    if (!days.length || seen.has(key)) continue;
+    seen.add(key);
+    result.push({ ...p, days });
+  }
+  return result;
+}
+
+/** Ticking a preset: exactly its days (in `order`); ticking it again when it is ticked clears the days. */
+export function togglePreset(picked, days, order) {
+  return presetState(picked, days).checked ? [] : order.filter((d) => days.includes(d));
+}

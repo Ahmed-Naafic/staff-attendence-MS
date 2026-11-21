@@ -140,7 +140,7 @@ describe('who may read and change Authentication Settings', () => {
       sessionLifetime: { hours: 12, source: 'default', minHours: 1, maxHours: 72, defaultHours: 12 },
       inactivityTimeout: { enabled: false, minutes: null, choices: [5, 10, 15, 30, 60, 120, 240, 480] },
       failedSignInLimit: { attempts: 5, windowMinutes: 15, per: 'email and network address' },
-      minPasswordLength: 12,
+      minPasswordLength: 6,
       mfa: { available: false },
     });
     assert.ok(!/tokenHash|passwordHash|scrypt\$|edutrack_session|DATABASE_URL|postgres(ql)?:\/\//.test(res.text));
@@ -522,7 +522,7 @@ describe('command-line Super Admin password reset', () => {
     const cases = [
       [['reset', 'Another-password-123', 'Another-password-123'], /Not confirmed/],
       [['yes', 'Another-password-123', 'Another-password-123'], /Not confirmed/],
-      [['RESET', 'short', 'short'], /at least 12 characters/],
+      [['RESET', 'short', 'short'], /at least 6 characters/],
       [['RESET', '              ', '              '], /only spaces/],
       [['RESET', 'Another-password-123', 'Different-password-123'], /do not match/],
       [['RESET', 'Another-password-123'], /Input ended/],

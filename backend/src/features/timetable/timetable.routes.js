@@ -1,5 +1,6 @@
 import { jsonBody } from '../../common/validate.js';
 import { calendarToday } from '../academic-calendar/calendar.service.js';
+import { schoolWeek } from './schoolWeek.service.js';
 import {
   cancelBellTimes,
   cancelTimetableVersion,
@@ -33,6 +34,13 @@ import {
  * Academic setup: available whether or not Student Attendance is switched on for the school.
  */
 export function mountTimetableRoutes(router, scopeOf, role) {
+  // The school week on a date: school days (Academic Calendar) and staff shifts (Staff Schedule),
+  // for setting up bell schedules and school days. Read only. Owner: optional ?branch=.
+  router.get('/school-week', async (req, res) => {
+    const date = typeof req.query.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(req.query.date) ? req.query.date : undefined;
+    const branch = role === 'OWNER' && typeof req.query.branch === 'string' && req.query.branch ? req.query.branch : undefined;
+    res.json(await schoolWeek(scopeOf(req), { branch, date }));
+  });
   router.get('/bell-schedules', async (req, res) => {
     res.json(await listBellSchedules(scopeOf(req), readBellListQuery(req.query, { role })));
   });

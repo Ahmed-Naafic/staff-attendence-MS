@@ -168,7 +168,7 @@ export default function ClassDetailsPage() {
       )}
 
       {cls && (
-        <ClassSubjectsCard role={role} classId={cls.id} readOnlyReason={schoolSuspended ? 'Your school is suspended.' : undefined} onSaved={setNotice} />
+        <ClassSubjectsCard role={role} classId={cls.id} readOnlyReason={schoolSuspended ? 'Your school is suspended.' : undefined} onSaved={setNotice} focus={params.get('subjects')} />
       )}
 
       <Card as="section" aria-label="Section filters" className="p-4">

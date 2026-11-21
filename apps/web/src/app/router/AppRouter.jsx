@@ -3,7 +3,7 @@ import { AcademicYearsPage } from '../../features/academic-years';
 import { AcademicCalendarPage } from '../../features/academic-calendar';
 import { SubjectsPage, TeachingPage } from '../../features/teaching';
 import { BellSchedulesPage, TimetablesPage } from '../../features/timetable';
-import { TimetableBuilderPage, TimetableViewsPage } from '../../features/timetable-builder';
+import { TimetableBuilderPage, TimetableStepsPage, TimetableViewsPage } from '../../features/timetable-builder';
 import { AttendanceCompletionPage, AttendanceSessionPage, AttendanceSettingsPage, StudentAttendancePage, StudentAttendanceReportsPage, StudentExcusesPage } from '../../features/student-attendance';
 import { AttendanceReportsPage } from '../../features/attendance-reports';
 import { ClassDetailsPage, ClassesPage } from '../../features/classes';
@@ -120,6 +120,9 @@ const routes = [
       { path: 'teaching', element: <TeachingPage />, handle: { title: 'Teaching', roles: OWNER_OR_MANAGER } },
       { path: 'bell-schedules', element: <BellSchedulesPage />, handle: { title: 'Bell Schedules', roles: OWNER_OR_MANAGER } },
       { path: 'timetables', element: <TimetablesPage />, handle: { title: 'Timetables', roles: OWNER_OR_MANAGER } },
+      // School Schedule → Timetable: every page needed to build a timetable, as steps in tabs.
+      { path: 'timetable', element: <Navigate to="/timetable/year" replace />, handle: { title: 'Timetable', roles: OWNER_OR_MANAGER } },
+      { path: 'timetable/:step', element: <TimetableStepsPage />, handle: { title: 'Timetable', roles: OWNER_OR_MANAGER } },
       { path: 'timetable-builder', element: <TimetableBuilderPage />, handle: { title: 'Timetable Builder', roles: OWNER_OR_MANAGER } },
       { path: 'timetable-views', element: <TimetableViewsPage />, handle: { title: 'Timetable Views', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — classes (Owner manages; Managers read) and sections (Owner: any branch; Manager: own branch)

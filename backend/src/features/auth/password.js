@@ -35,8 +35,8 @@ export async function verifyPassword(password, stored) {
 const dummyHash = hashPassword(randomBytes(16).toString('hex'));
 export const verifyAgainstDummy = async (password) => verifyPassword(password, await dummyHash);
 
-/** Password rule for accounts created by the CLI script (a technical minimum, not a policy). */
-export const MIN_PASSWORD_LENGTH = 12;
+/** The shortest password allowed (every account: created, temporary, changed). Mirrored by the web and mobile apps. */
+export const MIN_PASSWORD_LENGTH = 6;
 export const MAX_PASSWORD_LENGTH = 128;
 
 /**

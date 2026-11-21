@@ -3,6 +3,7 @@ import { Button, Input, Modal, Select } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { createManager, updateManager } from '../data/managerActions.js';
 import { branchLabel, cleanManagerValues, passwordProblem, validateManager } from '../utils/managerRules.js';
+import { PASSWORD_MIN } from '../../auth/passwordRules.js';
 
 const DETAILS = ['name', 'email', 'phone'];
 const EMPTY = { name: '', email: '', phone: '', branchId: '', password: '' };
@@ -125,7 +126,7 @@ export function ManagerFormModal({ mode, manager, branches, open, onClose, onSav
               type="password"
               required
               autoComplete="new-password"
-              hint="At least 12 characters. Give it to the Manager yourself; it is not shown again. They must change it at first sign-in."
+              hint={`At least ${PASSWORD_MIN} characters. Give it to the Manager yourself; it is not shown again. They must change it at first sign-in.`}
               {...field('password')}
               fieldClassName="sm:col-span-2"
             />

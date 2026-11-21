@@ -258,7 +258,7 @@ export default function OwnerStaffPage() {
                         </span>
                         {s.scheduledTransfer && (
                           <span className="text-caption text-warning-fg">
-                            Moves to {s.scheduledTransfer.toBranch.name} on {s.scheduledTransfer.effectiveFrom}
+                            Moves to {s.scheduledTransfer.toBranch.name} on {whenText(s.scheduledTransfer)}
                           </span>
                         )}
                       </div>

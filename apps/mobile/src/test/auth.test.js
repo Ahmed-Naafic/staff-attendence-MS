@@ -85,7 +85,7 @@ test('a temporary password must be replaced before anything else', async () => {
   await fireEvent.changeText(screen.getByTestId('current-password'), 'wrong-temporary');
   await fireEvent.changeText(screen.getByTestId('new-password'), 'short');
   await fireEvent.press(screen.getByTestId('update-password'));
-  expect(screen.getByText('Use at least 12 characters.')).toBeOnTheScreen();
+  expect(screen.getByText('Use at least 6 characters.')).toBeOnTheScreen();
   expect(server.count('POST /api/auth/password')).toBe(0);
 
   await fireEvent.changeText(screen.getByTestId('new-password'), 'a-new-long-password');

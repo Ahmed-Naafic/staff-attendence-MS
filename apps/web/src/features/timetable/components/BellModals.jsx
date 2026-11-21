@@ -4,8 +4,20 @@ import { Alert, Button, Checkbox, Input, Modal, Select, Textarea } from '../../.
 import { requestFailure, useDialogForm } from '../../../hooks/useDialogForm.js';
 import { formatFullDay } from '../../../lib/format.js';
 import { clean, WEEK, WEEKDAY_SHORT } from '../../academic-calendar/utils/calendarRules.js';
-import { createBellSchedule, saveBellTimes, updateBellSchedule } from '../data/timetableApi.js';
-import { BELL_NAME_MAX, generatePeriods, MAX_PERIOD_NUMBER, periodsBody, validatePeriodRows } from '../utils/timetableRules.js';
+import { useApiData } from '../../../hooks/useApiData.js';
+import { createBellSchedule, loadSchoolWeek, saveBellTimes, updateBellSchedule } from '../data/timetableApi.js';
+import {
+  BELL_NAME_MAX,
+  bellWeekWarnings,
+  defaultBellDays,
+  generatePeriods,
+  MAX_PERIOD_NUMBER,
+  periodsBody,
+  QUICK_FILL_DEFAULTS,
+  shiftLabel,
+  shiftSeed,
+  validatePeriodRows,
+} from '../utils/timetableRules.js';
 
 const failure = (error) => requestFailure(error);
 
@@ -24,17 +36,29 @@ function Footer({ formId, saving, onClose, label }) {
 
 /**
  * Create (bell null) or rename a bell schedule. The Owner chooses, when creating, the whole school or
- * one branch; a Manager's is their branch's.
+ * one branch; a Manager's is their branch's. When creating, it can start from a staff shift (Staff
+ * Schedule): a one-time copy of its name, school days and times; nothing stays linked.
+ * onSaved(bell, seed): seed (from shiftSeed) when started from a shift.
  */
 export function BellScheduleModal({ role, bell, branches, open, onClose, onSaved }) {
   const formId = useId();
   const owner = role === 'OWNER';
-  const form = useDialogForm(open, { name: bell?.name ?? '', description: bell?.description ?? '', branch: '' }, failure);
+  const form = useDialogForm(open, { name: bell?.name ?? '', description: bell?.description ?? '', branch: '', shift: '' }, failure);
   const v = form.values;
+  const week = useApiData(() => (open && !bell ? loadSchoolWeek(role, { branch: v.branch }) : Promise.resolve(null)), `week|${role}|${open && !bell}|${v.branch}`);
+  const shifts = week.data?.shifts ?? [];
+  const shiftKey = (s) => `${s.branch?.id ?? ''}|${s.key}`;
+  const chosen = shifts.find((s) => shiftKey(s) === v.shift) ?? null;
+  const chooseShift = (value) => {
+    form.set('shift', value);
+    const s = shifts.find((x) => shiftKey(x) === value);
+    if (s && !clean(v.name)) form.set('name', s.name);
+  };
+  const saved = (b) => onSaved(b, chosen ? shiftSeed(chosen, week.data?.schoolDays ?? []) : null);
   const save = () => {
     const name = clean(v.name);
     const problems = {};
-    if (!name) problems.name = 'Name is required, e.g. Morning.';
+    if (!name) problems.name = 'Name is required, e.g. Primary – full day.';
     else if (name.length > BELL_NAME_MAX) problems.name = `At most ${BELL_NAME_MAX} characters.`;
     const description = clean(v.description) || null;
     if (bell) {
@@ -42,7 +66,7 @@ export function BellScheduleModal({ role, bell, branches, open, onClose, onSaved
       if (!Object.keys(body).length) return onSaved(bell);
       return form.submit(problems, ['name', 'description'], () => updateBellSchedule(role, bell.id, body), onSaved);
     }
-    return form.submit(problems, ['name', 'description', 'branch'], () => createBellSchedule(role, { name, description, ...(owner && v.branch && { branch: v.branch }) }), onSaved);
+    return form.submit(problems, ['name', 'description', 'branch'], () => createBellSchedule(role, { name, description, ...(owner && v.branch && { branch: v.branch }) }), saved);
   };
   const field = (name) => ({ id: `${formId}-${name}`, value: v[name], error: form.errors[name], onChange: (e) => form.set(name, e.target.value) });
   return (
@@ -50,19 +74,37 @@ export function BellScheduleModal({ role, bell, branches, open, onClose, onSaved
       open={open}
       onClose={onClose}
       title={bell ? 'Edit Bell Schedule' : 'Add Bell Schedule'}
-      description="A bell schedule gives the times of a school day’s lessons and breaks. Sections follow it through their timetable."
+      description="The lesson and break times of a school day. Classes follow it through their timetable. Staff working hours are set separately, in Staff Schedule."
       loading={form.saving}
       error={form.formError}
       footer={<Footer formId={formId} saving={form.saving} onClose={onClose} label={bell ? 'Save Changes' : 'Add Bell Schedule'} />}
     >
       <form id={formId} noValidate onSubmit={(e) => { e.preventDefault(); save(); }} className="flex flex-col gap-4">
-        <Input label="Name" required autoComplete="off" placeholder="Morning" {...field('name')} />
+        <Input label="Name" required autoComplete="off" placeholder="Primary – full day" hint="The lesson times of a school day, e.g. by level or by half day." {...field('name')} />
         {!bell && owner && (
           <Select
             label="For"
             options={[{ value: '', label: 'The whole school (every branch can use it)' }, ...(branches ?? []).map((b) => ({ value: b.id, label: `${b.name} only` }))]}
             hint="A branch’s own schedule can also be managed by its Manager."
             {...field('branch')}
+            onChange={(e) => {
+              form.set('branch', e.target.value);
+              form.set('shift', '');
+            }}
+          />
+        )}
+        {!bell && (
+          <Select
+            id={`${formId}-shift`}
+            label="Start from a staff shift"
+            options={[
+              { value: '', label: shifts.length ? 'No, I will set the times myself' : week.data ? 'No staff shifts yet' : 'Loading staff shifts…' },
+              ...shifts.map((s) => ({ value: shiftKey(s), label: shiftLabel(s, owner && !v.branch) })),
+            ]}
+            value={v.shift}
+            disabled={!shifts.length}
+            hint="Optional. Fills in lessons that fit in the shift on its school days; you can change them before saving. Later shift changes do not change the bell schedule."
+            onChange={(e) => chooseShift(e.target.value)}
           />
         )}
         <Textarea label="Description" rows={2} hint="Optional." {...field('description')} />
@@ -71,13 +113,18 @@ export function BellScheduleModal({ role, bell, branches, open, onClose, onSaved
   );
 }
 
-const DEFAULT_DAYS = ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU'];
 const toRows = (periods) => (periods ?? []).map((p) => ({ kind: p.kind, number: p.number, name: p.name ?? '', days: [...p.days], start: p.start, end: p.end, mainBreak: Boolean(p.mainBreak) }));
 
-/** Quick fill: lessons of equal length with a main break. Replaces the rows. */
-function QuickFill({ onFill }) {
+/** Quick fill: lessons of equal length with a main break, on `days`. Replaces the rows. */
+function QuickFill({ onFill, days, seed }) {
   const id = useId();
-  const [s, setS] = useState({ start: '07:30', lessonMinutes: '45', lessons: '7', breakAfter: '4', breakMinutes: '30' });
+  const [s, setS] = useState(() => ({
+    start: seed?.start ?? '07:30',
+    lessonMinutes: String(QUICK_FILL_DEFAULTS.lessonMinutes),
+    lessons: String(seed?.lessons || 7),
+    breakAfter: String(seed ? seed.breakAfter : QUICK_FILL_DEFAULTS.breakAfter),
+    breakMinutes: String(QUICK_FILL_DEFAULTS.breakMinutes),
+  }));
   const set = (k) => (e) => setS((c) => ({ ...c, [k]: e.target.value }));
   return (
     <fieldset className="grid grid-cols-2 gap-3 rounded-md border border-border p-3 sm:grid-cols-6">
@@ -99,7 +146,7 @@ function QuickFill({ onFill }) {
                 lessons: Number(s.lessons),
                 breakAfter: Number(s.breakAfter),
                 breakMinutes: Number(s.breakMinutes),
-                days: DEFAULT_DAYS,
+                days,
               }),
             )
           }
@@ -114,17 +161,29 @@ function QuickFill({ onFill }) {
 /**
  * New times for a bell schedule from a date: lessons (numbered periods) and breaks, each on chosen
  * weekdays (different days may differ, e.g. a short Thursday). The main break splits the day into
- * the two halves Managers take attendance for. `start`: the version to start from (current times).
+ * the two halves Managers take attendance for. `start`: the version to start from (current times);
+ * `seed`: settings from a staff shift (shiftSeed) for a new schedule. New rows get the school days of
+ * the Academic Calendar; the rows are compared with the school days and staff shifts (warnings only).
  */
-export function BellTimesModal({ role, bell, start, earliest, open, onClose, onSaved }) {
+export function BellTimesModal({ role, bell, start, seed, earliest, open, onClose, onSaved }) {
   const formId = useId();
-  const form = useDialogForm(open, { effectiveFrom: earliest, rows: toRows(start?.periods) }, failure);
+  const seeded = () =>
+    seed && !start?.periods?.length && seed.lessons
+      ? generatePeriods({ start: seed.start, lessonMinutes: QUICK_FILL_DEFAULTS.lessonMinutes, lessons: seed.lessons, breakAfter: seed.breakAfter, breakMinutes: QUICK_FILL_DEFAULTS.breakMinutes, days: seed.days })
+      : toRows(start?.periods);
+  const form = useDialogForm(open, { effectiveFrom: earliest, rows: seeded() }, failure);
   const rows = form.values.rows;
+  const week = useApiData(
+    () => (open ? loadSchoolWeek(role, { branch: bell?.branch?.id, date: form.values.effectiveFrom || earliest }) : Promise.resolve(null)),
+    `week|${role}|${open}|${bell?.branch?.id ?? ''}|${form.values.effectiveFrom || earliest}`,
+  );
+  const newDays = defaultBellDays(week.data);
+  const warnings = bellWeekWarnings(rows, week.data);
   const setRows = (next) => form.set('rows', next);
   const update = (i, patch) => setRows(rows.map((r, k) => (k === i ? { ...r, ...patch } : r)));
   const nextNumber = () => Math.min(MAX_PERIOD_NUMBER, Math.max(0, ...rows.filter((r) => r.kind === 'lesson').map((r) => r.number || 0)) + 1);
   const lastEnd = rows.length ? rows[rows.length - 1].end : '07:30';
-  const add = (kind) => setRows([...rows, { kind, number: kind === 'lesson' ? nextNumber() : null, name: kind === 'break' ? 'Break' : '', days: rows.length ? [...rows[rows.length - 1].days] : [...DEFAULT_DAYS], start: lastEnd, end: '', mainBreak: false }]);
+  const add = (kind) => setRows([...rows, { kind, number: kind === 'lesson' ? nextNumber() : null, name: kind === 'break' ? 'Break' : '', days: rows.length ? [...rows[rows.length - 1].days] : [...newDays], start: lastEnd, end: '', mainBreak: false }]);
   const rowError = (i) => form.errors[`periods.${i}`];
 
   const save = () => {
@@ -158,7 +217,13 @@ export function BellTimesModal({ role, bell, start, earliest, open, onClose, onS
           onChange={(e) => form.set('effectiveFrom', e.target.value)}
           fieldClassName="max-w-xs"
         />
-        <QuickFill onFill={setRows} />
+        {seed && (
+          <Alert variant="info" title={`Started from the ${seed.name} shift (${seed.start}–${seed.end})`}>
+            {seed.lessons ? `${seed.lessons} lessons of ${QUICK_FILL_DEFAULTS.lessonMinutes} minutes fit in it. Change anything before saving; the shift itself is not changed.` : 'No lesson fits in it; set the times yourself.'}
+          </Alert>
+        )}
+        <QuickFill onFill={setRows} days={newDays} seed={seed} />
+        <p className="text-small text-fg-muted">New rows use the school days of the Academic Calendar: {newDays.map((d) => WEEKDAY_SHORT[d]).join(', ')}.</p>
         {form.errors.periods && <Alert variant="error">{form.errors.periods}</Alert>}
         <div role="region" aria-label="Lessons and breaks" tabIndex={0} className="overflow-x-auto">
           <table className="w-full min-w-[760px] text-small">
@@ -244,6 +309,16 @@ export function BellTimesModal({ role, bell, start, earliest, open, onClose, onS
             </tbody>
           </table>
         </div>
+        {warnings.length > 0 && (
+          <Alert variant="warning" title="Check against the school week">
+            <ul className="list-disc pl-5">
+              {warnings.map((w) => (
+                <li key={w}>{w}</li>
+              ))}
+            </ul>
+            You can still save.
+          </Alert>
+        )}
         {rows.some((_, i) => rowError(i)) && (
           <Alert variant="error" title="Some rows need attention">
             <ul className="list-disc pl-5">

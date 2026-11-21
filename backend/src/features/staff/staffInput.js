@@ -155,3 +155,19 @@ export function readAssignmentChange(body) {
   fail(errors);
   return { effectiveFrom: body.effectiveFrom, effectiveTime, shifts };
 }
+
+/**
+ * The same shift assignments for many staff: { staff: 'all' | [ids] (1–500), onlyUnassigned
+ * (default true), effectiveFrom, effectiveTime?, shifts } → { staff, onlyUnassigned, change }.
+ */
+export function readBulkAssignment(body) {
+  if (typeof body !== 'object' || body === null || Array.isArray(body)) fail({ staff: 'Send the staff and the assignments.' });
+  const { staff, onlyUnassigned, ...rest } = body;
+  const errors = {};
+  if (staff !== 'all' && !(Array.isArray(staff) && staff.length >= 1 && staff.length <= 500 && staff.every(isUuid) && new Set(staff).size === staff.length)) {
+    errors.staff = 'Choose "all" or 1 to 500 staff members.';
+  }
+  if (onlyUnassigned !== undefined && typeof onlyUnassigned !== 'boolean') errors.onlyUnassigned = 'Send true or false.';
+  fail(errors);
+  return { staff, onlyUnassigned: onlyUnassigned ?? true, change: readAssignmentChange(rest) };
+}

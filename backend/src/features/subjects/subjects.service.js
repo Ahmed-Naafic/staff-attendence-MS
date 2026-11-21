@@ -7,7 +7,7 @@ import { calendarToday } from '../academic-calendar/calendar.service.js';
 import { asDbDay } from '../academic-calendar/schoolDays.js';
 import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
-import { lockActiveSchool } from '../branches/branches.service.js';
+import { lockActiveSchool, lockOperatingBranch } from '../branches/branches.service.js';
 import { subjectNameKey } from './subjectInput.js';
 
 /*
@@ -201,12 +201,15 @@ export async function getCurriculum(school, classId, client = getPrisma()) {
 }
 
 /**
- * Replaces a class's curriculum (School Owner). New subjects must be active subjects of the school;
- * a subject still taught in the class's sections (live assignments) cannot be removed (409 SUBJECT_IN_USE).
+ * Replaces a class's curriculum (School Owner, or a Manager: `branch` set; the list is the class's
+ * for every branch). New subjects must be active subjects of the school; a subject still taught in
+ * the class's sections (live assignments) cannot be removed (409 SUBJECT_IN_USE). A Manager's
+ * branch must be operating (409 BRANCH_NOT_OPERATING).
  */
-export async function setCurriculum(school, classId, items, user, req) {
+export async function setCurriculum(school, classId, items, user, req, { branch = null } = {}) {
   const today = await calendarToday();
   await withSchoolLock(school, async (tx) => {
+    if (branch) await lockOperatingBranch(tx, { school, branch }, 'class subjects');
     const cls = await findClass(tx, school, classId);
     const current = await tx.classSubject.findMany({ where: { classId: cls.id }, include: { subject: true } });
     const byId = new Map(current.map((c) => [c.subjectId, c]));
@@ -250,7 +253,7 @@ export async function setCurriculum(school, classId, items, user, req) {
       actor: actorOf(user),
       target: { type: 'class', id: cls.id, name: cls.name },
       schoolId: school.id,
-      description: `Subjects of ${cls.name} updated.`,
+      description: `Subjects of ${cls.name} updated${branch ? ` by the Manager of ${branch.name} (the list applies to every branch)` : ''}.`,
       change: {
         fields: [
           ...added.map((i) => ({ field: 'Subject added', from: null, to: label(i.subjectId, i.weeklyLessons) })),

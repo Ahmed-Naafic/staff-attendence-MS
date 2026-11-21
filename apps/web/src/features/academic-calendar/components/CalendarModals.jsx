@@ -1,9 +1,11 @@
 import { useId } from 'react';
 import { Button, Checkbox, Input, Modal, RadioGroup, Select, Switch, Textarea } from '../../../components/ui';
+import { useApiData } from '../../../hooks/useApiData.js';
 import { requestFailure, useDialogForm } from '../../../hooks/useDialogForm.js';
 import { formatFullDay } from '../../../lib/format.js';
 import { cancelEntry, cancelWeekdays, createEntry, saveWeekdays, setBranchWeekdaysAllowed, updateEntry } from '../data/calendarApi.js';
-import { clean, daysText, ENTRY_TYPES, validateEntry, validateWeekdays, WEEK, WEEKDAY_NAMES } from '../utils/calendarRules.js';
+import { loadSchoolWeek } from '../../timetable/data/timetableApi.js';
+import { clean, daysText, ENTRY_TYPES, staffDayOptions, validateEntry, validateWeekdays, WEEK, WEEKDAY_NAMES } from '../utils/calendarRules.js';
 
 const failure = (error) => requestFailure(error);
 
@@ -23,6 +25,8 @@ function Footer({ formId, saving, onClose, label, variant }) {
 /**
  * Change weekly school days from a date. Owner: the school's days. Manager: their branch's own days,
  * or back to the school's. `limits`: { earliest, yearStart, yearEnd }; `current`: the days in effect.
+ * The staff working days (Staff Schedule shifts on that date) can be copied in with one click; they
+ * are a starting point only, nothing stays linked.
  */
 export function WeekdaysModal({ role, year, branchName, current, schoolDays, limits, open, onClose, onSaved }) {
   const formId = useId();
@@ -30,6 +34,9 @@ export function WeekdaysModal({ role, year, branchName, current, schoolDays, lim
   const form = useDialogForm(open, { mode: 'own', days: current ?? [], effectiveFrom: limits.earliest }, failure);
   const follows = manager && form.values.mode === 'school';
   const toggle = (day) => form.set('days', form.values.days.includes(day) ? form.values.days.filter((d) => d !== day) : [...form.values.days, day]);
+  const week = useApiData(() => (open ? loadSchoolWeek(role, { date: form.values.effectiveFrom }) : Promise.resolve(null)), `week|${role}|${open}|${form.values.effectiveFrom}`);
+  const staffDays = staffDayOptions(week.data);
+  const same = (days) => days.length === form.values.days.length && days.every((d) => form.values.days.includes(d));
 
   const save = () => {
     const body = follows ? { followsSchool: true, effectiveFrom: form.values.effectiveFrom } : { days: form.values.days, effectiveFrom: form.values.effectiveFrom };
@@ -70,6 +77,18 @@ export function WeekdaysModal({ role, year, branchName, current, schoolDays, lim
               <p id={`${formId}-days-error`} className="text-small text-error-fg">
                 {form.errors.days}
               </p>
+            )}
+            {staffDays.length > 0 && (
+              <div className="mt-1 flex flex-col gap-2 rounded-md border border-border p-3">
+                <p className="text-small text-fg-secondary">Copy the days staff work (Staff Schedule shifts):</p>
+                <div className="flex flex-wrap gap-2">
+                  {staffDays.map((o) => (
+                    <Button key={o.label} size="sm" variant="outline" disabled={same(o.days)} onClick={() => form.set('days', o.days)}>
+                      {same(o.days) ? `Same as staff days: ${o.label}` : `Use ${o.label}`}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             )}
           </fieldset>
         )}

@@ -256,7 +256,7 @@ describe('creating Managers', () => {
     });
     assert.equal(res.status, 400);
     assert.deepEqual(Object.keys(res.body.details).sort(), ['branchId', 'email', 'name', 'password', 'phone']);
-    assert.match(res.body.details.password, /at least 12/);
+    assert.match(res.body.details.password, /at least 6/);
     const empty = await ownerA('/api/owner/managers', { method: 'POST', body: {} });
     assert.equal(empty.body.details.password, 'Enter a temporary password.');
     assert.equal(empty.body.details.branchId, 'Choose a branch.');

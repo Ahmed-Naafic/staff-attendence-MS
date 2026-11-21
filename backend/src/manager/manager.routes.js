@@ -64,8 +64,10 @@ import {
 import { readScheduleChange } from '../features/schedules/scheduleInput.js';
 import { getBranchReminderSettings, updateBranchReminderSettings } from '../features/notifications/notificationSettings.service.js';
 import { cancelScheduledSchedule, getSchedule, listVersions, saveSchedule } from '../features/schedules/schedules.service.js';
-import { readAssignmentChange, readStaffCreation, readStaffPassword, readStaffSuspension, readStaffUpdate } from '../features/staff/staffInput.js';
+import { createSampleStaff, sampleStaffStatus } from '../features/staff/sampleStaff.js';
+import { readAssignmentChange, readBulkAssignment, readStaffCreation, readStaffPassword, readStaffSuspension, readStaffUpdate } from '../features/staff/staffInput.js';
 import {
+  bulkAssignmentContext,
   cancelScheduledAssignments,
   createStaff,
   getStaff,
@@ -74,6 +76,7 @@ import {
   reactivateStaff,
   resetStaffPassword,
   saveAssignments,
+  saveAssignmentsForMany,
   STAFF_STATUSES,
   suspendStaff,
   updateStaff,
@@ -145,6 +148,11 @@ managerRouter.get('/subjects/:id', async (req, res) => {
 });
 managerRouter.get('/classes/:id/subjects', async (req, res) => {
   res.json(await getCurriculum(req.branch.school, req.params.id));
+});
+// A class's subjects and lessons per week: one list for the class in every branch (audited with the branch).
+managerRouter.put('/classes/:id/subjects', async (req, res) => {
+  const { school, ...branch } = req.branch;
+  res.json(await setCurriculum(school, req.params.id, readCurriculum(jsonBody(req)), req.user, req, { branch }));
 });
 managerRouter.get('/teaching-assignments', async (req, res) => {
   res.json(await listTeachingAssignments(teachingScope(req), readAssignmentQuery(req.query, { role: 'MANAGER' })));
@@ -285,6 +293,21 @@ managerRouter.put('/notification-settings', async (req, res) => {
 managerRouter.get('/staff', async (req, res) => {
   const { q, status, page, pageSize } = readListQuery(req.query, { statuses: STAFF_STATUSES, defaultPageSize: 8 });
   res.json(await listStaff(req.branch, { q, status, page, pageSize }));
+});
+// Shifts for many staff at once: the form's data, and saving (each staff member answered on its own).
+managerRouter.get('/staff/assignments/bulk', async (req, res) => {
+  res.json(await bulkAssignmentContext(req.branch));
+});
+managerRouter.post('/staff/assignments/bulk', async (req, res) => {
+  res.json(await saveAssignmentsForMany(req.branch, readBulkAssignment(jsonBody(req)), req.user, req));
+});
+// Sample staff (test systems only): whether they can be added and how many exist; add the missing ones.
+managerRouter.get('/staff/sample', async (req, res) => {
+  res.json(await sampleStaffStatus(req.branch));
+});
+managerRouter.post('/staff/sample', async (req, res) => {
+  const { created, skipped } = await createSampleStaff(req.branch, readStaffPassword(jsonBody(req)), req.user, req);
+  res.status(201).json({ created, skipped, status: await sampleStaffStatus(req.branch) });
 });
 managerRouter.get('/staff/:id', async (req, res) => {
   res.json({ staff: await getStaff(req.branch, req.params.id) });

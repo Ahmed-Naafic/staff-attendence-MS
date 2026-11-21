@@ -174,9 +174,11 @@ const toOwnerStaff = (s) => ({
   jobTitle: s.jobTitle ?? '',
   status: fromDbStatus(s.status),
   branch: { ...branchRef(s.branch), status: fromDbStatus(s.branch.status) },
-  scheduledTransfer: s.staffTransfers[0] ? { id: s.staffTransfers[0].id, toBranch: branchRef(s.staffTransfers[0].toBranch), effectiveFrom: fromDbDate(s.staffTransfers[0].effectiveFrom) } : null,
+  scheduledTransfer: s.staffTransfers[0] ? { id: s.staffTransfers[0].id, toBranch: branchRef(s.staffTransfers[0].toBranch), ...when(s.staffTransfers[0]) } : null,
 });
 const inSchool = (school) => ({ role: 'STAFF', branch: { schoolId: school.id } });
+/** When a transfer takes effect: its date and local start time ('00:00' unless timed changes chose one). */
+const when = (t) => ({ effectiveFrom: fromDbDate(t.effectiveFrom), effectiveTime: localDateTime(t.effectiveAt, t.timeZone).time });
 
 /**
  * The Owner's staff list for transfers (T1): their school's staff with name, Staff ID, job title,
@@ -246,19 +248,19 @@ export async function transferSummary(branch, staffUserId, client = getPrisma())
   const rows = await client.staffTransfer.findMany({
     where: { staffUserId, status: { in: IN_EFFECT }, OR: [{ fromBranchId: branch.id }, { toBranchId: branch.id }] },
     orderBy: { effectiveAt: 'desc' },
-    select: { status: true, effectiveFrom: true, fromBranchId: true },
+    select: { status: true, effectiveFrom: true, effectiveAt: true, timeZone: true, fromBranchId: true },
   });
   const scheduled = rows.find((r) => r.status === 'SCHEDULED' && r.fromBranchId === branch.id);
   return {
-    scheduledOut: scheduled ? { effectiveFrom: fromDbDate(scheduled.effectiveFrom) } : null,
-    history: rows.filter((r) => r.status === 'COMPLETED').map((r) => ({ effectiveFrom: fromDbDate(r.effectiveFrom), direction: r.fromBranchId === branch.id ? 'out' : 'in' })),
+    scheduledOut: scheduled ? when(scheduled) : null,
+    history: rows.filter((r) => r.status === 'COMPLETED').map((r) => ({ ...when(r), direction: r.fromBranchId === branch.id ? 'out' : 'in' })),
   };
 }
 
 /** The staff member's own upcoming transfer (their profile in the app), or null. */
 export async function upcomingTransfer(staffUserId, client = getPrisma()) {
   const t = await client.staffTransfer.findFirst({ where: { staffUserId, status: 'SCHEDULED' }, include: { toBranch: true } });
-  return t ? { effectiveFrom: fromDbDate(t.effectiveFrom), branch: { code: t.toBranch.code, name: t.toBranch.name } } : null;
+  return t ? { ...when(t), branch: { code: t.toBranch.code, name: t.toBranch.name } } : null;
 }
 
 // ---- changes -----------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import { calendarToday } from '../academic-calendar/calendar.service.js';
 import { addDays, asDbDay, toDay, versionOn } from '../academic-calendar/schoolDays.js';
 import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
+import { schedulingPolicy } from '../platform-settings/schedulingPolicy.js';
 import { lockActiveSchool, lockOperatingBranch } from '../branches/branches.service.js';
 import { sectionDisplayName } from '../classes/classInput.js';
 import { WEEKDAYS } from '../schedules/scheduleInput.js';
@@ -80,10 +81,13 @@ const audit = (tx, action, scope, { user, req, target, description, fields, deta
   });
 
 /**
- * The first date a new version can start, given the active versions of one owner: today, or
- * tomorrow when the version in effect today started before today (that day is under way).
+ * The first date a new version (bell times, a timetable) can start, given the active versions of
+ * one owner: today, or tomorrow when the version in effect today started before today (that day is
+ * under way) — unless Platform Settings allow changes to take effect at their time (timed changes):
+ * then today, as for staff changes. `policy` from schedulingPolicy().
  */
-function earliestStart(activeVersions, today) {
+export function earliestStart(activeVersions, today, policy = { timedChanges: false }) {
+  if (policy.timedChanges) return today;
   const inEffect = versionOn(activeVersions, today);
   return inEffect && inEffect.effectiveFrom < today ? addDays(today, 1) : today;
 }
@@ -210,9 +214,9 @@ export async function listBellSchedules(scope, { status, branch }) {
 /** One bell schedule with every version (cancelled ones too) and its periods. */
 export async function getBellSchedule(scope, id) {
   const prisma = getPrisma();
-  const [today, bell] = await Promise.all([calendarToday(), findBell(prisma, scope, id)]);
+  const [today, bell, policy] = await Promise.all([calendarToday(), findBell(prisma, scope, id), schedulingPolicy(prisma)]);
   const active = plainVersions(bell.versions);
-  return { today, firstEditableDate: earliestStart(active, today), bellSchedule: toBell(bell, today, scope, { withVersions: true }) };
+  return { today, firstEditableDate: earliestStart(active, today, policy), bellSchedule: toBell(bell, today, scope, { withVersions: true }) };
 }
 
 // ---- bell schedules: changes ----------------------------------------------------------------
@@ -346,7 +350,7 @@ export async function saveBellTimes(scope, id, values, user, req) {
     if (bell.status !== 'ACTIVE') throw conflict('BELL_SCHEDULE_INACTIVE', `${bell.name} is inactive. Reactivate it to change its times.`);
     const active = plainVersions(bell.versions);
     const from = values.effectiveFrom;
-    const earliest = earliestStart(active, today);
+    const earliest = earliestStart(active, today, await schedulingPolicy(tx));
     if (from < earliest) {
       throw invalid({ effectiveFrom: earliest > today ? `These times already apply today, so a change can start on ${earliest} at the earliest.` : `Choose today (${today}) or a later date.` });
     }
@@ -576,7 +580,7 @@ export async function getTimetable(scope, sectionId, { versionId }) {
 
   return {
     today,
-    firstEditableDate: maxDay(earliestStart(active, today), toDay(section.academicYear.startDate)),
+    firstEditableDate: maxDay(earliestStart(active, today, await schedulingPolicy(prisma)), toDay(section.academicYear.startDate)),
     section: toSection(section),
     versions: versions.map((v) => ({
       id: v.id,
@@ -745,7 +749,7 @@ export async function prepareTimetableVersion(tx, scope, sectionId, values, toda
   const existing = await tx.timetableVersion.findMany({ where: { sectionId: section.id, cancelledAt: null }, include: timetableInclude });
   const active = plainVersions(existing);
   const from = values.effectiveFrom;
-  const earliest = maxDay(earliestStart(active, today), yearStart);
+  const earliest = maxDay(earliestStart(active, today, await schedulingPolicy(tx)), yearStart);
   if (from < earliest || from > yearEnd) {
     throw invalid({
       effectiveFrom:

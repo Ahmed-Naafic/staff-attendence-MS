@@ -11,6 +11,10 @@ import { apiRequest } from '../../../lib/api.js';
 const base = (role) => (role === 'OWNER' ? '/owner' : '/manager');
 const id = (value) => encodeURIComponent(value);
 
+// ---- the school week ----
+/** { date, academicYear, branch, schoolDays, shifts: [{ branch, key, name, days, start, end }] }: school days and staff shifts on a date (Owner: one branch or every branch). */
+export const loadSchoolWeek = (role, { branch, date } = {}) => apiRequest(`${base(role)}/school-week`, { query: { branch: role === 'OWNER' ? branch || undefined : undefined, date: date || undefined } });
+
 // ---- bell schedules ----
 /** { today, items: [bell schedule with `current` times] }; filters: status, branch (Owner: 'school' or an id). */
 export const loadBellSchedules = (role, { status, branch } = {}) => apiRequest(`${base(role)}/bell-schedules`, { query: { status, branch: role === 'OWNER' ? branch : undefined } });

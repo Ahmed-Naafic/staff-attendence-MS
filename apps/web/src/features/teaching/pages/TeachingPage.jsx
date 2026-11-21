@@ -152,7 +152,7 @@ function TeachersPanel({ role, owner, year, branch, version, onView }) {
  * academic year. School Owner: any staff of the school in any branch's sections. Manager: their own
  * staff in their branch's sections (and they see teachers the Owner brought from other branches).
  */
-export default function TeachingPage() {
+export default function TeachingPage({ fixedTab = null }) {
   const { user } = useSession();
   const role = user.role === 'OWNER' ? 'OWNER' : 'MANAGER';
   const owner = role === 'OWNER';
@@ -175,7 +175,7 @@ export default function TeachingPage() {
   // Assignments of one teacher ("View teaching" on the Teachers tab): { id, name } or null.
   const [teacher, setTeacher] = useState(null);
   const tabsId = useId();
-  const tab = ['teachers', 'limits'].includes(params.get('tab')) ? params.get('tab') : 'assignments';
+  const tab = fixedTab ?? (['teachers', 'limits'].includes(params.get('tab')) ? params.get('tab') : 'assignments');
 
   const years = useApiData(() => loadAcademicYears(role), `years|${role}`);
   const year = pickYear(years.data?.items ?? [], params.get('year'));
@@ -380,7 +380,7 @@ export default function TeachingPage() {
         </>
       )}
 
-      {!sectionId && year && (
+      {!sectionId && year && !fixedTab && (
         <Tabs
           id={tabsId}
           label="Teaching views"

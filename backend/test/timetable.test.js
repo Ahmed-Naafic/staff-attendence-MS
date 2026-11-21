@@ -90,7 +90,12 @@ const teach = (teacher, section, subject) =>
     data: { schoolId: schools.A.id, academicYearId: year.id, branchId: sections[section].branchId, sectionId: sections[section].id, teacherId: staff[teacher].id, role: 'SUBJECT_TEACHER', subjectId: subjects[subject].id, startDate: asDbDay(addDays(today, -30)) },
   });
 
+// These tests expect the default rule (a change starts tomorrow once times already apply today):
+// timed changes off for the run, the dev system's value restored afterwards.
+let savedTimedChanges;
 before(async () => {
+  savedTimedChanges = (await prisma.platformSettings.findUnique({ where: { id: 'platform' }, select: { timedChanges: true } }))?.timedChanges;
+  if (savedTimedChanges) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: false } });
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -155,6 +160,7 @@ before(async () => {
 });
 
 after(async () => {
+  if (savedTimedChanges) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: savedTimedChanges } });
   const schoolIds = Object.values(schools).map((s) => s.id);
   const userIds = (await prisma.user.findMany({ where: { email: { endsWith: `-${lower}@test.edutrack.example` } }, select: { id: true } })).map((u) => u.id);
   await prisma.timetableSlot.deleteMany({ where: { version: { schoolId: { in: schoolIds } } } });

@@ -5,6 +5,7 @@ import { getPrisma } from '../../config/prisma.js';
 import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { recordAuditEvent } from '../audit-logs/auditService.js';
 import { lockActiveSchool, lockOperatingBranch } from '../branches/branches.service.js';
+import { schedulingPolicy, schoolDaysDelay } from '../platform-settings/schedulingPolicy.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { localDate } from '../schedules/schedules.service.js';
 import { addDays, asDbDay, daysBetween, loadSchoolDays, toDay, versionOn, weekdaysOn } from './schoolDays.js';
@@ -190,7 +191,7 @@ export const toEntry = (e) => ({
  */
 export async function getCalendar(scope, yearId) {
   const prisma = getPrisma();
-  const today = await calendarToday();
+  const [today, policy] = await Promise.all([calendarToday(), schedulingPolicy(prisma)]);
   const year = await findYear(prisma, scope, yearId);
   const levels = scope.branch ? { OR: [{ branchId: null }, { branchId: scope.branch.id }] } : {};
   const [versions, entries] = await Promise.all([
@@ -214,6 +215,8 @@ export async function getCalendar(scope, yearId) {
     academicYear: toYear(year),
     today,
     firstEditableDate: firstEditableDay(today),
+    // Days ahead a change of school days can start when school days already apply today (Platform Settings).
+    schoolDaysDelayDays: schoolDaysDelay(policy),
     referenceDate: refDay,
     branchWeekdaysAllowed: year.branchWeekdaysAllowed,
     weekdays: {
@@ -270,12 +273,17 @@ export async function saveWeekdays(scope, yearId, values, user, req) {
     const level = scope.branch ? branchVersions : schoolVersions;
 
     const appliesToday = scope.branch ? weekdaysOn({ schoolVersions, branchVersions }, today).source !== null : Boolean(versionOn(schoolVersions, today));
-    const earliest = appliesToday ? addDays(today, 1) : today;
+    // Read in the transaction: a settings change saved meanwhile applies to this save.
+    const delay = schoolDaysDelay(await schedulingPolicy(tx));
+    const earliest = appliesToday ? addDays(today, delay) : today;
     if (from < earliest) {
       throw invalid({
         effectiveFrom: appliesToday
-          ? `School days already apply today, so a change can start on ${earliest} at the earliest.`
+          ? delay > 1
+            ? `School days already apply today, so a change can start on ${earliest} at the earliest (the platform's effective delay of ${delay} days).`
+            : `School days already apply today, so a change can start on ${earliest} at the earliest.`
           : `Choose today (${today}) or a later date.`,
+        // (With timed changes, earliest is today: only a past date gets here.)
       });
     }
 

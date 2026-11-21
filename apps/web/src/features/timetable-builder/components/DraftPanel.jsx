@@ -1,5 +1,5 @@
 import { useId, useState } from 'react';
-import { CalendarCheck, Lock, LockOpen, Sparkles, Trash2, Wand2 } from 'lucide-react';
+import { CalendarCheck, Lock, LockOpen, School, Sparkles, Trash2, Wand2 } from 'lucide-react';
 import { Alert, Badge, Button, Card, ConfirmModal, ErrorState, Input, KpiCard, Modal, Select, Skeleton, Switch, Tabs } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { requestFailure, useDialogForm } from '../../../hooks/useDialogForm.js';
@@ -9,9 +9,11 @@ import { ClassGrid, MasterGrid } from './TimetableGrids.jsx';
 
 const failure = (error) => requestFailure(error);
 
-function PublishModal({ role, draft, today, open, onClose, onDone }) {
+export function PublishModal({ role, draft, today, open, onClose, onDone }) {
   const formId = useId();
-  const earliest = draft.planDate > today ? draft.planDate : today;
+  // Today at the earliest: the server checks each class (a day under way keeps its timetable unless
+  // Platform Settings allow changes at their time).
+  const earliest = today;
   const form = useDialogForm(open, { effectiveFrom: draft.planDate }, failure);
   const save = () => {
     const problems = {};
@@ -345,5 +347,57 @@ export function DraftPanel({ role, context, builder, writable, version, onChange
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Publishing the branch's draft on its own (Timetable → Publish): what the draft holds and the
+ * Publish button (the same form and checks as in Draft & publish).
+ */
+export function PublishPanel({ role, context, builder, writable, version, onChanged }) {
+  const [open, setOpen] = useState(false);
+  const data = useApiData(() => loadDraft(role, context), `publish|${JSON.stringify(context)}|${version}`);
+  if (!data.data) return data.status === 'error' ? <ErrorState title="The draft could not be loaded" description={data.error?.message} onRetry={data.retry} /> : <Skeleton className="h-40" />;
+  const draft = data.data.draft;
+  if (!draft) {
+    return (
+      <Alert variant="info" title="No draft to publish">
+        Generate a timetable in the step Generate & Review first. Published timetables stay as they are until you publish a new one.
+      </Alert>
+    );
+  }
+  const classes = new Set(draft.lessons.map((l) => l.sectionId)).size;
+  const left = unplacedTotal(draft);
+  return (
+    <Card className="flex flex-col gap-4 p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-card-title text-fg">Publish the draft</h2>
+          <p className="text-small text-fg-secondary">
+            Planned for {draft.planDate}. Every class is published from the first day you choose, or none is; days before it keep their timetable.
+          </p>
+        </div>
+        <Button leftIcon={CalendarCheck} onClick={() => setOpen(true)} unavailableReason={writable ? undefined : 'Timetables of this year cannot be changed.'}>
+          Publish
+        </Button>
+      </div>
+      <ul className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <KpiCard label="Classes" value={classes} icon={School} />
+        <KpiCard label="Lessons placed" value={draft.lessons.length} icon={CalendarCheck} tone="success" />
+        <KpiCard label="Left out" value={left} icon={Sparkles} tone={left ? 'warning' : 'success'} />
+      </ul>
+      {left > 0 && <Alert variant="warning">Some lessons could not be placed. Review them in Generate & Review before publishing.</Alert>}
+      <PublishModal
+        role={role}
+        draft={draft}
+        today={builder.today}
+        open={open}
+        onClose={() => setOpen(false)}
+        onDone={(res) => {
+          setOpen(false);
+          onChanged(`Published from ${res.effectiveFrom}: ${res.changed} class${res.changed === 1 ? '' : 'es'} changed.${res.warnings?.length ? ` ${res.warnings[0]}` : ''}`);
+        }}
+      />
+    </Card>
   );
 }

@@ -216,7 +216,7 @@ export function StaffDrawer({ staff, open, onClose, readOnly, version, onEdit, o
             </h3>
             {staff.transfer.scheduledOut && (
               <p className="rounded-md border border-warning/40 bg-warning-soft px-4 py-3 text-small text-warning-fg">
-                This staff member moves to another branch of the school on {staff.transfer.scheduledOut.effectiveFrom} (decided by the School Owner). Shift
+                This staff member moves to another branch of the school on {whenText(staff.transfer.scheduledOut)} (decided by the School Owner). Shift
                 assignments here must start before that date. Their attendance at your branch stays in your reports.
               </p>
             )}
@@ -224,7 +224,7 @@ export function StaffDrawer({ staff, open, onClose, readOnly, version, onEdit, o
               <ul className="flex flex-col gap-1 text-small text-fg-secondary">
                 {staff.transfer.history.map((h) => (
                   <li key={`${h.direction}-${h.effectiveFrom}`}>
-                    {h.direction === 'in' ? `Joined your branch on ${h.effectiveFrom} (transfer).` : `Left your branch on ${h.effectiveFrom} (transfer).`}
+                    {h.direction === 'in' ? `Joined your branch on ${whenText(h)} (transfer).` : `Left your branch on ${whenText(h)} (transfer).`}
                   </li>
                 ))}
               </ul>

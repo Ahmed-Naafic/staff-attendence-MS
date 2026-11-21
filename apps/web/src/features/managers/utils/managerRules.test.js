@@ -18,10 +18,11 @@ test('every detail problem is reported', () => {
   assert.deepEqual(validateManager({ name: 'Asha Ali', email: 'asha@example.com', phone: '+252 61 2345678' }, FIELDS), {});
 });
 
-test('passwords: 12–128 characters, not only spaces, never trimmed', () => {
+test('passwords: 6–128 characters, not only spaces, never trimmed', () => {
   assert.equal(passwordProblem(''), 'Enter a password.');
   assert.equal(passwordProblem('            '), 'The password cannot be only spaces.');
-  assert.match(passwordProblem('short'), /at least 12/);
+  assert.match(passwordProblem('short'), /at least 6/);
+  assert.equal(passwordProblem('sixsix'), null, 'six characters are enough');
   assert.match(passwordProblem('x'.repeat(129)), /at most 128/);
   assert.equal(passwordProblem(' twelve chars '), null);
 });
