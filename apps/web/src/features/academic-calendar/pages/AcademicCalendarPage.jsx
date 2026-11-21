@@ -188,7 +188,7 @@ export default function AcademicCalendarPage() {
     const ownLevel = level === 'school' ? data.weekdays.school.versions : (data.weekdays.branches[0]?.versions ?? []);
     const inEffectToday = (versions) => versions.some((v) => v.state !== 'cancelled' && v.effectiveFrom <= data.today);
     const appliesToday = level === 'school' ? inEffectToday(ownLevel) : inEffectToday(ownLevel) || inEffectToday(data.weekdays.school.versions);
-    return { earliest: earliestWeekdaysDate({ today: data.today, yearStart: data.academicYear.startDate, appliesToday }), yearStart: data.academicYear.startDate, yearEnd: data.academicYear.endDate };
+    return { earliest: earliestWeekdaysDate({ today: data.today, yearStart: data.academicYear.startDate, appliesToday, delayDays: data.schoolDaysDelayDays }), yearStart: data.academicYear.startDate, yearEnd: data.academicYear.endDate };
   };
 
   return (

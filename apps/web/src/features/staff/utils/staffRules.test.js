@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as api from '../../../../../../backend/src/features/staff/jobTitles.js';
-import { cleanStaffValues, isTeachingTitle, JOB_TITLES, jobTitleFields, jobTitleFrom, OTHER_JOB_TITLE, TEACHING_JOB_TITLES, shiftsOn, toRequestAssignments, validateAssignments, validateReason, validateStaff } from './staffRules.js';
+import { bulkTargets, cleanStaffValues, isTeachingTitle, JOB_TITLES, jobTitleFields, jobTitleFrom, OTHER_JOB_TITLE, TEACHING_JOB_TITLES, shiftsOn, toRequestAssignments, validateAssignments, validateReason, validateStaff } from './staffRules.js';
 
 const FIELDS = ['name', 'phone', 'jobTitle', 'email'];
 
@@ -59,4 +59,14 @@ test('job titles: the same list and teaching rule as the API', () => {
   }
   assert.equal(isTeachingTitle('Head Teacher'), true);
   assert.equal(isTeachingTitle('Accountant'), false);
+});
+
+test('assign shifts to many: all or chosen staff, without those who already have shifts when asked', () => {
+  const staff = [{ id: 'a', hasShifts: false }, { id: 'b', hasShifts: true }, { id: 'c', hasShifts: false }];
+  const ids = (list) => list.map((s) => s.id);
+  assert.deepEqual(ids(bulkTargets(staff, { who: 'all', onlyUnassigned: true })), ['a', 'c']);
+  assert.deepEqual(ids(bulkTargets(staff, { who: 'all', onlyUnassigned: false })), ['a', 'b', 'c']);
+  assert.deepEqual(ids(bulkTargets(staff, { who: 'chosen', chosen: ['b', 'c'], onlyUnassigned: true })), ['c']);
+  assert.deepEqual(ids(bulkTargets(staff, { who: 'chosen', chosen: ['b', 'c'], onlyUnassigned: false })), ['b', 'c']);
+  assert.deepEqual(bulkTargets(staff, { who: 'chosen', chosen: [], onlyUnassigned: false }), []);
 });

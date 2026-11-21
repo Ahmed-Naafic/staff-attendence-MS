@@ -102,6 +102,17 @@ export function checkLessonMarks(data) {
 }
 
 /** The teacher's week: { date, days, rows, lessons: [{ weekday, period, start, end, section, subject }], perDay, total }. */
+export function checkTeaching(data) {
+  check(isObject(data) && isDay(data.date) && Array.isArray(data.items), 'teaching');
+  for (const a of data.items) {
+    check(
+      isObject(a) && isString(a.id) && (a.role === 'class' || a.role === 'subject') && isObject(a.section) && isString(a.section.displayName) && isDay(a.startDate) && (a.role === 'class' || (isObject(a.subject) && isString(a.subject.name))),
+      'teaching assignment',
+    );
+  }
+  return data;
+}
+
 export function checkTimetable(data) {
   check(isObject(data) && isDay(data.date) && Array.isArray(data.days) && Array.isArray(data.lessons) && isNumber(data.total), 'timetable');
   for (const l of data.lessons) {

@@ -27,6 +27,7 @@ const lower = tag.toLowerCase();
 // A unique phone prefix per run, so runs never collide on the platform-wide staff phone index.
 const prefix = `+99${String(parseInt(randomBytes(3).toString('hex'), 16)).padStart(8, '0')}`;
 let phones = 0;
+let savedTimedChanges;
 const nextPhone = () => `${prefix}${String((phones += 1)).padStart(3, '0')}`;
 const cookies = {};
 const accounts = {};
@@ -109,6 +110,10 @@ before(async () => {
     assert.equal(res.status, 200, `${key} sign-in`);
     cookies[key] = res.cookie;
   }
+  // These tests save changes from a date (no time of day): switch timed changes off for the run and
+  // put back whatever the dev system had (see after()).
+  savedTimedChanges = (await prisma.platformSettings.findUnique({ where: { id: 'platform' }, select: { timedChanges: true } }))?.timedChanges;
+  if (savedTimedChanges) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: false } });
   // Branch A1 and B1 schedules from today (A2 has none).
   for (const [who, list] of [[mA1, [MORNING, AFTERNOON, FRIDAY]], [mB1, [MORNING]]]) {
     const res = await who('/api/manager/schedule', { method: 'POST', body: { effectiveFrom: today, checkOutEnabled: false, shifts: list } });
@@ -119,6 +124,7 @@ before(async () => {
 });
 
 after(async () => {
+  if (savedTimedChanges) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: savedTimedChanges } });
   const schoolIds = Object.values(schools).map((s) => s.id);
   const branchIds = Object.values(branches).map((b) => b.id);
   const staffIds = (await prisma.user.findMany({ where: { branchId: { in: branchIds } }, select: { id: true } })).map((u) => u.id);
@@ -506,5 +512,81 @@ describe('audit visibility', () => {
     assert.ok(owner.body.items.every((e) => !e.action.startsWith('STAFF_')));
     const dashboard = await as('SUPER_ADMIN')('/api/platform/dashboard');
     assert.ok(dashboard.body.recentActivity.every((e) => !e.type.startsWith('STAFF_')));
+  });
+});
+
+describe('sample staff (test systems)', () => {
+  test('a Manager adds 20 sample staff (15 teachers) to their branch once; a second run adds nothing', async () => {
+    const status = await mA1('/api/manager/staff/sample');
+    assert.equal(status.status, 200);
+    assert.deepEqual(status.body, { enabled: true, total: 20, existing: 0, teachers: 15 });
+
+    assert.equal((await mA1('/api/manager/staff/sample', { method: 'POST', body: { password: 'x' } })).status, 400, 'the temporary password is checked');
+    const first = await mA1('/api/manager/staff/sample', { method: 'POST', body: { password: 'Sample-pass-2026' } });
+    assert.equal(first.status, 201, JSON.stringify(first.body));
+    assert.equal(first.body.created.length, 20);
+    assert.equal(first.body.created.filter((s) => s.jobTitle === 'Teacher').length, 15);
+    assert.deepEqual(first.body.created.filter((s) => s.jobTitle !== 'Teacher').map((s) => s.jobTitle).sort(), ['Accountant', 'Cleaner', 'Librarian', 'Secretary', 'Security Guard']);
+    assert.equal(new Set(first.body.created.map((s) => s.staffId)).size, 20, 'each its own Staff ID');
+    assert.ok(first.body.created.every((s) => s.status === 'active' && s.branch?.id !== branches.A2.id));
+    assert.deepEqual(first.body.status, { enabled: true, total: 20, existing: 20, teachers: 15 });
+
+    // Created like any staff member: in the branch, must change the password, audited.
+    const rows = await prisma.user.findMany({ where: { id: { in: first.body.created.map((s) => s.id) } } });
+    assert.ok(rows.every((u) => u.branchId === branches.A1.id && u.role === 'STAFF' && u.mustChangePassword));
+    assert.equal(await prisma.auditEvent.count({ where: { action: 'STAFF_CREATED', targetId: { in: rows.map((u) => u.id) } } }), 20);
+
+    const again = await mA1('/api/manager/staff/sample', { method: 'POST', body: { password: 'Sample-pass-2026' } });
+    assert.equal(again.status, 201);
+    assert.equal(again.body.created.length, 0);
+    assert.equal(again.body.skipped, 20);
+    // Another branch has its own sample staff.
+    assert.equal((await mA2('/api/manager/staff/sample')).body.existing, 0);
+  });
+});
+
+describe('shifts for many staff at once', () => {
+  test('chosen staff get the same shifts; staff who already have shifts are skipped unless asked; each answered on its own', async () => {
+    const made = [];
+    for (let i = 0; i < 3; i += 1) made.push((await mA1('/api/manager/staff', { method: 'POST', body: valid({ name: `Bulk ${i} ${tag}` }) })).body.staff);
+    const ctx = await mA1('/api/manager/staff/assignments/bulk');
+    assert.equal(ctx.status, 200, JSON.stringify(ctx.body));
+    assert.ok(made.every((m) => ctx.body.staff.some((s) => s.id === m.id && s.hasShifts === false)));
+    assert.ok(ctx.body.branchShifts.current.shifts.some((s) => s.key === shifts.Morning.key));
+    const from = ctx.body.earliestEffectiveDate;
+    const body = (extra) => ({ effectiveFrom: from, shifts: [{ shiftKey: shifts.Morning.key, days: ['SAT', 'MON'] }], ...extra });
+
+    // The first one gets shifts by itself; then all three with "only staff without shifts".
+    assert.equal((await mA1(`/api/manager/staff/${made[0].id}/assignments`, { method: 'POST', body: { effectiveFrom: from, shifts: [{ shiftKey: shifts.Afternoon.key, days: ['MON'] }] } })).status, 200);
+    const ids = made.map((m) => m.id);
+    const unknown = randomUUID();
+    const res = await mA1('/api/manager/staff/assignments/bulk', { method: 'POST', body: body({ staff: [...ids, unknown] }) });
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    assert.deepEqual([res.body.saved, res.body.skipped, res.body.failed], [2, 1, 1]);
+    assert.equal(res.body.results.find((r) => r.staff.id === made[0].id).result, 'skipped');
+    assert.equal(res.body.results.find((r) => r.staff.id === unknown).result, 'failed');
+    for (const m of made.slice(1)) {
+      const set = await prisma.staffAssignment.findFirst({ where: { staffUserId: m.id, cancelledAt: null }, include: { shifts: true } });
+      assert.deepEqual(set.shifts.map((s) => [s.shiftKey, s.days.join(',')]), [[shifts.Morning.key, 'MON,SAT']]);
+    }
+    // Audited like one by one.
+    assert.equal(await prisma.auditEvent.count({ where: { action: 'STAFF_ASSIGNMENT_CHANGED', targetId: { in: ids.slice(1) } } }), 2);
+
+    // Without "only staff without shifts" the first one's are replaced too.
+    const all = await mA1('/api/manager/staff/assignments/bulk', { method: 'POST', body: body({ staff: [made[0].id], onlyUnassigned: false }) });
+    assert.deepEqual([all.body.saved, all.body.skipped, all.body.failed], [1, 0, 0]);
+
+    // A day the shift does not have is refused for each staff member, with the reason.
+    const bad = await mA1('/api/manager/staff/assignments/bulk', { method: 'POST', body: body({ staff: [made[1].id], onlyUnassigned: false, shifts: [{ shiftKey: shifts.Morning.key, days: ['FRI'] }] }) });
+    assert.equal(bad.body.failed, 1);
+    assert.ok(bad.body.results[0].message);
+
+    // The request is checked first.
+    for (const wrong of [{ staff: [] }, { staff: 'everyone' }, { staff: ['x'] }, { staff: ids, onlyUnassigned: 'yes' }]) {
+      assert.equal((await mA1('/api/manager/staff/assignments/bulk', { method: 'POST', body: body(wrong) })).status, 400, JSON.stringify(wrong));
+    }
+    // Another branch's Manager cannot touch these staff.
+    const other = await mA2('/api/manager/staff/assignments/bulk', { method: 'POST', body: body({ staff: [made[2].id] }) });
+    assert.equal(other.body.failed, 1);
   });
 });

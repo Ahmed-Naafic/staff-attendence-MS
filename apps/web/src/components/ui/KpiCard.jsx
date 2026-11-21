@@ -28,9 +28,11 @@ export function KpiCard({ label, value, icon: Icon, tone = 'info', changePercent
 
   return (
     <Card as="li" className="flex-row gap-3 p-4">
-      <span className={cn('grid size-10 shrink-0 place-items-center rounded-md', style.tile)}>
-        <Icon aria-hidden="true" className="size-5" />
-      </span>
+      {Icon && (
+        <span className={cn('grid size-10 shrink-0 place-items-center rounded-md', style.tile)}>
+          <Icon aria-hidden="true" className="size-5" />
+        </span>
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
         <h3 title={label} className="truncate text-small font-medium text-fg-secondary">
           {label}

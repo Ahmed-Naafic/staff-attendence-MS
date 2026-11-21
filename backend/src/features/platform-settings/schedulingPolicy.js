@@ -18,17 +18,20 @@ import { recordAuditEvent } from '../audit-logs/auditService.js';
  *                             a chosen date and time (never in the past); the delay and the two
  *                             switches above do not apply. Off: the delay applies and changes start
  *                             at 00:00 (no time can be chosen).
+ *   schoolDaysFollowDelay     changes of school days (Academic Calendar) also wait for the effective
+ *                             delay when school days already apply today; whole days, no time.
+ *   With timed changes on, as for staff changes, a change of school days may start today.
  * Defaults (an empty value): 1 day, both switches on, and no timed changes, which is the behaviour
  * before these settings existed. A delay of 0 is not offered: a day's rules never change during the day.
  * Changes are saved at once and apply from their date; nothing has to "activate" them (the version
  * in effect on a day is the newest one whose date has arrived; see schedules.service scheduleOn).
  */
 
-export const SCHEDULING_DEFAULTS = Object.freeze({ effectiveDelayDays: 1, immediateFirstSchedule: true, immediateFirstAssignment: true, timedChanges: false });
+export const SCHEDULING_DEFAULTS = Object.freeze({ effectiveDelayDays: 1, immediateFirstSchedule: true, immediateFirstAssignment: true, timedChanges: false, schoolDaysFollowDelay: false });
 export const EFFECTIVE_DELAY = Object.freeze({ minDays: 1, maxDays: 30 });
 
-const FIELDS = ['effectiveDelayDays', 'immediateFirstSchedule', 'immediateFirstAssignment', 'timedChanges'];
-const SWITCHES = ['immediateFirstSchedule', 'immediateFirstAssignment', 'timedChanges'];
+const FIELDS = ['effectiveDelayDays', 'immediateFirstSchedule', 'immediateFirstAssignment', 'timedChanges', 'schoolDaysFollowDelay'];
+const SWITCHES = ['immediateFirstSchedule', 'immediateFirstAssignment', 'timedChanges', 'schoolDaysFollowDelay'];
 const DELAY_PROBLEM = `Effective delay must be a whole number of days from ${EFFECTIVE_DELAY.minDays} to ${EFFECTIVE_DELAY.maxDays}.`;
 
 export const isValidDelayDays = (value) => Number.isInteger(value) && value >= EFFECTIVE_DELAY.minDays && value <= EFFECTIVE_DELAY.maxDays;
@@ -40,6 +43,7 @@ export function schedulingSettings(row) {
     immediateFirstSchedule: typeof row?.immediateFirstSchedule === 'boolean' ? row.immediateFirstSchedule : SCHEDULING_DEFAULTS.immediateFirstSchedule,
     immediateFirstAssignment: typeof row?.immediateFirstAssignment === 'boolean' ? row.immediateFirstAssignment : SCHEDULING_DEFAULTS.immediateFirstAssignment,
     timedChanges: typeof row?.timedChanges === 'boolean' ? row.timedChanges : SCHEDULING_DEFAULTS.timedChanges,
+    schoolDaysFollowDelay: typeof row?.schoolDaysFollowDelay === 'boolean' ? row.schoolDaysFollowDelay : SCHEDULING_DEFAULTS.schoolDaysFollowDelay,
     limits: EFFECTIVE_DELAY,
   };
 }
@@ -48,7 +52,7 @@ export function schedulingSettings(row) {
 export async function schedulingPolicy(client = getPrisma()) {
   const row = await client.platformSettings.findUnique({
     where: { id: 'platform' },
-    select: { effectiveDelayDays: true, immediateFirstSchedule: true, immediateFirstAssignment: true, timedChanges: true },
+    select: { effectiveDelayDays: true, immediateFirstSchedule: true, immediateFirstAssignment: true, timedChanges: true, schoolDaysFollowDelay: true },
   });
   return schedulingSettings(row);
 }
@@ -75,6 +79,14 @@ export function earliestDateProblem(what, { today, earliest, delayDays, first })
     ? `A change can start ${when} at the earliest, so today's schedule does not change during the day.`
     : `A change can start ${when} at the earliest, so today's assignments do not change during the day.`;
 }
+
+/**
+ * How many days ahead a change of school days can start when school days already apply today: 0
+ * (today) with timed changes, as for staff changes; the effective delay when the policy says school
+ * days follow it; else 1 (tomorrow: today is under way). The first school days of a year can always
+ * start today.
+ */
+export const schoolDaysDelay = (policy) => (policy.timedChanges ? 0 : policy.schoolDaysFollowDelay ? policy.effectiveDelayDays : 1);
 
 /**
  * The earliest effective date under the policy: today when timed changes are on (any time after now
@@ -147,7 +159,7 @@ const has = (body, key) => Object.prototype.hasOwnProperty.call(body, key);
 export function readScheduling(body) {
   const unknown = Object.keys(body).filter((key) => !FIELDS.includes(key));
   if (unknown.length) throw badRequest(`Unknown fields: ${unknown.join(', ')}.`);
-  if (!FIELDS.some((key) => has(body, key))) throw badRequest('Send effectiveDelayDays, immediateFirstSchedule, immediateFirstAssignment or timedChanges.');
+  if (!FIELDS.some((key) => has(body, key))) throw badRequest('Send effectiveDelayDays, immediateFirstSchedule, immediateFirstAssignment, timedChanges or schoolDaysFollowDelay.');
   const values = {};
   const details = {};
   if (has(body, 'effectiveDelayDays')) {
@@ -168,6 +180,7 @@ const LABELS = {
   immediateFirstSchedule: 'First schedule may start today',
   immediateFirstAssignment: 'First assignments may start today',
   timedChanges: 'Allow changes to take effect at their scheduled time',
+  schoolDaysFollowDelay: 'School days follow the effective delay',
 };
 const text = (key, value) => (key === 'effectiveDelayDays' ? `${value} ${value === 1 ? 'day' : 'days'}` : value ? 'Yes' : 'No');
 
@@ -181,7 +194,7 @@ export async function updateScheduling(values, user, req) {
   const row = await getPrisma().$transaction(async (tx) => {
     // The row may not exist yet (e.g. production before any setting is saved).
     await tx.$executeRaw`INSERT INTO "PlatformSettings" ("id", "updatedAt") VALUES ('platform', now()) ON CONFLICT ("id") DO NOTHING`;
-    const [current] = await tx.$queryRaw`SELECT "effectiveDelayDays", "immediateFirstSchedule", "immediateFirstAssignment", "timedChanges" FROM "PlatformSettings" WHERE "id" = 'platform' FOR UPDATE`;
+    const [current] = await tx.$queryRaw`SELECT "effectiveDelayDays", "immediateFirstSchedule", "immediateFirstAssignment", "timedChanges", "schoolDaysFollowDelay" FROM "PlatformSettings" WHERE "id" = 'platform' FOR UPDATE`;
     const inForce = schedulingSettings(current);
     const changed = FIELDS.filter((key) => values[key] !== undefined && values[key] !== inForce[key]);
     if (!changed.length) return current;

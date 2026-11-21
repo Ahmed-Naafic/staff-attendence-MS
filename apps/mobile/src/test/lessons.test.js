@@ -136,3 +136,48 @@ test('My week: the teacher’s timetable by day (every branch), kept for offline
   await waitFor(() => expect(screen.getByText(/saved week|You’re offline/)).toBeOnTheScreen());
   expect(screen.getByText('Mathematics · Grade 7A')).toBeOnTheScreen();
 });
+
+const teachingBody = () => ({
+  date: today(),
+  academicYear: { id: 'y1', name: '2026-2027' },
+  items: [
+    { id: 'a1', role: 'class', subject: null, section: { id: 'sec-a', displayName: 'Grade 7A', className: 'Grade 7' }, branch: { id: 'b1', name: 'Main', code: 'M' }, academicYear: { id: 'y1', name: '2026-2027', status: 'current' }, startDate: '2026-09-01', endDate: null, state: 'active', weeklyLessons: null, inTimetable: null },
+    { id: 'a2', role: 'subject', subject: { id: 'sub-1', name: 'Mathematics', code: '' }, section: { id: 'sec-a', displayName: 'Grade 7A', className: 'Grade 7' }, branch: { id: 'b1', name: 'Main', code: 'M' }, academicYear: { id: 'y1', name: '2026-2027', status: 'current' }, startDate: '2026-09-01', endDate: null, state: 'active', weeklyLessons: 5, inTimetable: 5 },
+    { id: 'a3', role: 'subject', subject: { id: 'sub-2', name: 'Physics', code: '' }, section: { id: 'sec-b', displayName: 'Grade 8B', className: 'Grade 8' }, branch: { id: 'b2', name: 'North', code: 'N' }, academicYear: { id: 'y1', name: '2026-2027', status: 'current' }, startDate: '2026-09-01', endDate: null, state: 'active', weeklyLessons: 3, inTimetable: 0 },
+  ],
+});
+
+test('My classes: the teacher’s classes and subjects (every branch), kept for offline use', async () => {
+  let up = true;
+  const server = createServer({
+    'GET /api/teacher/lessons': () => [200, dayBody([])],
+    'GET /api/teacher/teaching': () => (up ? [200, teachingBody()] : networkDown()),
+  });
+  await renderApp(server);
+  await openLessons();
+  await fireEvent.press(screen.getByTestId('open-teaching'));
+  expect(await screen.findByText('2 classes · 2 subjects')).toBeOnTheScreen();
+  expect(screen.getByText('Class teacher')).toBeOnTheScreen();
+  expect(screen.getByText('5 lessons a week · 5 in your timetable')).toBeOnTheScreen();
+  expect(screen.getByText('3 lessons a week · not in the timetable yet')).toBeOnTheScreen();
+  expect(screen.getByText('North')).toBeOnTheScreen();
+  // Offline: the saved list is shown.
+  up = false;
+  await fireEvent.press(screen.getByLabelText('Back'));
+  await fireEvent.press(await screen.findByTestId('open-teaching'));
+  await waitFor(() => expect(screen.getByText(/saved classes|You’re offline/)).toBeOnTheScreen());
+  expect(screen.getByText('Physics')).toBeOnTheScreen();
+});
+
+test('student attendance off: My week and My classes are still reachable', async () => {
+  const server = createServer({
+    'GET /api/teacher/lessons': () => [403, { error: 'Off', code: 'FEATURE_DISABLED' }],
+    'GET /api/teacher/teaching': () => [200, teachingBody()],
+  });
+  await renderApp(server);
+  await fireEvent.press(await screen.findByText('Lessons'));
+  expect(await screen.findByText('Student attendance is not on')).toBeOnTheScreen();
+  expect(screen.getByTestId('open-timetable')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByTestId('open-teaching'));
+  expect(await screen.findByText('Mathematics')).toBeOnTheScreen();
+});

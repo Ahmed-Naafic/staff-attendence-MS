@@ -1,6 +1,22 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { cellsToLessons, countBySubject, generatePeriods, gridOf, lessonsToCells, periodsBody, summaryText, teachersFor, validatePeriodRows, versionOn } from './timetableRules.js';
+import {
+  bellWeekWarnings,
+  cellsToLessons,
+  countBySubject,
+  defaultBellDays,
+  fitLessons,
+  generatePeriods,
+  gridOf,
+  lessonsToCells,
+  periodsBody,
+  shiftLabel,
+  shiftSeed,
+  summaryText,
+  teachersFor,
+  validatePeriodRows,
+  versionOn,
+} from './timetableRules.js';
 
 const ALL = ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU'];
 
@@ -71,5 +87,50 @@ describe('timetable grid', () => {
       summaryText({ SAT: { lessons: 7, start: '07:30', end: '13:00', halves: 2 }, SUN: { lessons: 7, start: '07:30', end: '13:00', halves: 2 }, THU: { lessons: 4, start: '07:30', end: '10:30', halves: 1 } }),
       'Sat, Sun: 7 lessons, 07:30–13:00, 2 halves · Thu: 4 lessons, 07:30–10:30',
     );
+  });
+});
+
+describe('the school week (school days and staff shifts)', () => {
+  const morning = { branch: { id: 'b1', name: 'Main' }, key: 'k1', name: 'Morning', days: ['MON', 'SAT', 'SUN', 'TUE', 'WED'], start: '07:00', end: '13:30' };
+  const week = { schoolDays: ['WED', 'SAT', 'SUN', 'MON', 'TUE'], shifts: [morning] };
+
+  test('new bell rows get the school days in the school’s week order; Saturday–Thursday when unknown', () => {
+    assert.deepEqual(defaultBellDays(week), ['SAT', 'SUN', 'MON', 'TUE', 'WED']);
+    assert.deepEqual(defaultBellDays({ schoolDays: [] }), ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU']);
+    assert.deepEqual(defaultBellDays(null), ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU']);
+  });
+
+  test('lessons that fit between two times, with the break', () => {
+    assert.equal(fitLessons({ start: '07:00', end: '13:30', lessonMinutes: 45, breakAfter: 4, breakMinutes: 30 }), 8);
+    assert.equal(fitLessons({ start: '07:00', end: '07:30', lessonMinutes: 45, breakAfter: 4, breakMinutes: 30 }), 0);
+    assert.equal(fitLessons({ start: '07:00', end: '08:30', lessonMinutes: 45, breakAfter: 0, breakMinutes: 30 }), 2);
+    assert.equal(fitLessons({ start: 'x', end: '08:30', lessonMinutes: 45, breakAfter: 0, breakMinutes: 0 }), 0);
+  });
+
+  test('a staff shift seeds a bell schedule: its school days and the lessons that fit', () => {
+    const seed = shiftSeed({ ...morning, days: ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU'] }, week.schoolDays);
+    assert.deepEqual(seed, { name: 'Morning', start: '07:00', end: '13:30', lessons: 8, breakAfter: 4, days: ['SAT', 'SUN', 'MON', 'TUE', 'WED'] });
+    // The generated day ends inside the shift.
+    const rows = generatePeriods({ start: seed.start, lessonMinutes: 45, lessons: seed.lessons, breakAfter: seed.breakAfter, breakMinutes: 30, days: seed.days });
+    assert.equal(rows.at(-1).end, '13:30');
+    assert.deepEqual(bellWeekWarnings(rows, week), []);
+    // No school day in common: the shift's own days.
+    assert.deepEqual(shiftSeed(morning, ['FRI']).days, ['SAT', 'SUN', 'MON', 'TUE', 'WED']);
+    assert.equal(shiftLabel(morning), 'Morning 07:00–13:30 · Sat, Sun, Mon, Tue, Wed');
+    assert.equal(shiftLabel(morning, true), 'Morning 07:00–13:30 · Sat, Sun, Mon, Tue, Wed · Main');
+  });
+
+  test('warnings: lessons on a day that is not a school day, and lessons outside every staff shift', () => {
+    const rows = [
+      { kind: 'lesson', number: 1, days: ['SAT', 'THU'], start: '07:30', end: '08:15' },
+      { kind: 'break', number: null, days: ['SAT'], start: '13:00', end: '14:00' },
+      { kind: 'lesson', number: 8, days: ['SAT', 'SUN'], start: '13:15', end: '14:00' },
+    ];
+    const w = bellWeekWarnings(rows, week);
+    assert.equal(w.length, 2);
+    assert.match(w[0], /Lessons are set on Thu, which is not a school day/);
+    assert.match(w[1], /Period 8 \(13:15–14:00\) on Sat, Sun: outside every staff shift \(Morning 07:00–13:30/);
+    assert.deepEqual(bellWeekWarnings(rows, null), []);
+    assert.deepEqual(bellWeekWarnings(rows, { schoolDays: [], shifts: [] }), [], 'nothing known, nothing to say');
   });
 });

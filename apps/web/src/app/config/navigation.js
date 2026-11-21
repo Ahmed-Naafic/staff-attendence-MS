@@ -1,4 +1,4 @@
-import { ArrowRightLeft, CalendarCog, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, UserRound, Users } from 'lucide-react';
+import { ArrowRightLeft, CalendarCog, ListOrdered, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, UserRound, Users } from 'lucide-react';
 
 /*
  * Role-aware navigation. Each role gets its own identity and sidebar sections;
@@ -28,7 +28,7 @@ export const roleProfiles = {
 };
 
 /**
- * The school's schedule under one menu (School Owner and Manager), in the order it is set up: the
+ * The school's schedule under one menu (School Owner and Manager), each page on its own, in the order it is set up: the
  * year, its school days and holidays, the bell times, then the timetables (build and publish, view
  * and print, edit one class by hand). Staff work shifts are the Manager's separate Staff Schedule.
  */
@@ -110,6 +110,8 @@ export const navigationByRole = {
         { to: '/managers', label: 'Managers', icon: UserCog },
         staffGroup('OWNER'),
         scheduleGroup,
+        // Every page needed to build a timetable, as steps in tabs (its own menu item).
+        { to: '/timetable', label: 'Timetable', icon: ListOrdered },
         { to: '/classes', label: 'Classes', icon: GraduationCap },
         { to: '/subjects', label: 'Subjects', icon: BookOpen },
         { to: '/teaching', label: 'Teaching', icon: Presentation },
@@ -124,6 +126,8 @@ export const navigationByRole = {
         { to: '/my-branch', label: 'My Branch', icon: Building2 },
         staffGroup('MANAGER'),
         scheduleGroup,
+        // Every page needed to build a timetable, as steps in tabs (its own menu item).
+        { to: '/timetable', label: 'Timetable', icon: ListOrdered },
         { to: '/classes', label: 'Classes', icon: GraduationCap },
         { to: '/subjects', label: 'Subjects', icon: BookOpen },
         { to: '/teaching', label: 'Teaching', icon: Presentation },

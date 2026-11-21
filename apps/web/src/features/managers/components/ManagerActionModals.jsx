@@ -3,6 +3,7 @@ import { Button, Input, Modal, Select, Textarea } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { reactivateManager, resetManagerPassword, suspendManager, transferManager } from '../data/managerActions.js';
 import { branchLabel, passwordProblem, validateReason } from '../utils/managerRules.js';
+import { PASSWORD_MIN } from '../../auth/passwordRules.js';
 
 const failure = (error, verb) =>
   ['INVALID_STATUS', 'SCHOOL_SUSPENDED'].includes(error.code) || error.status === 404 || error.status === 0
@@ -306,7 +307,7 @@ export function ResetPasswordModal({ manager, open, onClose, onDone }) {
             if (state.error) state.setError('');
           }}
           error={state.error}
-          hint="At least 12 characters. Give it to the Manager yourself; it is not shown again."
+          hint={`At least ${PASSWORD_MIN} characters. Give it to the Manager yourself; it is not shown again.`}
         />
       </form>
     </Modal>

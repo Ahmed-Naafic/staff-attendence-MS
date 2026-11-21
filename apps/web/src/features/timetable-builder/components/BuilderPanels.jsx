@@ -24,30 +24,47 @@ import {
 } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { requestFailure, useDialogForm } from '../../../hooks/useDialogForm.js';
+import { ReadinessFixes } from './ReadinessFixes.jsx';
 import { addFixedLesson, loadBuilderTeachers, loadReadiness, removeFixedLesson, saveSetup, saveTeacherLimits } from '../data/builderApi.js';
-import { checkUnavailable, DAY_NAMES, DAY_SHORT, fixLink, limitValue, loadTone, orderDays } from '../utils/builderRules.js';
+import { checkUnavailable, DAY_NAMES, DAY_SHORT, fixActions, fixLinks, limitValue, loadTone, orderDays } from '../utils/builderRules.js';
 
 const failure = (error) => requestFailure(error);
 
 function FixLink({ item, role, onTab }) {
-  const link = fixLink(item, role);
-  if (!link) return null;
-  if (link.tab) {
-    return (
-      <Button size="sm" variant="ghost" onClick={() => onTab(link.tab)}>
-        {link.label}
-      </Button>
-    );
-  }
+  const links = fixLinks(item, role);
+  if (!links.length) return null;
   return (
-    <Link to={link.to} className="text-small font-medium text-interactive underline-offset-2 hover:underline">
-      {link.label}
-    </Link>
+    <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+      {links.map((link) =>
+        link.tab ? (
+          <Button key={link.label} size="sm" variant="ghost" onClick={() => onTab(link.tab)}>
+            {link.label}
+          </Button>
+        ) : (
+          <Link key={link.label} to={link.to} className="text-small font-medium text-interactive underline-offset-2 hover:underline">
+            {link.label}
+          </Link>
+        ),
+      )}
+    </span>
+  );
+}
+
+/**
+ * Under a readiness item (lined up with its text): the buttons that fix it here, or, when it has
+ * none, the link to where it is fixed.
+ */
+function ItemFixes({ item, role, context, builder, weekdays, onChanged, onTab }) {
+  const inPlace = builder && fixActions(item).length > 0;
+  return (
+    <div className="pl-6">
+      {inPlace ? <ReadinessFixes item={item} role={role} context={context} builder={builder} weekdays={weekdays} onChanged={onChanged} /> : <FixLink item={item} role={role} onTab={onTab} />}
+    </div>
   );
 }
 
 /** The checks before generating: blockers (red) stop it, warnings (amber) do not; each with where to fix it. */
-export function ReadinessPanel({ role, context, version, onTab }) {
+export function ReadinessPanel({ role, context, version, onTab, builder, onChanged }) {
   const r = useApiData(() => loadReadiness(role, context), `ready|${JSON.stringify(context)}|${version}`);
   if (!r.data) return r.status === 'error' ? <ErrorState title="The checks could not be loaded" description={r.error?.message} onRetry={r.retry} /> : <Skeleton className="h-64" />;
   const { ready, blockers, warnings, summary, teachers } = r.data;
@@ -60,18 +77,18 @@ export function ReadinessPanel({ role, context, version, onTab }) {
         </Alert>
       ) : (
         <Alert variant="error" title={`${blockers.length} thing${blockers.length === 1 ? '' : 's'} to fix before generating`}>
-          Fix each item below; the checks update when you come back.
+          Fix each item below with its buttons; the checks update as soon as a fix is saved.
         </Alert>
       )}
       {blockers.length > 0 && (
         <Card as="section" aria-label="To fix" className="flex flex-col divide-y divide-border">
           {blockers.map((b, i) => (
-            <div key={`${b.code}-${i}`} className="flex flex-wrap items-start justify-between gap-3 p-4">
-              <span className="flex min-w-0 flex-1 gap-2 text-body text-fg">
+            <div key={`${b.code}-${i}`} className="flex flex-col gap-3 p-4">
+              <p className="flex min-w-0 gap-2 text-body text-fg">
                 <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-error" />
-                {b.message}
-              </span>
-              <FixLink item={b} role={role} onTab={onTab} />
+                <span className="min-w-0">{b.message}</span>
+              </p>
+              <ItemFixes item={b} role={role} context={context} builder={builder} weekdays={summary.weekdays ?? []} onChanged={onChanged} onTab={onTab} />
             </div>
           ))}
         </Card>
@@ -79,12 +96,12 @@ export function ReadinessPanel({ role, context, version, onTab }) {
       {warnings.length > 0 && (
         <Card as="section" aria-label="Good to know" className="flex flex-col divide-y divide-border">
           {warnings.map((w, i) => (
-            <div key={`${w.code}-${i}`} className="flex flex-wrap items-start justify-between gap-3 p-4">
-              <span className="flex min-w-0 flex-1 gap-2 text-body text-fg-secondary">
+            <div key={`${w.code}-${i}`} className="flex flex-col gap-3 p-4">
+              <p className="flex min-w-0 gap-2 text-body text-fg-secondary">
                 <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-                {w.message}
-              </span>
-              <FixLink item={w} role={role} onTab={onTab} />
+                <span className="min-w-0">{w.message}</span>
+              </p>
+              <ItemFixes item={w} role={role} context={context} builder={builder} weekdays={summary.weekdays ?? []} onChanged={onChanged} onTab={onTab} />
             </div>
           ))}
         </Card>

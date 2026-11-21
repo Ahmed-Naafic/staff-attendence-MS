@@ -22,7 +22,8 @@ export const setSubjectActive = async (subjectId, active) =>
 /** { class, open, weeklyLessons, items: [{ subject, weeklyLessons }] } */
 export const loadCurriculum = (role, classId) => apiRequest(`${base(role)}/classes/${id(classId)}/subjects`);
 /** subjects: [{ subject: id, weeklyLessons }] → the curriculum. */
-export const saveCurriculum = (classId, subjects) => apiRequest(`/owner/classes/${id(classId)}/subjects`, { method: 'PUT', body: { subjects } });
+/** A class's subjects and lessons per week (School Owner, or a Manager: one list for the class in every branch). */
+export const saveCurriculum = (classId, subjects, role = 'OWNER') => apiRequest(`${base(role)}/classes/${id(classId)}/subjects`, { method: 'PUT', body: { subjects } });
 
 // ---- teaching assignments ----
 export const loadAssignments = (role, filters = {}) =>

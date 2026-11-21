@@ -67,7 +67,12 @@ async function wipeCalendar(schoolId) {
   await prisma.academicWeekdays.deleteMany({ where: { schoolId } });
 }
 
+// These tests expect the default rule (a change of school days starts tomorrow at the earliest once
+// school days apply): the scheduling switches are set to it for the run and restored afterwards.
+let savedSwitches;
 before(async () => {
+  savedSwitches = await prisma.platformSettings.findUnique({ where: { id: 'platform' }, select: { timedChanges: true, schoolDaysFollowDelay: true } });
+  if (savedSwitches) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: false, schoolDaysFollowDelay: false } });
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -119,6 +124,7 @@ before(async () => {
 });
 
 after(async () => {
+  if (savedSwitches) await prisma.platformSettings.update({ where: { id: 'platform' }, data: savedSwitches });
   const schoolIds = Object.values(schools).map((s) => s.id);
   const userIds = (await prisma.user.findMany({ where: { email: { endsWith: `-${lower}@test.edutrack.example` } }, select: { id: true } })).map((u) => u.id);
   for (const id of schoolIds) await wipeCalendar(id);

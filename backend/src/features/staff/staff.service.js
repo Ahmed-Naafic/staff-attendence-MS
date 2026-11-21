@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { badRequest, conflict, notFound } from '../../common/httpError.js';
+import { badRequest, conflict, HttpError, notFound } from '../../common/httpError.js';
 import { fromDbStatus, pageWindow, statusSummary, toDbStatus } from '../../common/listQuery.js';
 import { isUuid } from '../../common/validate.js';
 import { getPrisma } from '../../config/prisma.js';
@@ -184,15 +184,10 @@ export async function getStaff(branch, id, client = getPrisma()) {
   const now = new Date();
   const [timeZone, policy] = await Promise.all([platformTimeZone(), schedulingPolicy(client)]);
   const today = localDate(timeZone, now);
-  const [current, scheduled, scheduleNow, scheduleNext] = await Promise.all([
+  const [current, scheduled, branchShifts] = await Promise.all([
     assignmentAt(staff.id, now, client),
     assignmentAfter(staff.id, now, client, branch.id),
-    scheduleAt(branch.id, now, client),
-    client.branchSchedule.findFirst({
-      where: { branchId: branch.id, cancelledAt: null, effectiveAt: { gt: now } },
-      orderBy: { effectiveAt: 'asc' },
-      include: { shifts: { orderBy: [{ startMinute: 'asc' }, { name: 'asc' }] } },
-    }),
+    branchShiftChoices(branch, now, client),
   ]);
   return {
     ...toStaff(staff),
@@ -207,11 +202,22 @@ export async function getStaff(branch, id, client = getPrisma()) {
     transfer: await transferSummary(branch, staff.id, client),
     // What they teach, in any branch of the school (read only here; managed under Teaching).
     teaching: await liveTeachingOf(staff.id, client),
-    branchShifts: {
-      current: scheduleNow ? { effectiveFrom: fromDbDate(scheduleNow.effectiveFrom), effectiveTime: localDateTime(scheduleNow.effectiveAt, scheduleNow.timeZone).time, shifts: shiftOptions(scheduleNow) } : null,
-      scheduled: scheduleNext ? { effectiveFrom: fromDbDate(scheduleNext.effectiveFrom), effectiveTime: localDateTime(scheduleNext.effectiveAt, scheduleNext.timeZone).time, shifts: shiftOptions(scheduleNext) } : null,
-    },
+    branchShifts,
   };
+}
+
+/** The branch's shifts to choose from: the schedule in effect now and the next scheduled one. */
+async function branchShiftChoices(branch, now, client) {
+  const [scheduleNow, scheduleNext] = await Promise.all([
+    scheduleAt(branch.id, now, client),
+    client.branchSchedule.findFirst({
+      where: { branchId: branch.id, cancelledAt: null, effectiveAt: { gt: now } },
+      orderBy: { effectiveAt: 'asc' },
+      include: { shifts: { orderBy: [{ startMinute: 'asc' }, { name: 'asc' }] } },
+    }),
+  ]);
+  const choice = (v) => v && { effectiveFrom: fromDbDate(v.effectiveFrom), effectiveTime: localDateTime(v.effectiveAt, v.timeZone).time, shifts: shiftOptions(v) };
+  return { current: choice(scheduleNow), scheduled: choice(scheduleNext) };
 }
 
 /** Every assignment set of a staff member, newest effective date first, with state and effectiveUntil. */
@@ -460,7 +466,7 @@ async function cancelSet(tx, branch, staff, set, user, req, reason, outbox) {
  * scheduled set is replaced (kept as cancelled). Saving the set in effect changes nothing (or only
  * cancels a scheduled set).
  */
-export async function saveAssignments(branch, id, { effectiveFrom, effectiveTime = null, shifts }, user, req) {
+export async function saveAssignments(branch, id, { effectiveFrom, effectiveTime = null, shifts }, user, req, { reload = true } = {}) {
   const timeZone = await platformTimeZone();
   const outbox = [];
   await getPrisma().$transaction(async (tx) => {
@@ -535,7 +541,93 @@ export async function saveAssignments(branch, id, { effectiveFrom, effectiveTime
     });
   }, BRANCH_TX);
   await dispatch(outbox);
-  return getStaff(branch, id);
+  return reload ? getStaff(branch, id) : null;
+}
+
+// ---- shifts for many staff at once ------------------------------------------------------------
+
+/**
+ * What the "Assign shifts to many staff" form needs: the branch's active staff (with whether they
+ * have shifts now or scheduled), the branch's shifts, and the date rules (as for a staff member who
+ * already has shifts: the common earliest date).
+ */
+export async function bulkAssignmentContext(branch) {
+  const prisma = getPrisma();
+  const now = new Date();
+  const [timeZone, policy] = await Promise.all([platformTimeZone(), schedulingPolicy(prisma)]);
+  const today = localDate(timeZone, now);
+  const staff = await prisma.user.findMany({ where: { role: 'STAFF', branchId: branch.id, status: 'ACTIVE' }, select: { id: true, name: true, staffId: true, jobTitle: true }, orderBy: [{ name: 'asc' }, { staffId: 'asc' }] });
+  const withShifts = await staffWithShifts(prisma, branch, staff.map((s) => s.id), now);
+  return {
+    timeZone,
+    today,
+    ...effectiveDateFields(policy, { timeZone, today, now, first: false }),
+    latestEffectiveDate: addDays(today, MAX_AHEAD_DAYS),
+    branchShifts: await branchShiftChoices(branch, now, prisma),
+    staff: staff.map((s) => ({ ...s, jobTitle: s.jobTitle ?? '', hasShifts: withShifts.has(s.id) })),
+  };
+}
+
+/** The staff (of `ids`) with shifts in effect at `now` or a change scheduled in the branch after it. */
+async function staffWithShifts(client, branch, ids, now) {
+  if (!ids.length) return new Set();
+  const [sets, later] = await Promise.all([
+    client.staffAssignment.findMany({
+      where: { staffUserId: { in: ids }, cancelledAt: null, effectiveAt: { lte: now } },
+      orderBy: [{ effectiveAt: 'desc' }, { recordedAt: 'desc' }],
+      select: { staffUserId: true, _count: { select: { shifts: true } } },
+    }),
+    client.staffAssignment.findMany({ where: { staffUserId: { in: ids }, branchId: branch.id, cancelledAt: null, effectiveAt: { gt: now } }, select: { staffUserId: true } }),
+  ]);
+  const result = new Set(later.map((s) => s.staffUserId));
+  const seen = new Set();
+  for (const s of sets) {
+    if (seen.has(s.staffUserId)) continue;
+    seen.add(s.staffUserId);
+    if (s._count.shifts) result.add(s.staffUserId);
+  }
+  return result;
+}
+
+/**
+ * The same shift assignments for many staff of the branch: `staff` is 'all' (every active staff
+ * member) or a list of ids. Each is saved by saveAssignments — the same checks, history,
+ * notification and audit as one by one — and answered on its own: saved, skipped (with
+ * `onlyUnassigned`, staff who already have shifts or a scheduled change), or failed with the reason.
+ * One failure does not stop the others. → { saved, skipped, failed, results: [{ staff, result, message? }] }
+ */
+export async function saveAssignmentsForMany(branch, { staff, onlyUnassigned, change }, user, req) {
+  const prisma = getPrisma();
+  const all = staff === 'all';
+  const rows = await prisma.user.findMany({
+    where: { role: 'STAFF', branchId: branch.id, ...(all ? { status: 'ACTIVE' } : { id: { in: staff } }) },
+    select: { id: true, name: true, staffId: true, status: true },
+    orderBy: [{ name: 'asc' }, { staffId: 'asc' }],
+  });
+  const results = [];
+  if (!all) for (const id of staff.filter((x) => !rows.some((r) => r.id === x))) results.push({ staff: { id }, result: 'failed', message: 'Not a staff member of your branch.' });
+  const busy = onlyUnassigned ? await staffWithShifts(prisma, branch, rows.map((r) => r.id), new Date()) : new Set();
+  for (const s of rows) {
+    const who = { id: s.id, name: s.name, staffId: s.staffId };
+    if (s.status !== 'ACTIVE') {
+      results.push({ staff: who, result: 'skipped', message: 'Suspended.' });
+      continue;
+    }
+    if (busy.has(s.id)) {
+      results.push({ staff: who, result: 'skipped', message: 'Already has shifts.' });
+      continue;
+    }
+    try {
+      await saveAssignments(branch, s.id, change, user, req, { reload: false });
+      results.push({ staff: who, result: 'saved' });
+    } catch (error) {
+      // The branch itself cannot change: stop and say so (nothing else would work either).
+      if (!(error instanceof HttpError) || error.code === 'BRANCH_NOT_OPERATING') throw error;
+      results.push({ staff: who, result: 'failed', message: error.details ? Object.values(error.details)[0] : error.message });
+    }
+  }
+  const count = (r) => results.filter((x) => x.result === r).length;
+  return { saved: count('saved'), skipped: count('skipped'), failed: count('failed'), results };
 }
 
 /** Cancels the scheduled assignment set (404 when there is none). */

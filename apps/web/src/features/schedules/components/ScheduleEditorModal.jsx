@@ -1,15 +1,22 @@
 import { useEffect, useId, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { Button, Checkbox, FieldError, Input, Modal, Switch } from '../../../components/ui';
+import { Button, Checkbox, FieldError, Input, Modal, Select, Switch } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
 import { saveSchedule } from '../data/scheduleApi.js';
 import {
+  applyShiftTemplate,
+  DAY_PRESETS,
   effectiveDateHint,
   effectiveTimeHint,
   effectiveTimeProblem,
-  emptyShift,
   MAX_SHIFTS,
   nextQuarter,
+  nextShift,
+  SHIFT_TEMPLATES,
+  shiftNameOptions,
+  presetState,
+  rowClockTimes,
+  togglePreset,
   toRequestShifts,
   toRow,
   validateSchedule,
@@ -44,7 +51,7 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
     setEffectiveFrom(start?.date ?? page.earliestEffectiveDate);
     setEffectiveTime(start?.time ?? '');
     setCheckOutEnabled(base?.checkOutEnabled ?? false);
-    setRows(base ? base.shifts.map(toRow) : [emptyShift()]);
+    setRows(base ? base.shifts.map(toRow) : [nextShift([])]);
     setErrors({});
     setFormError('');
     setSaving(false);
@@ -59,6 +66,8 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
     const row = rows[index];
     setRow(index, 'days', row.days.includes(day) ? row.days.filter((d) => d !== day) : [...row.days, day]);
   };
+  const ALL_DAYS = WEEKDAYS.map((d) => d.value);
+  const pickPreset = (index, days) => setRow(index, 'days', togglePreset(rows[index].days, days, ALL_DAYS));
   // Removing a row shifts the indexes of later errors: clear the shift errors and validate again on save.
   const removeRow = (index) => {
     setRows((current) => current.filter((_, i) => i !== index));
@@ -196,7 +205,19 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
               // Rows have no stable id before saving; the index is the shift's identity in the form.
               <div key={index} className="flex flex-col gap-3 rounded-md border border-border p-4">
                 <div className="flex items-start gap-3">
-                  <Input label="Shift name" required {...shiftField(index, 'name')} fieldClassName="flex-1" />
+                  <Select
+                    label="Shift"
+                    required
+                    fieldClassName="flex-1"
+                    options={[...(row.name ? [] : [{ value: '', label: 'Choose a shift' }]), ...shiftNameOptions(row).map((n) => ({ value: n, label: n }))]}
+                    {...shiftField(index, 'name')}
+                    hint={row.savedName && row.name === row.savedName && !SHIFT_TEMPLATES.some((t) => t.name === row.name) ? 'Saved earlier under this name; choose one of the shifts to rename it.' : 'Choosing a shift fills in its usual times; you can change them.'}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setRows((current) => current.map((r, i) => (i === index ? applyShiftTemplate(r, value) : r)));
+                      ['name', 'start', 'end'].forEach((f) => clear(`shifts.${index}.${f}`));
+                    }}
+                  />
                   <Button
                     variant="ghost"
                     size="sm"
@@ -214,6 +235,11 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
                     Working days
                   </span>
                   <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    {DAY_PRESETS.map((p) => (
+                      <Checkbox key={p.id} label={p.label} {...presetState(row.days, p.days)} onChange={() => pickPreset(index, p.days)} />
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
                     {WEEKDAYS.map((day) => (
                       <Checkbox key={day.value} label={day.label} checked={row.days.includes(day.value)} onChange={() => toggleDay(index, day.value)} />
                     ))}
@@ -223,15 +249,38 @@ export function ScheduleEditorModal({ page, open, onClose, onSaved }) {
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Input label="Start" type="time" required {...shiftField(index, 'start')} />
                   <Input label="End" type="time" required {...shiftField(index, 'end')} />
-                  <Input label="Grace (min)" type="number" min={0} inputMode="numeric" required {...shiftField(index, 'graceMinutes')} />
-                  <Input label="Absent after (min)" type="number" min={0} inputMode="numeric" required {...shiftField(index, 'absenceCutoffMinutes')} />
+                  <Input
+                    label="Grace (min)"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    required
+                    hint={rowClockTimes(row).late ? `Late after ${rowClockTimes(row).late}` : 'Minutes after the start'}
+                    {...shiftField(index, 'graceMinutes')}
+                  />
+                  <Input
+                    label="Absent after (min)"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    required
+                    hint={rowClockTimes(row).absent ? `Absent if no check-in by ${rowClockTimes(row).absent}` : 'Minutes after the start'}
+                    {...shiftField(index, 'absenceCutoffMinutes')}
+                  />
                 </div>
                 {errors[`shifts.${index}`] && <FieldError>{errors[`shifts.${index}`]}</FieldError>}
               </div>
             ))}
             {errors.shifts && <FieldError>{errors.shifts}</FieldError>}
             <div>
-              <Button variant="outline" size="sm" leftIcon={Plus} onClick={() => setRows((current) => [...current, emptyShift()])} disabled={rows.length >= MAX_SHIFTS}>
+              <Button
+                variant="outline"
+                size="sm"
+                leftIcon={Plus}
+                onClick={() => setRows((current) => [...current, nextShift(current)])}
+                disabled={rows.length >= MAX_SHIFTS}
+                unavailableReason={!nextShift(rows) ? 'Every shift is already in this schedule.' : undefined}
+              >
                 Add Shift
               </Button>
             </div>

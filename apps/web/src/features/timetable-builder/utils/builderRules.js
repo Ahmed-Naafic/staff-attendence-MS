@@ -19,16 +19,25 @@ export const FIX_LINKS = {
 };
 
 /**
- * The link of one readiness item: { to, label } (a page) or { tab, label } (a builder tab), or null.
- * A class's lessons per week live on its class page, which only the School Owner can change.
+ * Every way to fix one readiness item, as its message lists them: [{ to, label } (a page) or
+ * { tab, label } (a builder tab)]. A class's lessons per week are on its class page (the link opens
+ * its Subjects with the editor open; the list is the class's in every branch); a class with more
+ * lessons than periods can also get school days (Academic Calendar) or periods (Bell Schedules),
+ * which Managers can change for their branch.
  */
-export function fixLink(item, role) {
+export function fixLinks(item, role) {
   if (item.fix === 'class-subjects' && item.classId) {
     const name = item.className ?? 'the class';
-    return { to: `/classes/${item.classId}`, label: role === 'OWNER' ? `Edit ${name}’s subjects` : `View ${name}’s subjects (School Owner edits)` };
+    const links = [{ to: `/classes/${item.classId}?subjects=edit`, label: `Edit ${name}’s lessons per week` }];
+    if (item.code === 'SECTION_OVERLOAD') links.push({ to: '/academic-calendar', label: 'Add school days' }, { to: '/bell-schedules', label: 'Add bell periods' });
+    if (item.code === 'SECTION_UNDERFILLED') links.push({ to: '/bell-schedules', label: 'Shorten the bell schedule' });
+    return links;
   }
-  return FIX_LINKS[item.fix] ?? null;
+  return FIX_LINKS[item.fix] ? [FIX_LINKS[item.fix]] : [];
 }
+
+/** The first way to fix a readiness item, or null. */
+export const fixLink = (item, role) => fixLinks(item, role)[0] ?? null;
 
 export const lessonAt = (lessons, weekday, period) => lessons.find((l) => l.weekday === weekday && l.period === period) ?? null;
 
@@ -129,3 +138,78 @@ export function upcomingTimetable(view) {
 }
 
 export const unplacedTotal = (draft) => (draft?.unplaced ?? []).reduce((n, u) => n + u.count, 0);
+
+/**
+ * The fixes a readiness item can get right here, in the builder (buttons that open the forms):
+ * 'bell-choice' (which bell schedule the class uses), 'bell-times' (its lesson periods), 'lessons'
+ * (the class's subjects and lessons per week), 'school-days', 'assign' (a teacher for a subject).
+ * Who may use each is checked when it opens (and again by the API).
+ */
+export function fixActions(item) {
+  switch (item.code) {
+    case 'SECTION_OVERLOAD':
+      return ['bell-choice', 'bell-times', 'lessons', 'school-days'];
+    case 'SECTION_UNDERFILLED':
+      return ['bell-choice', 'bell-times', 'lessons'];
+    case 'SECTION_NO_BELL':
+    case 'BELL_INACTIVE':
+      return ['bell-choice'];
+    case 'BELL_NO_TIMES':
+    case 'BELL_NO_LESSONS':
+      return item.sectionId ? ['bell-times', 'bell-choice'] : [];
+    case 'CLASS_NO_SUBJECTS':
+    case 'SUBJECT_NO_WEEKLY':
+      return ['lessons'];
+    case 'SUBJECT_NO_TEACHER':
+      return item.sectionId ? ['assign'] : [];
+    case 'NO_WEEKDAYS':
+      return ['school-days'];
+    default:
+      return [];
+  }
+}
+
+/** Lesson periods a week a bell schedule gives on the school days (bell: { lessonsByDay }). */
+export const bellPeriods = (bell, weekdays = []) => weekdays.reduce((n, d) => n + (bell?.lessonsByDay?.[d] ?? 0), 0);
+
+// ---- the Timetable page's grids ------------------------------------------------------------------
+
+/** A class's lesson periods a week in this branch, from its sections (builder.sections): { min, max } or null. */
+export function classPeriods(sections, classId) {
+  const list = (sections ?? []).filter((s) => s.class.id === classId && !s.excluded && s.lessonPeriods > 0).map((s) => s.lessonPeriods);
+  return list.length ? { min: Math.min(...list), max: Math.max(...list) } : null;
+}
+
+/** "35" or "30–35". */
+export const periodsText = (p) => (!p ? '—' : p.min === p.max ? String(p.min) : `${p.min}–${p.max}`);
+
+/** How a class's lessons a week compare with its periods: 'fit' | 'over' | 'under' | 'unknown', and by how many. */
+export function lessonsFit(total, periods) {
+  if (!periods) return { state: 'unknown', by: 0 };
+  if (total > periods.max) return { state: 'over', by: total - periods.max };
+  if (total < periods.min) return { state: 'under', by: periods.min - total };
+  return { state: 'fit', by: 0 };
+}
+
+/**
+ * The lessons grid's row → the class's list to save: cells { subjectId: '5' | '' } with `listed`
+ * (subjects already on the list). A typed number puts the subject on the list; an empty cell keeps
+ * a listed subject (without lessons per week) and leaves an unlisted one off. → [{ subject, weeklyLessons }]
+ * or { error } for a number outside 1–40.
+ */
+export function lessonsRowItems(cells, listed) {
+  const items = [];
+  for (const [subject, raw] of Object.entries(cells)) {
+    const text = String(raw ?? '').trim();
+    if (!text) {
+      if (listed.includes(subject)) items.push({ subject, weeklyLessons: null });
+      continue;
+    }
+    const n = /^\d+$/.test(text) ? Number(text) : NaN;
+    if (!(n >= 1 && n <= 40)) return { error: 'Lessons per week: a whole number from 1 to 40.' };
+    items.push({ subject, weeklyLessons: n });
+  }
+  return items;
+}
+
+export const rowTotal = (cells) => Object.values(cells).reduce((n, v) => n + (/^\d+$/.test(String(v ?? '').trim()) ? Number(v) : 0), 0);

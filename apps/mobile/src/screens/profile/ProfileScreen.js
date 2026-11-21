@@ -66,7 +66,7 @@ export default function ProfileScreen({ navigation }) {
                   testID="upcoming-transfer"
                   icon="swap-horizontal"
                   label="Moving to"
-                  value={`${profile.upcomingTransfer.branch.code} · ${profile.upcomingTransfer.branch.name} from ${profile.upcomingTransfer.effectiveFrom}`}
+                  value={`${profile.upcomingTransfer.branch.code} · ${profile.upcomingTransfer.branch.name} from ${profile.upcomingTransfer.effectiveFrom}${profile.upcomingTransfer.effectiveTime && profile.upcomingTransfer.effectiveTime !== '00:00' ? ` ${profile.upcomingTransfer.effectiveTime}` : ''}`}
                 />
               </>
             ) : null}
@@ -80,6 +80,12 @@ export default function ProfileScreen({ navigation }) {
             ) : null}
           </Card>
         ) : null}
+
+        <Card style={styles.list}>
+          <ListRow testID="profile-teaching" icon="people-outline" label="My classes & subjects" onPress={() => navigation.navigate('Teaching')} />
+          <Divider />
+          <ListRow testID="profile-timetable" icon="calendar-outline" label="My week" onPress={() => navigation.navigate('Timetable')} />
+        </Card>
 
         <Card style={styles.list}>
           <ListRow testID="open-sync" icon="sync" label="Sync status" value={pendingCount ? `${pendingCount} pending` : 'All uploaded'} onPress={() => navigation.navigate('Sync')} />

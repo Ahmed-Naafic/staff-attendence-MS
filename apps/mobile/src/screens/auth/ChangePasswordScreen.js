@@ -1,7 +1,7 @@
 /*
  * 3. First sign-in: replace the temporary password (POST /api/auth/password). Nothing else is
  * available until this is done (the API enforces it too). Requirements are the approved rule
- * (backend/src/features/auth/password.js): 12–128 characters, not only spaces, different from the
+ * (backend/src/features/auth/password.js): 6–128 characters, not only spaces, different from the
  * temporary password. The reference image's 8-character checklist is not the approved rule.
  */
 import { useState } from 'react';

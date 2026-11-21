@@ -28,8 +28,8 @@ import { useSession } from '../../auth';
 import { loadOwnerBranches } from '../../classes/data/classesApi.js';
 import { WEEK, WEEKDAY_SHORT } from '../../academic-calendar/utils/calendarRules.js';
 import { BellScheduleModal, BellTimesModal } from '../components/BellModals.jsx';
-import { cancelBellTimes, loadBellSchedule, loadBellSchedules, setBellScheduleActive } from '../data/timetableApi.js';
-import { summaryText, VERSION_STATES } from '../utils/timetableRules.js';
+import { cancelBellTimes, loadBellSchedule, loadBellSchedules, loadSchoolWeek, setBellScheduleActive } from '../data/timetableApi.js';
+import { bellWeekWarnings, summaryText, VERSION_STATES } from '../utils/timetableRules.js';
 
 /** One version's lessons and breaks, by weekday. */
 function TimesTable({ version }) {
@@ -96,6 +96,9 @@ export default function BellSchedulesPage() {
   const school = useApiData(() => (owner ? loadOwnerSchoolStatus() : Promise.resolve(null)), `school|${version}`);
   const unavailable = school.data === 'suspended' ? 'Your school is suspended.' : undefined;
   const bell = detail.data?.bellSchedule.id === selectedId ? detail.data.bellSchedule : null;
+  // The shown schedule's times against today's school week (school days and staff shifts).
+  const week = useApiData(() => (bell ? loadSchoolWeek(role, { branch: bell.branch?.id }) : Promise.resolve(null)), `week|${role}|${bell?.id ?? ''}|${bell?.branch?.id ?? ''}|${version}`);
+  const weekWarnings = bell?.current ? bellWeekWarnings(bell.current.periods, week.data) : [];
   const done = (message, extra = []) => {
     setDialog(null);
     setNotice(message);
@@ -235,6 +238,15 @@ export default function BellSchedulesPage() {
           </div>
           {!bell.versions.length && <Alert variant="info">No times yet. Set the lessons and breaks before sections use this schedule.</Alert>}
           {bell.current && <TimesTable version={bell.current} />}
+          {weekWarnings.length > 0 && (
+            <Alert variant="warning" title="These times do not fit the school week">
+              <ul className="list-disc pl-5">
+                {weekWarnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
+            </Alert>
+          )}
           {bell.versions.length > 0 && (
             <div role="region" aria-label="Changes of times" tabIndex={0} className="overflow-x-auto">
               <Table caption={`Changes of ${bell.name}'s times`}>
@@ -276,9 +288,12 @@ export default function BellSchedulesPage() {
         branches={branches.data}
         open={dialog?.type === 'create' || dialog?.type === 'edit'}
         onClose={() => setDialog(null)}
-        onSaved={(b) => {
-          done(dialog?.type === 'create' ? `${b.name} was added. Set its times next.` : `${b.name} was saved.`);
-          if (dialog?.type === 'create') select(b.id);
+        onSaved={(b, seed) => {
+          const created = dialog?.type === 'create';
+          done(created ? `${b.name} was added. ${seed ? 'Check the times filled in from the shift, then save them.' : 'Set its times next.'}` : `${b.name} was saved.`);
+          if (created) select(b.id);
+          // Started from a staff shift: open its times straight away, filled in from the shift.
+          if (created && seed) setDialog({ type: 'times', seed });
         }}
       />
       {dialog?.type === 'times' && bell && (
@@ -286,6 +301,7 @@ export default function BellSchedulesPage() {
           role={role}
           bell={bell}
           start={[...bell.versions].reverse().find((v) => v.state !== 'cancelled' && v.state !== 'past') ?? bell.current}
+          seed={dialog.seed}
           earliest={detail.data.firstEditableDate}
           open
           onClose={() => setDialog(null)}

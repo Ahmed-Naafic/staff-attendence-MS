@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { canManageEntry, daysText, earliestWeekdaysDate, entryActions, monthEnd, monthWeeks, shiftMonth, validateEntry, validateWeekdays } from './calendarRules.js';
+import { canManageEntry, daysText, earliestWeekdaysDate, entryActions, monthEnd, monthWeeks, shiftMonth, staffDayOptions, validateEntry, validateWeekdays } from './calendarRules.js';
 
 const year = { yearStart: '2026-09-01', yearEnd: '2027-06-30' };
 
@@ -14,6 +14,11 @@ describe('school days', () => {
     assert.equal(earliestWeekdaysDate({ today: '2026-10-01', yearStart: '2026-09-01', appliesToday: false }), '2026-10-01');
     assert.equal(earliestWeekdaysDate({ today: '2026-10-01', yearStart: '2026-09-01', appliesToday: true }), '2026-10-02');
     assert.equal(earliestWeekdaysDate({ today: '2026-08-01', yearStart: '2026-09-01', appliesToday: false }), '2026-09-01');
+    // Platform Settings: school days follow an effective delay of 3 days (only once school days apply).
+    assert.equal(earliestWeekdaysDate({ today: '2026-10-01', yearStart: '2026-09-01', appliesToday: true, delayDays: 3 }), '2026-10-04');
+    assert.equal(earliestWeekdaysDate({ today: '2026-10-01', yearStart: '2026-09-01', appliesToday: false, delayDays: 3 }), '2026-10-01');
+    // Timed changes on: today, even when school days already apply.
+    assert.equal(earliestWeekdaysDate({ today: '2026-10-01', yearStart: '2026-09-01', appliesToday: true, delayDays: 0 }), '2026-10-01');
   });
 
   test('a form needs days (unless following the school) and a date from the earliest, within the year', () => {
@@ -69,4 +74,15 @@ describe('month view', () => {
     assert.equal(shiftMonth('2026-01', -1), '2025-12');
     assert.equal(monthEnd('2028-02'), '2028-02-29');
   });
+});
+
+test('staff working days to copy into school days: one choice per distinct set, a branch’s shifts together', () => {
+  const s = (branch, days) => ({ branch: { id: branch, name: branch }, key: `${branch}${days}`, name: 'Shift', days, start: '07:00', end: '13:00' });
+  const week = { shifts: [s('Main', ['SAT', 'SUN']), s('Main', ['MON', 'TUE', 'WED']), s('North', ['SAT', 'SUN', 'MON', 'TUE', 'WED']), s('East', ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU'])] };
+  assert.deepEqual(staffDayOptions(week), [
+    { days: ['SAT', 'SUN', 'MON', 'TUE', 'WED'], label: 'Sat, Sun, Mon, Tue, Wed (staff at Main, North)' },
+    { days: ['SAT', 'SUN', 'MON', 'TUE', 'WED', 'THU'], label: 'Sat, Sun, Mon, Tue, Wed, Thu (staff at East)' },
+  ]);
+  assert.deepEqual(staffDayOptions({ shifts: [] }), []);
+  assert.deepEqual(staffDayOptions(null), []);
 });

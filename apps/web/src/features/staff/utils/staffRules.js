@@ -122,3 +122,12 @@ export function validateAssignments({ effectiveFrom, picked, schedule }, { earli
   else if (!schedule && toRequestAssignments(picked).length) errors.effectiveFrom = 'Your branch has no schedule in effect on that date. Set the schedule first.';
   return errors;
 }
+
+/**
+ * Who gets the shifts in "Assign shifts to many staff": every active staff member (`who` 'all') or
+ * the `chosen` ids, without those who already have shifts when `onlyUnassigned`. `staff`: the
+ * form's list [{ id, hasShifts }]. Mirrors the server, which decides.
+ */
+export function bulkTargets(staff, { who, chosen = [], onlyUnassigned }) {
+  return staff.filter((s) => (who === 'all' || chosen.includes(s.id)) && !(onlyUnassigned && s.hasShifts));
+}

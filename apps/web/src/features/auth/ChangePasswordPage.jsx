@@ -4,7 +4,7 @@ import { ThemeToggle } from '../../components/layout';
 import { Alert, Button, Card, Input } from '../../components/ui';
 import { createSingleFlight } from '../../lib/singleFlight.js';
 import { useBranding } from '../branding';
-import { validatePasswordChange } from './passwordRules.js';
+import { PASSWORD_MIN, validatePasswordChange } from './passwordRules.js';
 import { useSession } from './SessionProvider.jsx';
 
 const EMPTY = { currentPassword: '', newPassword: '', confirmPassword: '' };
@@ -83,7 +83,7 @@ export default function ChangePasswordPage() {
             }}
           >
             <Input label="Temporary password" type="password" autoComplete="current-password" required {...field('currentPassword')} />
-            <Input label="New password" type="password" autoComplete="new-password" required hint="At least 12 characters." {...field('newPassword')} />
+            <Input label="New password" type="password" autoComplete="new-password" required hint={`At least ${PASSWORD_MIN} characters.`} {...field('newPassword')} />
             <Input label="Confirm new password" type="password" autoComplete="new-password" required {...field('confirmPassword')} />
             <Button type="submit" loading={saving} className="mt-2 w-full">
               Change Password

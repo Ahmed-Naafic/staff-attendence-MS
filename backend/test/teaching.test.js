@@ -207,6 +207,16 @@ describe('subjects (School Owner manages, Managers read)', () => {
     assert.equal(bad.body.code, 'SUBJECT_UNAVAILABLE');
     assert.equal((await owner(`/api/owner/classes/${classes.G1.id}/subjects`, { method: 'PUT', body: { subjects: [{ subject: subjects.math.id, weeklyLessons: 99 }] } })).status, 400);
     assert.equal((await manager1(`/api/manager/classes/${classes.G1.id}/subjects`)).body.items.length, 2);
+    // Managers change lessons per week too: one list for the class in every branch, audited with their branch.
+    const before = (await manager1(`/api/manager/classes/${classes.G1.id}/subjects`)).body.items.map((i) => ({ subject: i.subject.id, weeklyLessons: i.weeklyLessons }));
+    const more = before.map((i, k) => (k === 0 ? { ...i, weeklyLessons: (i.weeklyLessons ?? 0) + 1 } : i));
+    const byManager = await manager1(`/api/manager/classes/${classes.G1.id}/subjects`, { method: 'PUT', body: { subjects: more } });
+    assert.equal(byManager.status, 200, JSON.stringify(byManager.body));
+    assert.equal(byManager.body.items.find((i) => i.subject.id === more[0].subject).weeklyLessons, more[0].weeklyLessons);
+    const event = await prisma.auditEvent.findFirst({ where: { action: 'CLASS_SUBJECTS_UPDATED', targetId: classes.G1.id }, orderBy: { occurredAt: 'desc' } });
+    assert.match(event.description, /by the Manager of .* \(the list applies to every branch\)/);
+    assert.equal((await owner(`/api/owner/classes/${classes.G1.id}/subjects`)).body.items.find((i) => i.subject.id === more[0].subject).weeklyLessons, more[0].weeklyLessons, 'the School Owner sees the same list');
+    assert.equal((await manager1(`/api/manager/classes/${classes.G1.id}/subjects`, { method: 'PUT', body: { subjects: before } })).status, 200);
     assert.equal((await owner(`/api/owner/classes/${classes.G2.id}/subjects`)).body.open, true);
   });
 });

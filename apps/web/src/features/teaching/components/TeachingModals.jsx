@@ -52,10 +52,11 @@ export function SubjectModal({ subject, open, onClose, onSaved }) {
 }
 
 /**
- * The subjects a class studies, with lessons per week (School Owner). No subject chosen: the class is
- * open to every active subject. Subjects still taught in the class cannot be removed (the API says which).
+ * The subjects a class studies, with lessons per week (School Owner or Manager; one list for the
+ * class in every branch). No subject chosen: the class is open to every active subject. Subjects
+ * still taught in the class cannot be removed (the API says which).
  */
-export function CurriculumModal({ cls, curriculum, subjects, open, onClose, onSaved }) {
+export function CurriculumModal({ role = 'OWNER', cls, curriculum, subjects, open, onClose, onSaved }) {
   const formId = useId();
   const initial = Object.fromEntries((curriculum?.items ?? []).map((i) => [i.subject.id, i.weeklyLessons == null ? '' : String(i.weeklyLessons)]));
   const form = useDialogForm(open, initial, failure);
@@ -70,7 +71,7 @@ export function CurriculumModal({ cls, curriculum, subjects, open, onClose, onSa
       if (Number.isNaN(n)) problems[subject] = 'Lessons per week: a whole number from 1 to 40, or empty.';
       return { subject, weeklyLessons: Number.isNaN(n) ? null : n };
     });
-    return form.submit(problems, [], () => saveCurriculum(cls.id, items), onSaved);
+    return form.submit(problems, [], () => saveCurriculum(cls.id, items, role), onSaved);
   };
   const total = present.reduce((sum, [, v]) => sum + (weeklyLessons(v) || 0), 0);
   return (
@@ -78,7 +79,7 @@ export function CurriculumModal({ cls, curriculum, subjects, open, onClose, onSa
       open={open}
       onClose={onClose}
       title={`Subjects of ${cls?.name ?? 'the class'}`}
-      description="Used every academic year. Leave everything unticked to allow every active subject."
+      description={`Used every academic year${role === 'MANAGER' ? ', in every branch of the school (not only yours)' : ''}. Leave everything unticked to allow every active subject.`}
       size="lg"
       loading={form.saving}
       error={form.formError}

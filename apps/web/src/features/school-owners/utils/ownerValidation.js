@@ -4,7 +4,10 @@
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^\+?\d(?:[ -]?\d)+$/;
-export const MIN_PASSWORD_LENGTH = 12;
+import { PASSWORD_MIN } from '../../auth/passwordRules.js';
+
+/** The shortest password: the one rule in auth/passwordRules.js. */
+export const MIN_PASSWORD_LENGTH = PASSWORD_MIN;
 const MAX_PASSWORD_LENGTH = 128;
 
 const LABELS = { name: 'Full name', email: 'Email', phone: 'Phone' };

@@ -36,3 +36,13 @@ export const resetStaffPassword = async (id, password) => (await apiRequest(path
 /** change: { effectiveFrom: 'YYYY-MM-DD', shifts: [{ shiftKey, days }] } */
 export const saveAssignments = async (id, change) => (await apiRequest(path(id, '/assignments'), { method: 'POST', body: change })).staff;
 export const cancelScheduledAssignments = async (id) => (await apiRequest(path(id, '/assignments/scheduled'), { method: 'DELETE' })).staff;
+
+/** Sample staff (test systems only): { enabled, total, teachers, existing }. */
+export const loadSampleStaffStatus = () => apiRequest('/manager/staff/sample');
+/** Adds the branch's missing sample staff with a temporary password → { created: [staff], skipped, status }. */
+export const addSampleStaff = (password) => apiRequest('/manager/staff/sample', { method: 'POST', body: { password } });
+
+/** Assign shifts to many staff: { timeZone, today, earliestEffectiveDate, latestEffectiveDate, timedChanges, now, branchShifts, staff: [{ id, name, staffId, jobTitle, hasShifts }] }. */
+export const loadBulkAssignmentContext = () => apiRequest('/manager/staff/assignments/bulk');
+/** { staff: 'all' | [ids], onlyUnassigned, effectiveFrom, effectiveTime?, shifts } → { saved, skipped, failed, results }. */
+export const saveAssignmentsForMany = (body) => apiRequest('/manager/staff/assignments/bulk', { method: 'POST', body });

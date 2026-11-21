@@ -35,6 +35,9 @@ export const env = {
   // Database and role used to check a staged restore (defaults: neondb and DIRECT_URL's user).
   neonDatabaseName: process.env.NEON_DATABASE_NAME || 'neondb',
   neonRoleName: process.env.NEON_ROLE_NAME || undefined,
+  // Sample data (e.g. Manager → Staff → Add Sample Staff): only on a test system — the Neon dev
+  // branch (EDUTRACK_DB_BRANCH=dev), or where SAMPLE_DATA=on is set. Off in production by default.
+  sampleData: process.env.SAMPLE_DATA === 'on' || process.env.EDUTRACK_DB_BRANCH === 'dev',
 };
 
 export const isProduction = env.nodeEnv === 'production';

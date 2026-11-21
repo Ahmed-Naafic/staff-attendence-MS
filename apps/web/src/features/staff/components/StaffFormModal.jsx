@@ -1,7 +1,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Button, Input, Modal, Select } from '../../../components/ui';
 import { createSingleFlight } from '../../../lib/singleFlight.js';
-import { passwordProblem } from '../../auth/passwordRules.js';
+import { PASSWORD_MIN, passwordProblem } from '../../auth/passwordRules.js';
 import { createStaff, updateStaff } from '../data/staffApi.js';
 import { cleanStaffValues, JOB_TITLES, jobTitleFields, jobTitleFrom, OTHER_JOB_TITLE, validateStaff } from '../utils/staffRules.js';
 
@@ -122,7 +122,7 @@ export function StaffFormModal({ mode, staff, open, onClose, onSaved, jobTitle, 
             type="password"
             required
             autoComplete="new-password"
-            hint="At least 12 characters. Give it to the staff member yourself; it is not shown again. They must change it at first sign-in."
+            hint={`At least ${PASSWORD_MIN} characters. Give it to the staff member yourself; it is not shown again. They must change it at first sign-in.`}
             {...field('password')}
             fieldClassName="sm:col-span-2"
           />

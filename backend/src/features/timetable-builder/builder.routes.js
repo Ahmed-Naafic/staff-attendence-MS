@@ -9,6 +9,7 @@ import {
   listTeachers,
   publishDraft,
   readiness,
+  timetableProgress,
   removeFixedLesson,
   saveSetup,
   saveTeacherLimits,
@@ -30,6 +31,10 @@ export function mountTimetableBuilderRoutes(router, scopeOf, role) {
   });
   router.put(`${base}/setup`, async (req, res) => {
     res.json(await saveSetup(scopeOf(req), readSetup(jsonBody(req), { role }), req.user, req));
+  });
+  // Where the branch and year stand, step by step (School Schedule → Timetable).
+  router.get(`${base}/progress`, async (req, res) => {
+    res.json(await timetableProgress(scopeOf(req), readBuilderQuery(req.query, { role })));
   });
   router.get(`${base}/readiness`, async (req, res) => {
     res.json(await readiness(scopeOf(req), readBuilderQuery(req.query, { role })));

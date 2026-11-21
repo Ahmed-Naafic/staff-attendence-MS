@@ -114,7 +114,11 @@ async function bringForward(transferId, effectiveAt) {
 }
 const lastMinutes = () => localMoment(new Date(), zone).minutes >= 1436;
 
+let savedTimedChanges;
 before(async () => {
+  // These tests schedule changes by date only: timed changes off for the run, restored after.
+  savedTimedChanges = (await prisma.platformSettings.findUnique({ where: { id: 'platform' }, select: { timedChanges: true } }))?.timedChanges;
+  if (savedTimedChanges) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: false } });
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -140,6 +144,7 @@ before(async () => {
 });
 
 after(async () => {
+  if (savedTimedChanges) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: savedTimedChanges } });
   const schoolIds = Object.values(schools).map((s) => s.id);
   const branchIds = Object.values(branches).map((b) => b.id);
   const userIds = (await prisma.user.findMany({ where: { email: { endsWith: `-${lower}@test.edutrack.example` } }, select: { id: true } })).map((u) => u.id);
@@ -247,8 +252,11 @@ test('a transfer is scheduled for tomorrow: the staff member stays at the old br
   ]);
   const detail = (await as(people.OA, `/api/owner/staff/${people.S1.id}`)).body.staff;
   assert.equal(detail.scheduledTransfer.toBranch.code, branches.A2.code);
+  // The owner's list shows when it takes effect, with the time (00:00 here: no timed changes).
+  const listed = (await as(people.OA, '/api/owner/staff')).body.items.find((x) => x.id === detail.id)?.scheduledTransfer;
+  if (listed) assert.deepEqual([listed.effectiveFrom, listed.effectiveTime], [addDays(today, 1), '00:00']);
   assert.equal(detail.transfers.length, 1);
-  assert.deepEqual((await as(people.S1, '/api/attendance/profile')).body.upcomingTransfer, { effectiveFrom: addDays(today, 1), branch: { code: branches.A2.code, name: branches.A2.name } });
+  assert.deepEqual((await as(people.S1, '/api/attendance/profile')).body.upcomingTransfer, { effectiveFrom: addDays(today, 1), effectiveTime: '00:00', branch: { code: branches.A2.code, name: branches.A2.name } });
 });
 
 test('one scheduled transfer per staff member (409); simultaneous requests: exactly one succeeds', async () => {
@@ -263,7 +271,7 @@ test('one scheduled transfer per staff member (409); simultaneous requests: exac
 
 test('before the transfer: the old Manager sees only the date; assignments there must end before it; an open check-in can still be checked out that day (T4)', async (t) => {
   const detail = (await as(people.MA1, `/api/manager/staff/${people.S1.id}`)).body.staff;
-  assert.deepEqual(detail.transfer.scheduledOut, { effectiveFrom: addDays(today, 1) });
+  assert.deepEqual(detail.transfer.scheduledOut, { effectiveFrom: addDays(today, 1), effectiveTime: '00:00' });
   assert.ok(!JSON.stringify(detail).includes(branches.A2.code), 'the destination branch is not named to the old Manager');
   const late = await as(people.MA1, `/api/manager/staff/${people.S1.id}/assignments`, { method: 'POST', body: { effectiveFrom: addDays(today, 1), shifts: [{ shiftKey: branches.A1.keys.Early, days: ALL }] } });
   assert.equal(late.status, 400);
@@ -384,7 +392,7 @@ test('Manager access after the transfer (T8, T12): the old Manager loses the sta
   assert.ok(oldRecords.body.items.filter((r) => r.staff.id === people.S1.id).length >= 2, 'the old branch keeps its records');
 
   const detail = (await as(people.MA2, `/api/manager/staff/${people.S1.id}`)).body.staff;
-  assert.deepEqual(detail.transfer, { scheduledOut: null, history: [{ effectiveFrom: today, direction: 'in' }] });
+  assert.deepEqual(detail.transfer, { scheduledOut: null, history: [{ effectiveFrom: today, effectiveTime: '00:00', direction: 'in' }] });
   assert.ok(!JSON.stringify(detail).includes(branches.A1.name), 'the old branch is not named to the new Manager');
   assert.deepEqual(detail.assignments.current.shifts.map((s) => s.name), ['Day']);
   const sets = (await as(people.MA2, `/api/manager/staff/${people.S1.id}/assignments`)).body.items;

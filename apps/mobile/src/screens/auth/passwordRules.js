@@ -1,8 +1,8 @@
 // Password rules shown immediately, mirroring the API (backend/src/features/auth/password.js) and
-// the web app (apps/web/src/features/auth/passwordRules.js): 12–128 characters, not only spaces,
+// the web app (apps/web/src/features/auth/passwordRules.js): 6–128 characters, not only spaces,
 // used exactly as typed. The API checks again and has the final say.
 
-export const PASSWORD_MIN = 12;
+export const PASSWORD_MIN = 6;
 export const PASSWORD_MAX = 128;
 
 export function passwordProblem(password) {

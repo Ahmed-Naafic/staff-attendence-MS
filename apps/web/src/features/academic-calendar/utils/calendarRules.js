@@ -53,8 +53,9 @@ export function validateWeekdays({ days, effectiveFrom, followsSchool }, { earli
  * The earliest date new school days can apply from: tomorrow when days already apply today (at this
  * level), else today; never before the year starts.
  */
-export function earliestWeekdaysDate({ today, yearStart, appliesToday }) {
-  const earliest = appliesToday ? addDays(today, 1) : today;
+export function earliestWeekdaysDate({ today, yearStart, appliesToday, delayDays = 1 }) {
+  // delayDays: 0 with timed changes (today), else 1 (tomorrow) or the effective delay (Platform Settings).
+  const earliest = appliesToday ? addDays(today, Math.max(0, delayDays)) : today;
   return earliest < yearStart ? yearStart : earliest;
 }
 
@@ -129,3 +130,27 @@ export const monthEnd = (yearMonth) => {
   const [y, m] = yearMonth.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
 };
+
+/**
+ * Ways to copy the staff working days (Staff Schedule shifts of `week` from GET …/school-week) into
+ * school days: one per distinct set of days, a branch's shifts together → [{ days, label }].
+ */
+export function staffDayOptions(week) {
+  const byBranch = new Map();
+  for (const s of week?.shifts ?? []) {
+    const key = s.branch?.id ?? '';
+    const entry = byBranch.get(key) ?? { name: s.branch?.name ?? '', days: new Set() };
+    s.days.forEach((d) => entry.days.add(d));
+    byBranch.set(key, entry);
+  }
+  const options = new Map();
+  for (const { name, days } of byBranch.values()) {
+    const list = WEEK.filter((d) => days.has(d));
+    if (!list.length) continue;
+    const key = list.join(',');
+    const o = options.get(key) ?? { days: list, branches: [] };
+    if (name) o.branches.push(name);
+    options.set(key, o);
+  }
+  return [...options.values()].map((o) => ({ days: o.days, label: `${daysText(o.days)}${o.branches.length ? ` (staff at ${o.branches.join(', ')})` : ''}` }));
+}

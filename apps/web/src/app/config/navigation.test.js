@@ -49,3 +49,28 @@ test('navigation: inside a menu only the closest page lights up (Student Reports
   assert.deepEqual(ended('/student-attendance/sessions/1'), []);
   assert.deepEqual(ended('/students/5'), []);
 });
+
+test('Timetable is a menu item of its own, right after School Schedule (School Owner and Manager)', () => {
+  for (const role of ['OWNER', 'MANAGER']) {
+    const top = navigationByRole[role].flatMap((s) => s.items);
+    const at = top.findIndex((i) => i.id === 'school-schedule');
+    assert.equal(top[at + 1]?.to, '/timetable', role);
+  }
+});
+
+test('the timetable steps: every step is a page of its own, in the order of the guide', async () => {
+  const { TIMETABLE_STEPS, stepOf } = await import('../../features/timetable-builder/utils/timetableSteps.js');
+  const { sharedSearch, BUILDER_TAB_STEP } = await import('../../features/timetable-builder/utils/timetableSteps.js');
+  // The same keys, in the same order, as the server's progress (builder.service.js PROGRESS_STEPS).
+  assert.deepEqual(TIMETABLE_STEPS.map((s) => s.key), ['year', 'school-days', 'bell-times', 'subjects', 'classes', 'lessons', 'teachers', 'assign', 'limits', 'rules', 'fixed', 'readiness', 'generate', 'publish', 'view']);
+  assert.deepEqual([...new Set(TIMETABLE_STEPS.map((s) => s.group))], ['Calendar', 'Curriculum', 'Staff', 'Build', 'Result']);
+  for (const s of TIMETABLE_STEPS) assert.ok(s.label && s.what && s.who && s.group, s.key);
+  assert.equal(stepOf('unknown').key, 'year', 'an unknown step opens the first');
+  const lessons = stepOf('lessons');
+  assert.deepEqual([lessons.number, lessons.previous.key, lessons.next.key], [6, 'classes', 'teachers']);
+  assert.equal(stepOf('view').next, null);
+  // Only the year and branch go along to the next step.
+  assert.equal(sharedSearch('?year=y1&branch=b1&tab=rules&section=s'), '?year=y1&branch=b1');
+  assert.equal(sharedSearch('?tab=x'), '');
+  assert.equal(BUILDER_TAB_STEP.teachers, 'limits');
+});

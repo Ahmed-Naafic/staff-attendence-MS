@@ -141,7 +141,12 @@ function checkDraft(draft, { maxSubjectPerDay = 2, doubles = true, teachers = {}
   return problems;
 }
 
+// These tests expect the default rules (plan date tomorrow; a day under way keeps its timetable):
+// timed changes off for the run, the dev system's value restored afterwards.
+let savedTimedChanges;
 before(async () => {
+  savedTimedChanges = (await prisma.platformSettings.findUnique({ where: { id: 'platform' }, select: { timedChanges: true } }))?.timedChanges;
+  if (savedTimedChanges) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: false } });
   server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
@@ -232,6 +237,7 @@ before(async () => {
 });
 
 after(async () => {
+  if (savedTimedChanges) await prisma.platformSettings.update({ where: { id: 'platform' }, data: { timedChanges: savedTimedChanges } });
   const schoolIds = Object.values(schools).map((s) => s.id);
   const userIds = (await prisma.user.findMany({ where: { email: { endsWith: `-${lower}@test.edutrack.example` } }, select: { id: true } })).map((u) => u.id);
   await prisma.timetableDraftLesson.deleteMany({ where: { draft: { schoolId: { in: schoolIds } } } });
@@ -250,6 +256,13 @@ after(async () => {
   await prisma.subject.deleteMany({ where: { schoolId: { in: schoolIds } } });
   await prisma.section.deleteMany({ where: { schoolId: { in: schoolIds } } });
   await prisma.schoolClass.deleteMany({ where: { schoolId: { in: schoolIds } } });
+  const branchIds = (await prisma.branch.findMany({ where: { schoolId: { in: schoolIds } }, select: { id: true } })).map((b) => b.id);
+  const sets = (await prisma.staffAssignment.findMany({ where: { branchId: { in: branchIds } }, select: { id: true } })).map((x) => x.id);
+  await prisma.staffAssignmentShift.deleteMany({ where: { assignmentId: { in: sets } } });
+  await prisma.staffAssignment.deleteMany({ where: { id: { in: sets } } });
+  const versions = (await prisma.branchSchedule.findMany({ where: { branchId: { in: branchIds } }, select: { id: true } })).map((v) => v.id);
+  await prisma.branchShift.deleteMany({ where: { scheduleId: { in: versions } } });
+  await prisma.branchSchedule.deleteMany({ where: { id: { in: versions } } });
   await prisma.auditEvent.deleteMany({ where: { OR: [{ schoolId: { in: schoolIds } }, { actorId: { in: userIds } }] } });
   await prisma.academicYear.deleteMany({ where: { schoolId: { in: schoolIds } } });
   await prisma.session.deleteMany({ where: { userId: { in: userIds } } });
@@ -530,11 +543,86 @@ describe('publishing', () => {
     assert.equal(week.body.total, 17);
     assert.ok(week.body.lessons.some((l) => l.section.branch.id === branches.A2.id));
     assert.equal((await call('/api/teacher/timetable', { token: 'nope' })).status, 401);
+
+    // Their classes and subjects: every live assignment, with lessons per week and how many are in that week.
+    const mine = await call(`/api/teacher/teaching?date=${tomorrow}`, { token: teacherToken });
+    assert.equal(mine.status, 200, JSON.stringify(mine.body));
+    const subjectItems = mine.body.items.filter((a) => a.role === 'subject');
+    assert.ok(subjectItems.length > 0);
+    assert.ok(mine.body.items.some((a) => a.branch.id === branches.A2.id), 'other branches too');
+    assert.equal(subjectItems.reduce((n, a) => n + (a.inTimetable ?? 0), 0), week.body.total, 'every lesson of My week belongs to one of them');
+    for (const a of mine.body.items) {
+      assert.ok(a.section.displayName && a.startDate && a.state, JSON.stringify(a));
+      if (a.role === 'class') assert.equal(a.inTimetable, null);
+    }
+    assert.ok(subjectItems.some((a) => Number.isInteger(a.weeklyLessons)));
+    assert.equal((await call('/api/teacher/teaching', { token: 'nope' })).status, 401);
   });
 
   test('another school sees nothing; random ids are not found', async () => {
     assert.equal((await ownerB(`/api/owner/timetable-builder/drafts/${draft.id}/discard`, { method: 'POST', body: { revision: 1 } })).status, 404);
     assert.equal((await manager1(`${M}/drafts/${randomUUID()}/edit`, { method: 'POST', body: { revision: 1, action: 'lock', lesson: randomUUID() } })).status, 404);
     assert.equal((await ownerB(`/api/owner/timetable-views/sections/${sections.G1A.id}`)).status, 404);
+  });
+});
+
+describe('staff shifts and the school week', () => {
+  test('lesson times outside a teacher’s shift are a readiness warning; the school week lists school days and shifts', async () => {
+    const from = addDays(today, -5);
+    const at = new Date(`${from}T00:00:00Z`);
+    const key = randomUUID();
+    await prisma.branchSchedule.create({
+      data: { branchId: branches.A1.id, effectiveFrom: asDbDay(from), effectiveAt: at, timeZone: 'UTC', checkOutEnabled: false, shifts: { create: [{ shiftKey: key, name: 'Early', days: ['MON', 'TUE', 'WED'], startMinute: 420, endMinute: 480, graceMinutes: 10, absenceCutoffMinutes: 30 }] } },
+    });
+    await prisma.staffAssignment.create({ data: { staffUserId: staff.T2.id, branchId: branches.A1.id, effectiveFrom: asDbDay(from), effectiveAt: at, timeZone: 'UTC', shifts: { create: [{ shiftKey: key, days: ['MON', 'TUE', 'WED'] }] } } });
+
+    // Only T2 has a shift: they get the warning (no shift on Thu and Fri, lessons after 08:00), nobody else.
+    const r = await manager1(`${M}/readiness`);
+    assert.equal(r.status, 200, JSON.stringify(r.body));
+    const w = r.body.warnings.filter((x) => x.code === 'TEACHER_OUTSIDE_SHIFT');
+    assert.equal(w.length, 1, JSON.stringify(w));
+    assert.equal(w[0].teacherId, staff.T2.id);
+    assert.equal(w[0].fix, 'teachers');
+    assert.match(w[0].message, /Early 07:00–08:00 \(Mon, Tue, Wed\)/);
+    assert.match(w[0].message, /Thu, Fri, when they have no shift/);
+
+    // The school week: the branch's school days and its shifts (Manager: their branch).
+    const week = await manager1('/api/manager/school-week');
+    assert.equal(week.status, 200, JSON.stringify(week.body));
+    assert.deepEqual([...week.body.schoolDays].sort(), [...WEEK].sort());
+    assert.equal(week.body.branch.id, branches.A1.id);
+    assert.deepEqual(week.body.shifts.map((x) => [x.name, x.start, x.end, x.days.join(','), x.branch.id]), [['Early', '07:00', '08:00', 'MON,TUE,WED', branches.A1.id]]);
+    // Owner: one branch, or every branch; another school's branch is not found.
+    const one = await owner(`/api/owner/school-week?branch=${branches.A1.id}`);
+    assert.equal(one.status, 200);
+    assert.equal(one.body.shifts.length, 1);
+    const every = await owner('/api/owner/school-week');
+    assert.equal(every.status, 200);
+    assert.equal(every.body.branch, null);
+    assert.ok(every.body.shifts.some((x) => x.branch.id === branches.A1.id));
+    assert.equal((await ownerB(`/api/owner/school-week?branch=${branches.A1.id}`)).status, 404);
+    // Before the year: no school days.
+    assert.deepEqual((await manager1('/api/manager/school-week?date=1990-01-01')).body.schoolDays, []);
+  });
+});
+
+describe('progress of the Timetable steps', () => {
+  test('every step with its state and note; problems belong to the step that fixes them; the Owner names the branch', async () => {
+    const res = await manager1(`${M}/progress`);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+    const keys = ['year', 'school-days', 'bell-times', 'subjects', 'classes', 'lessons', 'teachers', 'assign', 'limits', 'rules', 'fixed', 'readiness', 'generate', 'publish', 'view'];
+    assert.deepEqual(Object.keys(res.body.steps), keys);
+    for (const k of keys) assert.ok(['done', 'attention', 'todo', 'optional'].includes(res.body.steps[k].state), k);
+    assert.equal(res.body.branch.id, branches.A1.id);
+    // The readiness state agrees with the readiness checks; any attention elsewhere comes from them.
+    const check = (await manager1(`${M}/readiness`)).body;
+    assert.equal(res.body.steps.readiness.state, check.ready ? 'done' : 'attention');
+    if (check.ready) assert.ok(keys.filter((k) => !['generate', 'publish', 'view'].includes(k)).every((k) => res.body.steps[k].state !== 'attention'));
+    assert.equal(res.body.steps.subjects.state, 'done');
+    assert.equal(res.body.steps.classes.state, 'done');
+    // The Owner chooses the branch; without one it is refused.
+    assert.equal((await owner(`/api/owner/timetable-builder/progress?branch=${branches.A1.id}`)).status, 200);
+    assert.equal((await owner('/api/owner/timetable-builder/progress')).status, 400);
+    assert.equal((await call(`${M}/progress`)).status, 401);
   });
 });

@@ -25,6 +25,8 @@ export const removeFixedLesson = (role, fixedId) => apiRequest(`${B(role)}/fixed
 /** → { draft } */
 export const generateTimetable = (role, context, { keepLocked = true } = {}) => apiRequest(`${B(role)}/generate`, { method: 'POST', body: { ...ctx(role, context), keepLocked } });
 export const loadDraft = (role, context) => apiRequest(`${B(role)}/draft`, { query: ctx(role, context) });
+/** Where the branch and year stand on the Timetable page: { academicYear, branch, steps: { key: { state: 'done' | 'attention' | 'todo' | 'optional', note } } }. */
+export const loadProgress = (role, context) => apiRequest(`${B(role)}/progress`, { query: ctx(role, context) });
 /** body: { revision, action: 'move' | 'lock' | 'unlock' | 'remove' | 'place' | 'teacher', … } → { draft } */
 export const editDraft = (role, draftId, body) => apiRequest(`${B(role)}/drafts/${id(draftId)}/edit`, { method: 'POST', body });
 /** → { published, effectiveFrom, changed, unchanged, warnings } */

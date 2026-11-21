@@ -10,6 +10,7 @@ const draftOf = (s) => ({
   immediateFirstSchedule: s.immediateFirstSchedule,
   immediateFirstAssignment: s.immediateFirstAssignment,
   timedChanges: Boolean(s.timedChanges),
+  schoolDaysFollowDelay: Boolean(s.schoolDaysFollowDelay),
 });
 
 /**
@@ -42,7 +43,8 @@ export function SchedulingSettingsCard({ settings: initial }) {
     draft.effectiveDelayDays.trim() !== String(saved.effectiveDelayDays) ||
     draft.immediateFirstSchedule !== saved.immediateFirstSchedule ||
     draft.immediateFirstAssignment !== saved.immediateFirstAssignment ||
-    draft.timedChanges !== Boolean(saved.timedChanges);
+    draft.timedChanges !== Boolean(saved.timedChanges) ||
+    draft.schoolDaysFollowDelay !== Boolean(saved.schoolDaysFollowDelay);
 
   function clear() {
     setError('');
@@ -123,7 +125,7 @@ export function SchedulingSettingsCard({ settings: initial }) {
             label="Allow Changes to Take Effect at Their Scheduled Time"
             description={
               draft.timedChanges
-                ? 'ON: schedule changes, staff assignments and transfers can be scheduled for today or any later date at a chosen time (not in the past). The effective delay below does not apply.'
+                ? 'ON: schedule changes, staff assignments and transfers can be scheduled for today or any later date at a chosen time (not in the past). School days, bell times and timetables can also start today. The effective delay below does not apply.'
                 : 'OFF: the effective delay below applies, and changes start at 00:00 of their date.'
             }
             checked={draft.timedChanges}
@@ -166,6 +168,19 @@ export function SchedulingSettingsCard({ settings: initial }) {
             }
             checked={draft.immediateFirstAssignment}
             onChange={(v) => set('immediateFirstAssignment', v)}
+            disabled={saving}
+          />
+          <Switch
+            label="School days follow the effective delay"
+            description={
+              draft.timedChanges
+                ? 'With timed changes on, the delay does not apply: a change of school days (Academic Calendar) can start today.'
+                : draft.schoolDaysFollowDelay
+                  ? `ON: a change of school days (Academic Calendar) also waits ${daysText(days)} when school days already apply today. The first school days of a year can start today.`
+                  : 'OFF: a change of school days (Academic Calendar) can start tomorrow at the earliest.'
+            }
+            checked={draft.schoolDaysFollowDelay}
+            onChange={(v) => set('schoolDaysFollowDelay', v)}
             disabled={saving}
           />
           <p className="flex items-start gap-2 rounded-md bg-muted px-3 py-2 text-caption text-fg-secondary">
