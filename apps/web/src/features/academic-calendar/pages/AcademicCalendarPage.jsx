@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSearchParams } from 'react-router';
+import { Link, useSearchParams } from 'react-router';
 import { CalendarDays, Plus } from 'lucide-react';
 import { PageContainer, PageHeader } from '../../../components/layout';
 import {
@@ -350,6 +350,46 @@ export default function AcademicCalendarPage() {
               </Table>
             </div>
           </Card>
+
+          {data.examinations?.length > 0 && (
+            <Card as="section" aria-labelledby="calendar-exams" className="overflow-hidden">
+              <div className="flex flex-col gap-0.5 border-b border-border px-4 py-3">
+                <h2 id="calendar-exams" className="text-card-title text-fg">Examinations</h2>
+                <p className="text-small text-fg-muted">Scheduled examinations, managed in Examinations. Their days stay school days; the classes sitting one that stops lessons have no normal lessons.</p>
+              </div>
+              <div role="region" aria-label="Scheduled examinations" tabIndex={0} className="overflow-x-auto">
+                <Table caption={`Scheduled examinations of ${data.academicYear.name}, by first day`}>
+                  <TableHead>
+                    <TableRow interactive={false}>
+                      <TableHeaderCell>Name</TableHeaderCell>
+                      <TableHeaderCell>Classes</TableHeaderCell>
+                      <TableHeaderCell>Branch</TableHeaderCell>
+                      <TableHeaderCell>Dates</TableHeaderCell>
+                      <TableHeaderCell>Lessons</TableHeaderCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {data.examinations.map((exam) => (
+                      <TableRow key={exam.id}>
+                        <TableCell>
+                          <Link to={`/examinations/list/${exam.id}`} className="font-medium text-fg underline-offset-2 hover:underline">
+                            {exam.name}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="max-w-64 truncate" title={exam.classes.join(', ')}>{exam.classes.join(', ')}</TableCell>
+                        <TableCell>{exam.branch?.name ?? 'Every branch'}</TableCell>
+                        <TableCell className="tabular-nums">
+                          {exam.startDate === exam.endDate ? exam.startDate : `${exam.startDate} to ${exam.endDate}`}
+                          <span className="block text-caption text-fg-muted">{exam.days} day{exam.days === 1 ? '' : 's'}</span>
+                        </TableCell>
+                        <TableCell>{exam.stopsLessons ? <Badge variant="accent">Stopped for its classes</Badge> : <Badge variant="neutral">Go on</Badge>}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          )}
 
           <EntryModal
             role={role}

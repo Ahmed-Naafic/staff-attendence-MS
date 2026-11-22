@@ -120,3 +120,31 @@ export function checkTimetable(data) {
   }
   return data;
 }
+
+// ---- examinations (/api/teacher/exams) ----
+
+export function checkExamDuties(data) {
+  check(isObject(data) && isDay(data.date) && Array.isArray(data.duties), 'examination duties');
+  for (const d of data.duties) {
+    check(isObject(d) && isObject(d.session) && isString(d.session.id) && isDay(d.session.date) && isTime(d.session.start) && isTime(d.session.end) && isObject(d.room) && isString(d.room.id) && isObject(d.examination) && Array.isArray(d.papers) && isObject(d.summary) && typeof d.canMark === 'boolean', 'examination duty');
+  }
+  return data;
+}
+
+export function checkExamRoom(data) {
+  check(isObject(data) && isObject(data.session) && isObject(data.room) && isObject(data.examination) && typeof data.canMark === 'boolean' && Array.isArray(data.seats) && isObject(data.summary), 'examination room');
+  for (const s of data.seats) check(isObject(s) && isNumber(s.seatNumber) && isObject(s.student) && isString(s.student.id) && isString(s.student.name) && (s.attendance === null || isString(s.attendance)), 'seat');
+  return data;
+}
+
+export function checkMarkSheets(data) {
+  check(isObject(data) && isDay(data.date) && Array.isArray(data.items), 'mark sheets');
+  for (const i of data.items) check(isObject(i) && isObject(i.paper) && isString(i.paper.id) && isObject(i.section) && isString(i.section.id) && isString(i.status) && isDay(i.deadline) && typeof i.opened === 'boolean', 'mark sheet');
+  return data;
+}
+
+export function checkMarkSheet(data) {
+  check(isObject(data) && isObject(data.paper) && isNumber(data.paper.maxMarks) && isObject(data.section) && isString(data.status) && isObject(data.actions) && Array.isArray(data.students) && isObject(data.stats), 'mark sheet');
+  for (const s of data.students) check(isObject(s) && isObject(s.student) && isString(s.student.id) && (s.marks === null || isNumber(s.marks)) && typeof s.absent === 'boolean', 'student marks');
+  return data;
+}

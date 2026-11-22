@@ -107,26 +107,28 @@ model User {
   updatedAt          DateTime      @updatedAt
 
   /// For OWNER accounts: the one school they own.
-  ownedSchool            School?                 @relation("SchoolOwner")
-  sessions               Session[]
-  auditEvents            AuditEvent[]            @relation("AuditActor")
-  managerAssignments     ManagerAssignment[]
-  staffAssignments       StaffAssignment[]
-  attendanceEvents       AttendanceEvent[]
-  notifications          Notification[]
-  notificationPreference NotificationPreference?
-  pushDevices            PushDevice[]
-  pushMessages           PushMessage[]
-  announcementReads      AnnouncementRead[]
-  staffTransfers         StaffTransfer[]
+  ownedSchool              School?                   @relation("SchoolOwner")
+  sessions                 Session[]
+  auditEvents              AuditEvent[]              @relation("AuditActor")
+  managerAssignments       ManagerAssignment[]
+  staffAssignments         StaffAssignment[]
+  attendanceEvents         AttendanceEvent[]
+  notifications            Notification[]
+  notificationPreference   NotificationPreference?
+  pushDevices              PushDevice[]
+  pushMessages             PushMessage[]
+  announcementReads        AnnouncementRead[]
+  staffTransfers           StaffTransfer[]
   /// STAFF only: what they teach (TeachingAssignment), in any branch of their school.
-  teachingAssignments    TeachingAssignment[]
+  teachingAssignments      TeachingAssignment[]
   /// STAFF only: timetable lessons naming them as the teacher.
-  timetableSlots         TimetableSlot[]
+  timetableSlots           TimetableSlot[]
   /// STAFF only: timetable builder limits and unavailable times, fixed and draft lessons naming them.
   teacherTimetableProfiles TeacherTimetableProfile[]
   timetableFixedLessons    TimetableFixedLesson[]
   timetableDraftLessons    TimetableDraftLesson[]
+
+  examInvigilations ExamInvigilation[]
 
   @@index([role, status])
   @@index([branchId])
@@ -159,6 +161,8 @@ model School {
   branchSequence           Int          @default(0)
   /// Student Attendance is available to this school (Super Admin; off by default). Changes are in the audit log.
   studentAttendanceEnabled Boolean      @default(false)
+  /// The Examination module is available to this school (Super Admin; off by default). Changes are in the audit log.
+  examinationsEnabled      Boolean      @default(false)
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 
@@ -182,6 +186,16 @@ model School {
   bellSchedules             BellSchedule[]
   timetableVersions         TimetableVersion[]
   timetableSetups           TimetableSetup[]
+  academicPeriods           AcademicPeriod[]
+  examTypes                 ExamType[]
+  gradingScales             GradingScale[]
+  resultFormulas            ResultFormula[]
+  examSettings              ExamSettings[]
+  examRooms                 ExamRoom[]
+  examinations              Examination[]
+  examPapers                ExamPaper[]
+  examTimetables            ExamTimetable[]
+  examSessions              ExamSession[]
   teacherTimetableProfiles  TeacherTimetableProfile[]
   timetableDrafts           TimetableDraft[]
   studentAttendanceSettings StudentAttendanceSettings[]
@@ -243,6 +257,12 @@ model Branch {
   timetableVersions         TimetableVersion[]
   timetableSetups           TimetableSetup[]
   timetableDrafts           TimetableDraft[]
+  examSettings              ExamSettings?
+  examRooms                 ExamRoom[]
+  examinations              Examination[]
+  examTimetables            ExamTimetable[]
+  examSessions              ExamSession[]
+  examSittings              ExamSitting[]
   studentAttendanceSettings StudentAttendanceSettings?
   studentAttendanceSessions StudentAttendanceSession[]
   studentExcuses            StudentExcuse[]
@@ -532,6 +552,7 @@ enum NotificationCategory {
   ANNOUNCEMENT // platform announcements (mandatory)
   TRANSFER // a staff member's own branch transfer, and staff joining a Manager's branch (mandatory)
   STUDENT_ATTENDANCE // student attendance not taken (teachers, Managers) and daily summaries (Owners)
+  EXAMINATION // examination timetables, marks, approvals and results
 }
 
 /// DRAFT (not visible), PUBLISHED (visible from publishAt until expiresAt; "scheduled" while
@@ -944,6 +965,9 @@ model AcademicYear {
   timetableSetups           TimetableSetup[]
   teacherTimetableProfiles  TeacherTimetableProfile[]
   timetableDrafts           TimetableDraft[]
+  academicPeriods           AcademicPeriod[]
+  resultFormula             ResultFormula?
+  examinations              Examination[]
   studentAttendanceSessions StudentAttendanceSession[]
 
   @@unique([schoolId, nameKey])
@@ -974,8 +998,10 @@ model SchoolClass {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  sections Section[]
-  subjects ClassSubject[]
+  sections           Section[]
+  subjects           ClassSubject[]
+  examinationClasses ExaminationClass[]
+  examPapers         ExamPaper[]
 
   @@unique([schoolId, nameKey])
   @@unique([schoolId, sequence])
@@ -1005,14 +1031,17 @@ model Section {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
-  enrollments         Enrollment[]
-  teachingAssignments TeachingAssignment[]
-  timetableVersions   TimetableVersion[]
+  enrollments           Enrollment[]
+  teachingAssignments   TeachingAssignment[]
+  timetableVersions     TimetableVersion[]
   timetableFixedLessons TimetableFixedLesson[]
   timetableDraftLessons TimetableDraftLesson[]
-  promotionsFrom      PromotionItem[]            @relation("PromotionItemFrom")
-  promotionsTarget    PromotionItem[]            @relation("PromotionItemTarget")
-  attendanceSessions  StudentAttendanceSession[]
+  promotionsFrom        PromotionItem[]            @relation("PromotionItemFrom")
+  promotionsTarget      PromotionItem[]            @relation("PromotionItemTarget")
+  attendanceSessions    StudentAttendanceSession[]
+  examSeats             ExamSeat[]
+  examMarkSheets        ExamMarkSheet[]
+  examResultSets        ExamResultSet[]
 
   @@unique([classId, academicYearId, branchId, nameKey])
   @@index([schoolId, academicYearId])
@@ -1068,6 +1097,10 @@ model Student {
   promotionItems    PromotionItem[]
   attendanceEntries StudentAttendanceEntry[]
   excuses           StudentExcuse[]
+
+  examSeats   ExamSeat[]
+  examMarks   ExamMark[]
+  examResults ExamResult[]
 
   @@index([schoolId, branchId, status])
   @@index([schoolId, nameKey, dateOfBirth])
@@ -1318,12 +1351,13 @@ model Subject {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  classes             ClassSubject[]
-  teachingAssignments TeachingAssignment[]
-  timetableSlots      TimetableSlot[]
+  classes               ClassSubject[]
+  teachingAssignments   TeachingAssignment[]
+  timetableSlots        TimetableSlot[]
   timetableFixedLessons TimetableFixedLesson[]
   timetableDraftLessons TimetableDraftLesson[]
-  attendanceSessions  StudentAttendanceSession[]
+  attendanceSessions    StudentAttendanceSession[]
+  examPapers            ExamPaper[]
 
   @@unique([schoolId, nameKey])
   @@index([schoolId, status])
@@ -1417,8 +1451,8 @@ model BellSchedule {
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 
-  versions   BellScheduleVersion[]
-  timetables TimetableVersion[]
+  versions      BellScheduleVersion[]
+  timetables    TimetableVersion[]
   setupDefaults TimetableSetup[]
 
   @@index([schoolId, status])
@@ -1889,4 +1923,559 @@ model TimetableDraftLesson {
   @@index([sectionId])
   @@index([subjectId])
   @@index([teacherId])
+}
+
+// ---- Examinations (docs/business-rules.md → Examinations) -----------------------------------------
+// Phase 0–1: the school's configuration (academic periods, examination types, grading scales, result
+// formulas, layered settings) and examination rooms. Nothing is deleted: rows are deactivated, and
+// results keep the values they were calculated with.
+
+/// A term, semester or quarter of an academic year (School Owner). Dates inside the year; periods of a
+/// year do not overlap (checked by the API). Deactivated instead of deleted.
+model AcademicPeriod {
+  id             String        @id @default(uuid())
+  schoolId       String
+  school         School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  /// At most 60 characters; unique per year regardless of capitalization.
+  name           String
+  nameKey        String
+  /// Order within the year (1, 2, …), from the start dates.
+  sequence       Int
+  startDate      DateTime      @db.Date
+  endDate        DateTime      @db.Date
+  status         ClassStatus   @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  examinations   Examination[]
+
+  @@unique([academicYearId, nameKey])
+  @@index([schoolId, academicYearId])
+}
+
+/// A kind of examination the school holds (Mid-Term, Final, Unit Test…), reused every year (School Owner).
+model ExamType {
+  id              String        @id @default(uuid())
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  name            String
+  nameKey         String
+  description     String?
+  /// Marks a paper of this type is out of, unless set on the paper (1–1000).
+  defaultMaxMarks Int
+  /// Examinations of this type suspend normal lessons during their period (e.g. Mid-Term, Final; not a unit test).
+  stopsLessons    Boolean       @default(true)
+  /// The grading scale of this type; null: the school default scale.
+  gradingScaleId  String?
+  gradingScale    GradingScale? @relation(fields: [gradingScaleId], references: [id], onDelete: Restrict)
+  status          ClassStatus   @default(ACTIVE)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  examinations    Examination[]
+
+  @@unique([schoolId, nameKey])
+}
+
+/// A grading system: bands of percentages and the grade each gives (School Owner). Results keep the
+/// grade label they were given, so changing a scale never rewrites history.
+model GradingScale {
+  id        String      @id @default(uuid())
+  schoolId  String
+  school    School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  name      String
+  nameKey   String
+  /// The scale used when an examination type names none (at most one per school).
+  isDefault Boolean     @default(false)
+  status    ClassStatus @default(ACTIVE)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  bands     GradeBand[]
+  examTypes ExamType[]
+
+  @@unique([schoolId, nameKey])
+}
+
+/// One band of a grading scale: from minPercent up to maxPercent (inclusive), its label and points.
+/// The bands of a scale cover 0–100 without gaps or overlaps (checked by the API). Replaced as a set.
+model GradeBand {
+  id         String       @id @default(uuid())
+  scaleId    String
+  scale      GradingScale @relation(fields: [scaleId], references: [id], onDelete: Restrict)
+  label      String
+  minPercent Decimal      @db.Decimal(5, 2)
+  maxPercent Decimal      @db.Decimal(5, 2)
+  points     Decimal?     @db.Decimal(5, 2)
+  passes     Boolean
+  remark     String?
+
+  @@index([scaleId])
+}
+
+enum ResultMethod {
+  WEIGHTED // weights per examination type (and per period)
+  AVERAGE // plain average of the year's examinations
+  LAST // the year's last examination
+}
+
+/// How a year's final result is calculated (School Owner; one per year).
+model ResultFormula {
+  id             String       @id @default(uuid())
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String       @unique
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  method         ResultMethod @default(WEIGHTED)
+  /// [{ examTypeId, weight }] (percent, adding up to 100) for WEIGHTED.
+  typeWeights    Json         @default("[]")
+  /// [{ periodId, weight }] (percent, adding up to 100); empty: periods count equally.
+  periodWeights  Json         @default("[]")
+  updatedById    String?
+  updatedByName  String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([schoolId])
+}
+
+/// Examination settings: the school's values (branchId null; School Owner) and a branch's own values
+/// (its Manager) for the settings the school lets branches change. Unset values come from the level
+/// above (features/examinations/examSettings.js decides).
+model ExamSettings {
+  id                String   @id @default(uuid())
+  schoolId          String
+  school            School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  /// Null: the school's values (one per school). Set: that branch's own values (one per branch).
+  branchId          String?  @unique
+  branch            Branch?  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// { settingKey: value } for the keys set at this level.
+  values            Json     @default("{}")
+  /// School row only: the settings branches may set for themselves.
+  branchOverridable String[] @default([])
+  updatedById       String?
+  updatedByName     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([schoolId])
+}
+
+/// A room used for examinations, separate from classrooms (no location). Name unique per branch
+/// regardless of capitalization. Deactivated instead of deleted; reused in sessions that do not overlap.
+model ExamRoom {
+  id              String             @id @default(uuid())
+  schoolId        String
+  school          School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId        String
+  branch          Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  name            String
+  nameKey         String
+  /// Seats normally available (1–500); an examination may override it with a reason.
+  defaultCapacity Int
+  status          ClassStatus        @default(ACTIVE)
+  deactivatedAt   DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  seats           ExamSeat[]
+  invigilations   ExamInvigilation[]
+
+  @@unique([branchId, nameKey])
+  @@index([schoolId, status])
+}
+
+enum ExaminationStatus {
+  /// Being prepared: no effect on lessons or the calendar.
+  DRAFT
+  /// On the academic calendar; stops the normal lessons of its classes when it stops lessons.
+  SCHEDULED
+  /// Called off. Kept for history.
+  CANCELLED
+}
+
+/// One examination of a year (e.g. "Mid-Term, Term 1"): its type, period, dates, the branches holding
+/// it (one branch, or every branch when branchId is null) and the classes sitting it. School Owner:
+/// any; Manager: their branch's (when the school lets Managers create examinations). Never deleted:
+/// cancelled. Days before today are fixed once it is scheduled (docs/business-rules.md → Examinations).
+model Examination {
+  id               String             @id @default(uuid())
+  schoolId         String
+  school           School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId   String
+  academicYear     AcademicYear       @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  /// The term or semester it belongs to; null: the year as a whole.
+  academicPeriodId String?
+  academicPeriod   AcademicPeriod?    @relation(fields: [academicPeriodId], references: [id], onDelete: Restrict)
+  examTypeId       String
+  examType         ExamType           @relation(fields: [examTypeId], references: [id], onDelete: Restrict)
+  /// Null: school-wide (every branch). Set: that branch only.
+  branchId         String?
+  branch           Branch?            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// At most 80 characters; unique in the year and branch (or school-wide) regardless of capitalization.
+  name             String
+  nameKey          String
+  description      String?
+  /// Calendar dates, both inclusive, inside the year (and the period when one is chosen).
+  startDate        DateTime           @db.Date
+  endDate          DateTime           @db.Date
+  /// Copied from the type when created (can be changed until it starts): whether its classes' normal
+  /// lessons stop from startDate to endDate in the branches holding it.
+  stopsLessons     Boolean
+  status           ExaminationStatus  @default(DRAFT)
+  scheduledAt      DateTime?
+  cancelledAt      DateTime?
+  cancelReason     String?
+  createdById      String?
+  createdByName    String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  classes          ExaminationClass[]
+  papers           ExamPaper[]
+  timetables       ExamTimetable[]
+  sessions         ExamSession[]
+  markSheets       ExamMarkSheet[]
+  resultSets       ExamResultSet[]
+
+  // Names are unique per year among examinations not cancelled: school-wide ones together, and each
+  // branch's together (partial unique indexes in the migration).
+  @@index([academicYearId, nameKey])
+  @@index([schoolId, academicYearId, startDate])
+  @@index([schoolId, status, startDate])
+}
+
+/// A class sitting an examination (every section of the class in the branches holding it).
+model ExaminationClass {
+  id            String      @id @default(uuid())
+  examinationId String
+  examination   Examination @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  classId       String
+  class         SchoolClass @relation(fields: [classId], references: [id], onDelete: Restrict)
+  createdAt     DateTime    @default(now())
+
+  @@unique([examinationId, classId])
+  @@index([classId])
+}
+
+/// A paper of an examination: one subject for one class, out of maxMarks, lasting durationMinutes.
+/// Filled in from the class's curriculum; removed only while nothing refers to it (timetable, marks).
+model ExamPaper {
+  id              String          @id @default(uuid())
+  schoolId        String
+  school          School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  examinationId   String
+  examination     Examination     @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  classId         String
+  class           SchoolClass     @relation(fields: [classId], references: [id], onDelete: Restrict)
+  subjectId       String
+  subject         Subject         @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  sittings        ExamSitting[]
+  /// 1 – the school's highest marks setting.
+  maxMarks        Int
+  /// Minutes (15–480).
+  durationMinutes Int
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  markSheets      ExamMarkSheet[]
+  files           ExamPaperFile[]
+
+  @@unique([examinationId, classId, subjectId])
+  @@index([schoolId])
+  @@index([subjectId])
+}
+
+// ---- Examination timetable (docs/business-rules.md → Examinations → Timetable) --------------------
+// Per examination and branch: sessions (a day's shifts run sessions one after another), the papers sat
+// in each session, each student's room and seat, and the invigilators of each room. Generated, then
+// adjusted by hand; past sessions are kept as they are.
+
+/// How a branch's timetable of an examination was generated (the choices, to regenerate the same way)
+/// and whether it is published to the invigilators.
+model ExamTimetable {
+  id              String      @id @default(uuid())
+  schoolId        String
+  school          School      @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  examinationId   String
+  examination     Examination @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  branchId        String
+  branch          Branch      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  /// { shifts: [{ name, start, sessions }], gapMinutes, rooms: [{ roomId, capacity }], useAllRooms,
+  ///   excludedStaff: [userId], distribution, seed }.
+  config          Json
+  generatedAt     DateTime
+  generatedById   String?
+  generatedByName String?
+  publishedAt     DateTime?
+  /// Times published (notifications are sent once per publication).
+  publications    Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([examinationId, branchId])
+  @@index([schoolId])
+}
+
+/// A session: papers that start together in a branch on a date. Sessions of a branch on a day never overlap.
+model ExamSession {
+  id            String             @id @default(uuid())
+  schoolId      String
+  school        School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  examinationId String
+  examination   Examination        @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  branchId      String
+  branch        Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  date          DateTime           @db.Date
+  /// The shift it belongs to (e.g. "Morning") and its place in the day (1, 2, …).
+  shiftName     String
+  sequence      Int
+  /// Minutes after midnight (platform time zone); end after start.
+  startMinute   Int
+  endMinute     Int
+  createdAt     DateTime           @default(now())
+  sittings      ExamSitting[]
+  seats         ExamSeat[]
+  invigilations ExamInvigilation[]
+
+  @@index([examinationId, branchId, date])
+  @@index([branchId, date])
+}
+
+/// A paper sat in a session, in one branch (a school-wide examination's paper has one sitting per branch).
+model ExamSitting {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   ExamSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  paperId   String
+  paper     ExamPaper   @relation(fields: [paperId], references: [id], onDelete: Restrict)
+  branchId  String
+  branch    Branch      @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  seats     ExamSeat[]
+
+  @@unique([paperId, branchId])
+  @@index([sessionId])
+}
+
+/// A student at a paper: present, absent (counts as zero or is left out, by setting), late (sat it) or
+/// excused (left out of the result).
+enum ExamAttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+/// A student's room and seat for a sitting.
+model ExamSeat {
+  id               String                @id @default(uuid())
+  sessionId        String
+  session          ExamSession           @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  sittingId        String
+  sitting          ExamSitting           @relation(fields: [sittingId], references: [id], onDelete: Restrict)
+  roomId           String
+  room             ExamRoom              @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  studentId        String
+  student          Student               @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  sectionId        String
+  section          Section               @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  seatNumber       Int
+  /// Examination attendance (phase 4): taken by the room's invigilators on the day, or by the School
+  /// Owner or the branch's Manager from the day on. Null: not taken yet.
+  attendance       ExamAttendanceStatus?
+  attendanceNote   String?
+  attendanceAt     DateTime?
+  attendanceById   String?
+  attendanceByName String?
+
+  @@unique([sittingId, studentId])
+  @@unique([sessionId, studentId])
+  @@unique([sessionId, roomId, seatNumber])
+  @@index([studentId])
+}
+
+/// An invigilator of a room in a session (a staff member of the branch).
+model ExamInvigilation {
+  id        String      @id @default(uuid())
+  sessionId String
+  session   ExamSession @relation(fields: [sessionId], references: [id], onDelete: Restrict)
+  roomId    String
+  room      ExamRoom    @relation(fields: [roomId], references: [id], onDelete: Restrict)
+  staffId   String
+  staff     User        @relation(fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@unique([sessionId, roomId, staffId])
+  @@index([staffId])
+}
+
+// ---- Marks (docs/business-rules.md → Examinations → Marks) ---------------------------------------
+
+enum MarkSheetStatus {
+  /// Being entered (the subject teacher, or the School Owner or Manager).
+  DRAFT
+  /// Sent for approval by the teacher; the School Owner or Manager approves or returns it.
+  SUBMITTED
+  /// Approved: fixed (reopened only before the results are published).
+  APPROVED
+  /// Sent back to the teacher with a reason (or reopened): entered again, then submitted.
+  RETURNED
+}
+
+/// The marks of one paper for one section: created when its first marks are saved.
+model ExamMarkSheet {
+  id              String          @id @default(uuid())
+  schoolId        String
+  examinationId   String
+  examination     Examination     @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  paperId         String
+  paper           ExamPaper       @relation(fields: [paperId], references: [id], onDelete: Restrict)
+  sectionId       String
+  section         Section         @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  branchId        String
+  status          MarkSheetStatus @default(DRAFT)
+  submittedAt     DateTime?
+  submittedByName String?
+  approvedAt      DateTime?
+  approvedByName  String?
+  returnedReason  String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  marks           ExamMark[]
+
+  @@unique([paperId, sectionId])
+  @@index([examinationId, branchId])
+}
+
+/// A student's marks on a paper (two decimals at most, 0 to the paper's marks), or absent. Absent and
+/// excused from examination attendance win over what is entered.
+model ExamMark {
+  id            String        @id @default(uuid())
+  sheetId       String
+  sheet         ExamMarkSheet @relation(fields: [sheetId], references: [id], onDelete: Restrict)
+  studentId     String
+  student       Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  marks         Decimal?      @db.Decimal(6, 2)
+  /// Entered as absent (when attendance was not taken, e.g. without a timetable).
+  absent        Boolean       @default(false)
+  updatedById   String?
+  updatedByName String?
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([sheetId, studentId])
+  @@index([studentId])
+}
+
+// ---- Results (docs/business-rules.md → Examinations → Results) -----------------------------------
+
+enum ResultSetStatus {
+  /// Calculated live from the approved marks; not shown as final.
+  DRAFT
+  /// Approved (School Owner or Manager): the results are kept as calculated (a revision in waiting).
+  APPROVED
+  /// Published to staff (report cards); marks and attendance of the class are fixed.
+  PUBLISHED
+}
+
+/// The results of one section in one examination: their state and the revision published last.
+model ExamResultSet {
+  id               String               @id @default(uuid())
+  schoolId         String
+  examinationId    String
+  examination      Examination          @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  sectionId        String
+  section          Section              @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  branchId         String
+  status           ResultSetStatus      @default(DRAFT)
+  /// The last published revision (0: never published).
+  revision         Int                  @default(0)
+  approvedAt       DateTime?
+  approvedByName   String?
+  publishedAt      DateTime?
+  publishedByName  String?
+  /// Why the published results were reopened (kept until the correction is published).
+  correctionReason String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  results          ExamResult[]
+  revisions        ExamResultRevision[]
+
+  @@unique([examinationId, sectionId])
+  @@index([schoolId, status])
+}
+
+/// A student's result as approved (revision = the set's revision + 1 until published). Kept for history.
+model ExamResult {
+  id           String        @id @default(uuid())
+  resultSetId  String
+  resultSet    ExamResultSet @relation(fields: [resultSetId], references: [id], onDelete: Restrict)
+  revision     Int
+  studentId    String
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  /// [{ paperId, subject, maxMarks, marks, percent, grade, passed, status }]
+  papers       Json
+  totalMarks   Decimal       @db.Decimal(8, 2)
+  totalMax     Int
+  percent      Decimal?      @db.Decimal(5, 2)
+  grade        String?
+  points       Decimal?      @db.Decimal(5, 2)
+  remark       String?
+  passed       Boolean?
+  failedPapers Int
+  rank         Int?
+
+  @@unique([resultSetId, revision, studentId])
+  @@index([studentId])
+}
+
+/// One publication of a section's results (the first, then each correction), with the reason.
+model ExamResultRevision {
+  id              String        @id @default(uuid())
+  resultSetId     String
+  resultSet       ExamResultSet @relation(fields: [resultSetId], references: [id], onDelete: Restrict)
+  revision        Int
+  publishedAt     DateTime
+  publishedByName String?
+  /// Why it was reopened (corrections), null for the first publication.
+  reason          String?
+  /// { students, passed, passRate, average }
+  summary         Json
+
+  @@unique([resultSetId, revision])
+}
+
+// ---- Paper files (docs/business-rules.md → Examinations → Paper files) ---------------------------
+
+enum ExamPaperFileKind {
+  QUESTION_PAPER
+  MARKING_SCHEME
+  OTHER
+}
+
+enum ExamPaperFileStatus {
+  /// The upload was started (a signed upload URL was given) but not confirmed.
+  PENDING
+  /// Uploaded and checked.
+  READY
+  /// Removed: the stored file is deleted; the record stays.
+  REMOVED
+}
+
+/// A file of a paper (question paper, marking scheme…) kept in the private storage bucket.
+model ExamPaperFile {
+  id             String              @id @default(uuid())
+  schoolId       String
+  paperId        String
+  paper          ExamPaper           @relation(fields: [paperId], references: [id], onDelete: Restrict)
+  kind           ExamPaperFileKind
+  /// As uploaded (shown and used when downloading), at most 120 characters.
+  fileName       String
+  contentType    String
+  size           Int
+  /// Path in the bucket: <schoolId>/<examinationId>/<paperId>/<id>.<ext>
+  storageKey     String              @unique
+  status         ExamPaperFileStatus @default(PENDING)
+  uploadedById   String?
+  uploadedByName String?
+  createdAt      DateTime            @default(now())
+  confirmedAt    DateTime?
+  removedAt      DateTime?
+  removedByName  String?
+
+  @@index([paperId, status])
 }

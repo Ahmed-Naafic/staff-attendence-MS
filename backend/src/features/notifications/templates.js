@@ -158,6 +158,30 @@ SO.STUDENT_ATTENDANCE_SUMMARY = (p) => ({
   ].join('\n'),
 });
 
+SO.EXAM_DUTIES = (p) => ({
+  title: `Ilaalinta imtixaanka: ${p.examination}`,
+  body: [
+    `Laanta: ${p.branch} · Fadhiyada aad ilaalinayso: ${p.duties.length}`,
+    ...p.duties.slice(0, 8).map((d) => `${d.date} ${d.start}–${d.end} · Qolka ${d.room}`),
+    ...(p.duties.length > 8 ? [`iyo ${p.duties.length - 8} kale.`] : []),
+    p.republished ? 'Jadwalka waa la beddelay: fadhiyadaada hadda waa kuwan.' : '',
+  ].filter(Boolean).join('\n'),
+});
+
+SO.EXAM_MARKS_RETURNED = (p) => ({
+  title: `Dhibcaha waa laguu soo celiyey: ${p.subject}`,
+  body: [`Imtixaanka: ${p.examination} · Fasalka: ${p.section}`, `Sababta: ${p.reason}`, 'Fadlan sax oo dib u dir.'].join('\n'),
+});
+
+SO.EXAM_RESULTS_APPROVED = (p) => ({
+  title: `Natiijooyin sugaya daabacaad: ${p.section}`,
+  body: [`Imtixaanka: ${p.examination}`, `Waxaa ansixiyey: ${p.by}`, 'Fadlan dib u eeg oo daabac.'].join('\n'),
+});
+SO.EXAM_RESULTS_PUBLISHED = (p) => ({
+  title: `Natiijooyinka waa la daabacay: ${p.section}`,
+  body: [`Imtixaanka: ${p.examination}`, p.revision > 1 ? `Sixitaan ${p.revision - 1}` : 'Daabacaaddii koowaad'].join('\n'),
+});
+
 const TEMPLATES = { so: SO };
 
 /** Generic push texts (N21): never a name, time, status, branch or reason on the lock screen. */
@@ -166,6 +190,7 @@ export const PUSH_TEXTS = {
     title: 'EduTrack',
     attendance: 'Waxaad leedahay ogeysiis cusub oo imaanshaha ah.',
     announcement: 'Waxaad leedahay ogeysiis cusub oo EduTrack ah.',
+    examination: 'Waxaad leedahay ogeysiis cusub oo imtixaan ah.',
   },
 };
 

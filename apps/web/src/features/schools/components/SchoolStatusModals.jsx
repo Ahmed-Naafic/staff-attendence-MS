@@ -156,7 +156,10 @@ export function ReactivateSchoolModal({ school, open, onClose, onDone }) {
 }
 
 /** Confirm turning Student Attendance on or off for a school (`enable`). */
-export function SchoolFeatureModal({ school, enable, open, onClose, onDone }) {
+/** The features the Super Admin switches per school, by their API name. */
+export const FEATURE_NAMES = { studentAttendance: 'Student Attendance', examinations: 'Examinations' };
+
+export function SchoolFeatureModal({ school, enable, feature = 'studentAttendance', open, onClose, onDone }) {
   const formId = useId();
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -172,7 +175,7 @@ export function SchoolFeatureModal({ school, enable, open, onClose, onDone }) {
     setFormError('');
     setSaving(true);
     try {
-      const updated = await updateSchoolFeatures(school.id, { studentAttendance: enable });
+      const updated = await updateSchoolFeatures(school.id, { [feature]: enable });
       setSaving(false);
       onDone(updated);
     } catch (failed) {
@@ -185,7 +188,7 @@ export function SchoolFeatureModal({ school, enable, open, onClose, onDone }) {
     <Modal
       open={open}
       onClose={onClose}
-      title={enable ? 'Turn on Student Attendance' : 'Turn off Student Attendance'}
+      title={`${enable ? 'Turn on' : 'Turn off'} ${FEATURE_NAMES[feature]}`}
       description={school?.name}
       loading={saving}
       error={formError}
@@ -203,8 +206,8 @@ export function SchoolFeatureModal({ school, enable, open, onClose, onDone }) {
       <form id={formId} noValidate onSubmit={(event) => { event.preventDefault(); saveOnce(save); }}>
         <p className="text-body text-fg-secondary">
           {enable
-            ? 'The school’s Owner and Managers can then use Student Attendance.'
-            : 'The school can no longer use Student Attendance. Nothing already recorded is deleted, and turning it on again brings it back.'}
+            ? `The school’s Owner and Managers can then use ${FEATURE_NAMES[feature]}.`
+            : `The school can no longer use ${FEATURE_NAMES[feature]}. Nothing already recorded is deleted, and turning it on again brings it back.`}
         </p>
       </form>
     </Modal>

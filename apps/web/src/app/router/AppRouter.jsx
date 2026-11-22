@@ -4,6 +4,7 @@ import { AcademicCalendarPage } from '../../features/academic-calendar';
 import { SubjectsPage, TeachingPage } from '../../features/teaching';
 import { BellSchedulesPage, TimetablesPage } from '../../features/timetable';
 import { TimetableBuilderPage, TimetableStepsPage, TimetableViewsPage } from '../../features/timetable-builder';
+import { ExamAnalyticsPage, ExaminationDetailPage, ExaminationsListPage, ExamMarksPage, ExamOverviewPage, ExamResultsPage, ExamRoomsPage, ExamSettingsPage, ExamSetupPage, ExamTimetablePage } from '../../features/examinations';
 import { AttendanceCompletionPage, AttendanceSessionPage, AttendanceSettingsPage, StudentAttendancePage, StudentAttendanceReportsPage, StudentExcusesPage } from '../../features/student-attendance';
 import { AttendanceReportsPage } from '../../features/attendance-reports';
 import { ClassDetailsPage, ClassesPage } from '../../features/classes';
@@ -125,6 +126,17 @@ const routes = [
       { path: 'timetable/:step', element: <TimetableStepsPage />, handle: { title: 'Timetable', roles: OWNER_OR_MANAGER } },
       { path: 'timetable-builder', element: <TimetableBuilderPage />, handle: { title: 'Timetable Builder', roles: OWNER_OR_MANAGER } },
       { path: 'timetable-views', element: <TimetableViewsPage />, handle: { title: 'Timetable Views', roles: OWNER_OR_MANAGER } },
+      // OWNER and MANAGER — Examinations (switched on per school by the Super Admin; the pages say when it is off)
+      { path: 'examinations', element: <ExamOverviewPage />, handle: { title: 'Examinations', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/list', element: <ExaminationsListPage />, handle: { title: 'Examinations', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/list/:examId', element: <ExaminationDetailPage />, handle: { title: 'Examination', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/setup', element: <ExamSetupPage />, handle: { title: 'Types & Periods', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/rooms', element: <ExamRoomsPage />, handle: { title: 'Examination Rooms', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/timetable', element: <ExamTimetablePage />, handle: { title: 'Timetable & Allocation', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/marks', element: <ExamMarksPage />, handle: { title: 'Marks Entry', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/results', element: <ExamResultsPage />, handle: { title: 'Results & Report Cards', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/analytics', element: <ExamAnalyticsPage />, handle: { title: 'Examination Analytics', roles: OWNER_OR_MANAGER } },
+      { path: 'examinations/settings', element: <ExamSettingsPage />, handle: { title: 'Examination Settings', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — classes (Owner manages; Managers read) and sections (Owner: any branch; Manager: own branch)
       { path: 'classes', element: <ClassesPage />, handle: { title: 'Class Management', roles: OWNER_OR_MANAGER } },
       { path: 'classes/:classId', element: <ClassDetailsPage />, handle: { title: 'Class', roles: OWNER_OR_MANAGER } },

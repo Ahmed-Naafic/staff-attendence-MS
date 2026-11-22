@@ -15,6 +15,7 @@
     "prisma:migrate:dev-branch": "node --env-file=.env.dev ../node_modules/prisma/build/index.js migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "seed:dev": "node --env-file=.env.dev scripts/seed-dev.js",
+    "seed:dev-accounts": "node --env-file=.env.dev scripts/seed-dev-accounts.js",
     "create-super-admin": "node scripts/create-super-admin.js",
     "create-super-admin:dev-branch": "node --env-file=.env.dev scripts/create-super-admin.js",
     "reset-super-admin-password": "node scripts/reset-super-admin-password.js",

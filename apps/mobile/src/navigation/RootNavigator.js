@@ -15,6 +15,10 @@ import AttendanceScreen from '../screens/attendance/AttendanceScreen';
 import ChangePasswordScreen from '../screens/auth/ChangePasswordScreen';
 import SignInScreen from '../screens/auth/SignInScreen';
 import SplashScreen from '../screens/auth/SplashScreen';
+import ExamDutiesScreen from '../screens/exams/ExamDutiesScreen';
+import ExamMarkSheetScreen from '../screens/exams/ExamMarkSheetScreen';
+import ExamMarksScreen from '../screens/exams/ExamMarksScreen';
+import ExamRoomScreen from '../screens/exams/ExamRoomScreen';
 import HistoryScreen from '../screens/history/HistoryScreen';
 import HomeScreen from '../screens/home/HomeScreen';
 import LessonScreen from '../screens/lessons/LessonScreen';
@@ -81,6 +85,10 @@ function SignedIn() {
           <Stack.Screen name="Lesson" component={LessonScreen} />
           <Stack.Screen name="Timetable" component={MyTimetableScreen} />
           <Stack.Screen name="Teaching" component={MyTeachingScreen} />
+          <Stack.Screen name="ExamDuties" component={ExamDutiesScreen} />
+          <Stack.Screen name="ExamRoom" component={ExamRoomScreen} />
+          <Stack.Screen name="ExamMarks" component={ExamMarksScreen} />
+          <Stack.Screen name="ExamMarkSheet" component={ExamMarkSheetScreen} />
           <Stack.Screen name="Sync" component={SyncScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
           <Stack.Screen name="About" component={AboutScreen} />

@@ -85,6 +85,10 @@ export default function ProfileScreen({ navigation }) {
           <ListRow testID="profile-teaching" icon="people-outline" label="My classes & subjects" onPress={() => navigation.navigate('Teaching')} />
           <Divider />
           <ListRow testID="profile-timetable" icon="calendar-outline" label="My week" onPress={() => navigation.navigate('Timetable')} />
+          <Divider />
+          <ListRow testID="profile-exam-duties" icon="clipboard-outline" label="Examination duties" onPress={() => navigation.navigate('ExamDuties')} />
+          <Divider />
+          <ListRow testID="profile-exam-marks" icon="create-outline" label="Examination marks" onPress={() => navigation.navigate('ExamMarks')} />
         </Card>
 
         <Card style={styles.list}>

@@ -15,13 +15,16 @@ const DAY_STYLES = {
 };
 const styleOf = (day) => (day.schoolDay ? 'school' : day.reason === 'holiday' ? 'holiday' : day.reason === 'closure' ? 'closure' : 'none');
 
-function describe(day) {
+function describeDay(day) {
   if (day.extraDay) return `Extra school day: ${day.extraDay.name} (${WEEKDAY_NAMES[day.timetableDay]}'s timetable)`;
   if (day.schoolDay) return day.reopening ? `School day (reopened: ${day.reopening.name})` : 'School day';
   if (day.reason === 'holiday') return `School holiday: ${day.holiday.name}`;
   if (day.reason === 'closure') return `Branch closed: ${day.closure.name}`;
   return DAY_REASONS[day.reason] ?? 'No school';
 }
+
+/** The day, and the examinations held in the branch that day (they stop lessons only for their classes). */
+const describe = (day) => (day.examinations?.length ? `${describeDay(day)}. Examination: ${day.examinations.map((e) => e.name).join(', ')}` : describeDay(day));
 
 /**
  * One month of one branch's school days, as the attendance features will see them (the server
@@ -86,8 +89,11 @@ export function MonthView({ role, branch, month, onMonthChange, version }) {
                       date === data.today && 'ring-2 ring-interactive ring-offset-1',
                     )}
                   >
-                    <span className="font-medium">{Number(date.slice(8))}</span>
-                    <span className="hidden truncate text-caption sm:block">{day.schoolDay ? (day.extraDay ? `Extra (${WEEKDAY_SHORT[day.timetableDay]})` : day.reopening ? 'Reopened' : '') : (day.holiday?.name ?? day.closure?.name ?? '')}</span>
+                    <span className="flex items-center justify-between gap-1 font-medium">
+                      {Number(date.slice(8))}
+                      {day.examinations?.length > 0 && <span aria-hidden="true" title="Examination" className="size-2 shrink-0 rounded-pill bg-accent" />}
+                    </span>
+                    <span className="hidden truncate text-caption sm:block">{day.examinations?.length ? day.examinations[0].name : day.schoolDay ? (day.extraDay ? `Extra (${WEEKDAY_SHORT[day.timetableDay]})` : day.reopening ? 'Reopened' : '') : (day.holiday?.name ?? day.closure?.name ?? '')}</span>
                   </span>
                 );
               })}
@@ -105,6 +111,10 @@ export function MonthView({ role, branch, month, onMonthChange, version }) {
                 {text}
               </li>
             ))}
+            <li className="flex items-center gap-1.5">
+              <span aria-hidden="true" className="inline-block size-2 rounded-pill bg-accent" />
+              Examination (its classes have no normal lessons when it stops lessons)
+            </li>
           </ul>
         </div>
       )}

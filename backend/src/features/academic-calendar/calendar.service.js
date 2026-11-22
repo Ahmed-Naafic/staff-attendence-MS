@@ -8,6 +8,7 @@ import { lockActiveSchool, lockOperatingBranch } from '../branches/branches.serv
 import { schedulingPolicy, schoolDaysDelay } from '../platform-settings/schedulingPolicy.js';
 import { platformTimeZone } from '../platform-settings/settings.service.js';
 import { localDate } from '../schedules/schedules.service.js';
+import { examCovers, loadScheduledExams } from '../examinations/examDays.js';
 import { addDays, asDbDay, daysBetween, loadSchoolDays, toDay, versionOn, weekdaysOn } from './schoolDays.js';
 
 /*
@@ -194,9 +195,15 @@ export async function getCalendar(scope, yearId) {
   const [today, policy] = await Promise.all([calendarToday(), schedulingPolicy(prisma)]);
   const year = await findYear(prisma, scope, yearId);
   const levels = scope.branch ? { OR: [{ branchId: null }, { branchId: scope.branch.id }] } : {};
-  const [versions, entries] = await Promise.all([
+  const [versions, entries, exams] = await Promise.all([
     prisma.academicWeekdays.findMany({ where: { academicYearId: year.id, ...levels }, include: { branch: { select: { id: true, name: true, code: true } } } }),
     prisma.calendarEntry.findMany({ where: { academicYearId: year.id, ...levels }, orderBy: [{ startDate: 'asc' }, { createdAt: 'asc' }], include: entryInclude }),
+    // Scheduled examinations (read only here: they are managed in Examinations).
+    prisma.examination.findMany({
+      where: { academicYearId: year.id, status: 'SCHEDULED', ...levels },
+      orderBy: [{ startDate: 'asc' }, { nameKey: 'asc' }],
+      select: { id: true, name: true, startDate: true, endDate: true, stopsLessons: true, branch: { select: { id: true, name: true, code: true } }, classes: { select: { class: { select: { name: true, sequence: true } } } } },
+    }),
   ]);
 
   // Which day "current" means: today, kept within the year (a planned year shows its first day).
@@ -227,6 +234,16 @@ export async function getCalendar(scope, yearId) {
       }),
     },
     entries: entries.map(toEntry),
+    examinations: exams.map((e) => ({
+      id: e.id,
+      name: e.name,
+      startDate: toDay(e.startDate),
+      endDate: toDay(e.endDate),
+      days: daysBetween(toDay(e.startDate), toDay(e.endDate)) + 1,
+      branch: brief(e.branch),
+      stopsLessons: e.stopsLessons,
+      classes: e.classes.map((c) => c.class).sort((a, b) => a.sequence - b.sequence).map((c) => c.name),
+    })),
   };
 }
 
@@ -238,8 +255,14 @@ export async function listSchoolDays(scope, { from, to, branch }) {
     target = isUuid(branch) ? await prisma.branch.findFirst({ where: { id: branch, schoolId: scope.school.id }, select: { id: true, name: true, code: true } }) : null;
     if (!target) throw notFound('Branch not found.');
   }
-  const [days, today] = await Promise.all([loadSchoolDays({ id: target.id, schoolId: scope.school.id }, from, to, prisma), calendarToday()]);
-  return { branch: brief(target), from, to, today, schoolDays: days.filter((d) => d.schoolDay).length, days };
+  const [days, today, exams] = await Promise.all([
+    loadSchoolDays({ id: target.id, schoolId: scope.school.id }, from, to, prisma),
+    calendarToday(),
+    loadScheduledExams(scope.school.id, { branchIds: [target.id] }, from, to, prisma),
+  ]);
+  // Each day names the scheduled examinations held in the branch (they stop lessons for their classes only).
+  const withExams = days.map((d) => ({ ...d, examinations: exams.filter((e) => examCovers(e, { day: d.date, branchId: target.id })).map((e) => ({ id: e.id, name: e.name, stopsLessons: e.stopsLessons })) }));
+  return { branch: brief(target), from, to, today, schoolDays: days.filter((d) => d.schoolDay).length, days: withExams };
 }
 
 // ---- weekly school days -----------------------------------------------------------------------

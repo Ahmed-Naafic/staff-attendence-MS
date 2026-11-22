@@ -51,6 +51,10 @@ const SAMPLE = {
   LESSON_ATTENDANCE_MISSING: { date: '2026-11-12', section: 'Grade 7A', subject: 'Xisaab', period: 3, start: '09:30', end: '10:15', uploadUntil: '2026-11-13 10:45' },
   STUDENT_ATTENDANCE_INCOMPLETE: { date: '2026-11-12', branch: { name: 'Hodan', code: 'IFT-001-B001' }, halves: { due: 8, complete: 6, missing: 1, incomplete: 1 }, lessons: { due: 30, taken: 27, missing: 3 }, sections: ['Grade 7A', 'Grade 8B'], moreSections: 0 },
   STUDENT_ATTENDANCE_SUMMARY: { date: '2026-11-12', schoolName: 'Iftiin', branches: [{}, {}], halves: { due: 16, complete: 15, missing: 1 }, lessons: { due: 60, taken: 58, missing: 2 }, students: { present: 400, absent: 12, late: 9, excused: 4, notMarked: 3 } },
+  EXAM_MARKS_RETURNED: { examination: 'Imtixaanka Badhtamaha', subject: 'Xisaab', section: 'Fasalka 7A', reason: 'Dhibcaha Axmed waa khalad', deadline: '2026-12-10' },
+  EXAM_RESULTS_APPROVED: { examination: 'Imtixaanka Badhtamaha', section: 'Fasalka 7A', by: 'Maamule Cali' },
+  EXAM_RESULTS_PUBLISHED: { examination: 'Imtixaanka Badhtamaha', section: 'Fasalka 7A', revision: 2 },
+  EXAM_DUTIES: { examination: 'Imtixaanka Badhtamaha', branch: 'Hodan', duties: [{ date: '2026-12-01', start: '08:00', end: '10:00', room: 'R1' }, { date: '2026-12-02', start: '10:30', end: '12:00', room: 'R2' }] },
 };
 
 test('every notification type has a Somali template; no English fallback and no other language', () => {

@@ -10,6 +10,10 @@ import { requireAuth, requireRole } from '../middleware/requireAuth.js';
 import { requireStudentAttendance } from '../middleware/requireStudentAttendance.js';
 import { myTimetable } from '../features/timetable-builder/views.service.js';
 import { myTeaching } from './teacher.service.js';
+import { saveTeacherAttendance, teacherDuties, teacherRoom } from '../features/examinations/examAttendance.service.js';
+import { saveTeacherMarks, submitTeacherMarks, teacherSheet, teacherSheets } from '../features/examinations/examMarks.service.js';
+import { readExamAttendance, readMarkEntries } from '../features/examinations/examInput.js';
+import { requireExaminations } from '../middleware/requireExaminations.js';
 
 /**
  * Teacher API (/api/teacher), used by the Staff mobile app (bearer token): a teacher's lessons and
@@ -44,6 +48,32 @@ teacherRouter.get('/timetable', async (req, res) => {
 teacherRouter.get('/teaching', async (req, res) => {
   res.json(await myTeaching(req.teacher, { date: dayParam(req) }));
 });
+// Examinations (invigilation duties and their attendance; marks): need Examinations switched on,
+// not Student Attendance, so they sit before that gate.
+const exams = Router();
+exams.use(requireExaminations((req) => req.teacher.school.id));
+exams.get('/duties', async (req, res) => {
+  res.json(await teacherDuties(req.teacher));
+});
+exams.get('/duties/:sessionId/rooms/:roomId', async (req, res) => {
+  res.json(await teacherRoom(req.teacher, req.params.sessionId, req.params.roomId));
+});
+exams.put('/attendance', async (req, res) => {
+  res.json(await saveTeacherAttendance(req.teacher, readExamAttendance(jsonBody(req), { teacher: true }), req));
+});
+exams.get('/marks', async (req, res) => {
+  res.json(await teacherSheets(req.teacher));
+});
+exams.get('/marks/:paperId/:sectionId', async (req, res) => {
+  res.json(await teacherSheet(req.teacher, req.params.paperId, req.params.sectionId));
+});
+exams.put('/marks/:paperId/:sectionId', async (req, res) => {
+  res.json(await saveTeacherMarks(req.teacher, req.params.paperId, req.params.sectionId, readMarkEntries(jsonBody(req)), req));
+});
+exams.post('/marks/:paperId/:sectionId/submit', async (req, res) => {
+  res.json(await submitTeacherMarks(req.teacher, req.params.paperId, req.params.sectionId, req));
+});
+teacherRouter.use('/exams', exams);
 teacherRouter.use(requireStudentAttendance((req) => req.teacher.school.id));
 
 // The teacher's lessons of a day (default today), with class lists and marks.

@@ -104,12 +104,20 @@ export function SchoolDrawer({ school, open, onClose, onEdit, onSuspend, onReact
       {school.features && onFeature && (
         <>
           <h3 className="mt-6 mb-3 text-card-title text-fg">Features</h3>
-          <Switch
-            label="Student Attendance"
-            description="Lets the school take student attendance. Off by default; turning it off keeps everything already recorded."
-            checked={school.features.studentAttendance}
-            onChange={(next) => onFeature(school, next)}
-          />
+          <div className="flex flex-col gap-4">
+            <Switch
+              label="Student Attendance"
+              description="Lets the school take student attendance. Off by default; turning it off keeps everything already recorded."
+              checked={school.features.studentAttendance}
+              onChange={(next) => onFeature(school, next, 'studentAttendance')}
+            />
+            <Switch
+              label="Examinations"
+              description="Lets the school run examinations: timetables, marks, results and report cards. Off by default; turning it off keeps everything already recorded."
+              checked={Boolean(school.features.examinations)}
+              onChange={(next) => onFeature(school, next, 'examinations')}
+            />
+          </div>
         </>
       )}
     </Drawer>
