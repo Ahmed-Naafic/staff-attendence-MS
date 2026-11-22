@@ -1,7 +1,7 @@
 /*
  * The API routes the Staff app uses (docs/architecture.md → API). Each returns checked data.
  */
-import { checkEventResponse, checkHistory, checkLessonMarks, checkLessons, checkLogin, checkProfile, checkSession, checkTeaching, checkTimetable, checkToday, checkUser } from './contracts';
+import { checkExamDuties, checkExamRoom, checkMarkSheet, checkMarkSheets, checkEventResponse, checkHistory, checkLessonMarks, checkLessons, checkLogin, checkProfile, checkSession, checkTeaching, checkTimetable, checkToday, checkUser } from './contracts';
 
 export const signIn = (api, { phone, password }) =>
   api
@@ -44,3 +44,15 @@ export const fetchMyTeaching = (api, date, options) =>
 /** The teacher's week (published timetables, every branch): see checkTimetable. */
 export const fetchMyTimetable = (api, date, options) =>
   api.request(`/api/teacher/timetable${date ? `?date=${date}` : ''}`, options).then(({ data }) => checkTimetable(data));
+
+// ---- examinations (/api/teacher/exams): online only ----
+
+/** Today's and the next two weeks' invigilation duties. */
+export const fetchExamDuties = (api, options) => api.request('/api/teacher/exams/duties', options).then(({ data }) => checkExamDuties(data));
+export const fetchExamRoom = (api, sessionId, roomId) => api.request(`/api/teacher/exams/duties/${sessionId}/rooms/${roomId}`).then(({ data }) => checkExamRoom(data));
+/** body: { session, room, marks: [{ student, status }] } → the room again. */
+export const putExamAttendance = (api, body) => api.request('/api/teacher/exams/attendance', { method: 'PUT', body }).then(({ data }) => checkExamRoom(data));
+export const fetchMarkSheets = (api, options) => api.request('/api/teacher/exams/marks', options).then(({ data }) => checkMarkSheets(data));
+export const fetchMarkSheet = (api, paperId, sectionId) => api.request(`/api/teacher/exams/marks/${paperId}/${sectionId}`).then(({ data }) => checkMarkSheet(data));
+export const putMarks = (api, paperId, sectionId, marks) => api.request(`/api/teacher/exams/marks/${paperId}/${sectionId}`, { method: 'PUT', body: { marks } }).then(({ data }) => checkMarkSheet(data));
+export const submitMarks = (api, paperId, sectionId) => api.request(`/api/teacher/exams/marks/${paperId}/${sectionId}/submit`, { method: 'POST' }).then(({ data }) => checkMarkSheet(data));

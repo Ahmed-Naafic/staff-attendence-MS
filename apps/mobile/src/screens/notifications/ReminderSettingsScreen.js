@@ -28,6 +28,7 @@ const CATEGORY_LABELS = {
   ANNOUNCEMENT: 'EduTrack announcements',
   TRANSFER: 'Branch transfers',
   STUDENT_ATTENDANCE: 'Lesson attendance reminders',
+  EXAMINATION: 'Examination invigilation duties',
 };
 
 function Row({ label, description, value, onChange, disabled, testID }) {

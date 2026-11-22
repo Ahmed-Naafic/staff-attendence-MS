@@ -27,15 +27,16 @@ export const CATEGORIES = [
   'ANNOUNCEMENT',
   'TRANSFER',
   'STUDENT_ATTENDANCE',
+  'EXAMINATION',
 ];
 export const MANDATORY_CATEGORIES = ['STATUS', 'MANAGER_ASSIGNMENT', 'ANNOUNCEMENT', 'TRANSFER'];
 export const isMandatory = (category) => MANDATORY_CATEGORIES.includes(category);
 
 /** The categories each role can receive (and so can see in its preferences). */
 export const ROLE_CATEGORIES = {
-  STAFF: ['MISSING_CHECK_OUT', 'ASSIGNMENT', 'SCHEDULE', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE'],
-  MANAGER: ['ATTENDANCE', 'DIGEST', 'BRANCH_SETUP', 'MANAGER_ASSIGNMENT', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE'],
-  OWNER: ['DIGEST', 'BRANCH_SETUP', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE'],
+  STAFF: ['MISSING_CHECK_OUT', 'ASSIGNMENT', 'SCHEDULE', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE', 'EXAMINATION'],
+  MANAGER: ['ATTENDANCE', 'DIGEST', 'BRANCH_SETUP', 'MANAGER_ASSIGNMENT', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE', 'EXAMINATION'],
+  OWNER: ['DIGEST', 'BRANCH_SETUP', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE', 'EXAMINATION'],
 };
 
 /** Notification type → category. The 11 approved Phase 1 events (N3) plus the digests (N6–N8). */
@@ -61,6 +62,10 @@ export const NOTIFICATION_TYPES = {
   LESSON_ATTENDANCE_MISSING: 'STUDENT_ATTENDANCE', // the lesson's teacher: attendance not taken by the deadline
   STUDENT_ATTENDANCE_INCOMPLETE: 'STUDENT_ATTENDANCE', // the branch's Managers: a day's attendance incomplete
   STUDENT_ATTENDANCE_SUMMARY: 'STUDENT_ATTENDANCE', // the Owner: a day's student attendance across branches
+  EXAM_DUTIES: 'EXAMINATION',
+  EXAM_MARKS_RETURNED: 'EXAMINATION',
+  EXAM_RESULTS_APPROVED: 'EXAMINATION', // the School Owner: a Manager approved results that wait for publication
+  EXAM_RESULTS_PUBLISHED: 'EXAMINATION', // the branch's Managers: the School Owner published results // the section's teachers of the subject: marks returned to correct // an invigilator: their duties when an examination timetable is published (again)
 };
 export const categoryOf = (type) => NOTIFICATION_TYPES[type];
 

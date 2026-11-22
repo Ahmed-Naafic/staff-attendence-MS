@@ -8,7 +8,7 @@ import { SchoolFormModal } from '../components/SchoolFormModal.jsx';
 import { SchoolsFilters } from '../components/SchoolsFilters.jsx';
 import { SchoolsSkeleton } from '../components/SchoolsSkeleton.jsx';
 import { SchoolsSummary } from '../components/SchoolsSummary.jsx';
-import { ReactivateSchoolModal, SchoolFeatureModal, SuspendSchoolModal } from '../components/SchoolStatusModals.jsx';
+import { FEATURE_NAMES, ReactivateSchoolModal, SchoolFeatureModal, SuspendSchoolModal } from '../components/SchoolStatusModals.jsx';
 import { SchoolsTable } from '../components/SchoolsTable.jsx';
 import { useSchoolFilters } from '../hooks/useSchoolFilters.js';
 import { useSchoolDetails, useSchools } from '../hooks/useSchools.js';
@@ -133,9 +133,9 @@ export default function SchoolsPage() {
             onEdit={open('edit')}
             onSuspend={open('suspend')}
             onReactivate={open('reactivate')}
-            onFeature={(school, enable) => {
+            onFeature={(school, enable, feature) => {
               setNotice('');
-              setDialog({ type: 'feature', school, enable });
+              setDialog({ type: 'feature', school, enable, feature });
             }}
           />
         </>
@@ -161,7 +161,8 @@ export default function SchoolsPage() {
         enable={dialog?.enable === true}
         open={dialog?.type === 'feature'}
         onClose={closeDialog}
-        onDone={done((s) => `Student Attendance is now ${s.features.studentAttendance ? 'on' : 'off'} for ${s.name}.`)}
+        feature={dialog?.feature ?? 'studentAttendance'}
+        onDone={done((s) => `${FEATURE_NAMES[dialog?.feature ?? 'studentAttendance']} is now ${s.features[dialog?.feature ?? 'studentAttendance'] ? 'on' : 'off'} for ${s.name}.`)}
       />
       <ReactivateSchoolModal
         school={dialog?.school}

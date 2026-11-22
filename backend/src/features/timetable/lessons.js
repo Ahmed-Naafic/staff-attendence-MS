@@ -1,5 +1,6 @@
 import { getPrisma } from '../../config/prisma.js';
 import { asDbDay, loadSchoolDaysForBranches, toDay, versionOn } from '../academic-calendar/schoolDays.js';
+import { examCovers, loadScheduledExams } from '../examinations/examDays.js';
 import { dayPlan, halvesOf, minutesToTime } from './bellTimes.js';
 
 /*
@@ -9,8 +10,14 @@ import { dayPlan, halvesOf, minutesToTime } from './bellTimes.js';
  * effect that day. Student attendance (Manager half-shifts, teacher lessons, NOT_MARKED, reports)
  * reads days from here.
  *
+ * Examinations: on the days of a scheduled examination that stops lessons, the normal lessons of the
+ * classes sitting it stop in the branches holding it (examinations/examDays.js). The day stays a school
+ * day (halves unchanged); its lessons become `lesson: null` with `stoppedLesson` kept for display, and
+ * the day names the `examination`. So no lesson attendance is expected or taken on those days.
+ *
  * Fixed number of queries whatever the number of sections and days: three for the school days of
- * every branch involved, one for the timetable versions, one for the bell times.
+ * every branch involved, one for the timetable versions, one for the sections' classes, one for the
+ * examinations, one for the bell times.
  */
 
 const subjectSelect = { id: true, name: true, code: true };
@@ -18,15 +25,16 @@ const teacherSelect = { id: true, name: true, staffId: true };
 
 /**
  * `sections`: [{ id, branchId }] of one school. → Map sectionId → [day], each day:
- * { date, weekday, timetableDay, schoolDay, reason, holiday, closure, extraDay, timetable: { id,
- *   effectiveFrom } | null, bellSchedule: { id, name } | null, periods: [plan item + lesson], halves }.
+ * { date, weekday, timetableDay, schoolDay, reason, holiday, closure, extraDay, examination: { id, name }
+ *   | null, timetable: { id, effectiveFrom } | null, bellSchedule: { id, name } | null, periods: [plan
+ *   item + lesson (+ stoppedLesson)], halves }.
  */
 export async function loadSectionDays(schoolId, sections, from, to, client = getPrisma()) {
   const result = new Map();
   if (!sections.length) return result;
   const sectionIds = sections.map((s) => s.id);
   const branchIds = [...new Set(sections.map((s) => s.branchId))];
-  const [calendar, versions] = await Promise.all([
+  const [calendar, versions, sectionClasses] = await Promise.all([
     loadSchoolDaysForBranches(schoolId, branchIds, from, to, client),
     client.timetableVersion.findMany({
       where: { sectionId: { in: sectionIds }, cancelledAt: null, effectiveFrom: { lte: asDbDay(to) } },
@@ -39,7 +47,10 @@ export async function loadSectionDays(schoolId, sections, from, to, client = get
         slots: { select: { weekday: true, periodNumber: true, room: true, subject: { select: subjectSelect }, teacher: { select: teacherSelect } } },
       },
     }),
+    client.section.findMany({ where: { id: { in: sectionIds } }, select: { id: true, classId: true } }),
   ]);
+  const classOf = new Map(sectionClasses.map((s) => [s.id, s.classId]));
+  const exams = await loadScheduledExams(schoolId, { branchIds, classIds: [...new Set(classOf.values())], stopsLessons: true }, from, to, client);
   const bellIds = [...new Set(versions.map((v) => v.bellScheduleId))];
   const bellRows = bellIds.length
     ? await client.bellScheduleVersion.findMany({
@@ -65,11 +76,14 @@ export async function loadSectionDays(schoolId, sections, from, to, client = get
         closure: d.closure,
         extraDay: d.extraDay,
         academicYear: d.academicYear,
+        examination: null,
         timetable: null,
         bellSchedule: null,
         periods: [],
         halves: [],
       };
+      const exam = d.schoolDay ? exams.find((e) => examCovers(e, { day: d.date, branchId: section.branchId, classId: classOf.get(section.id) })) : null;
+      if (exam) base.examination = { id: exam.id, name: exam.name };
       const tv = versionOn(own, d.date);
       if (!tv) return base;
       const shaped = { ...base, timetable: { id: tv.id, effectiveFrom: tv.effectiveFrom }, bellSchedule: tv.bellSchedule };
@@ -79,11 +93,13 @@ export async function loadSectionDays(schoolId, sections, from, to, client = get
       const plan = dayPlan(bv.periods, d.timetableDay);
       const periods = plan.map((p) => {
         const slot = p.kind === 'LESSON' ? tv.slots.find((s) => s.weekday === d.timetableDay && s.periodNumber === p.number) : null;
+        const lesson = slot ? { subject: slot.subject, teacher: slot.teacher ?? null, room: slot.room ?? null } : null;
         return {
           ...p,
           start: minutesToTime(p.startMinute),
           end: minutesToTime(p.endMinute),
-          lesson: slot ? { subject: slot.subject, teacher: slot.teacher ?? null, room: slot.room ?? null } : null,
+          lesson: exam ? null : lesson,
+          ...(exam && lesson && { stoppedLesson: lesson }),
         };
       });
       return { ...shaped, periods, halves: halvesOf(plan).map((h) => ({ ...h, start: minutesToTime(h.startMinute), end: minutesToTime(h.endMinute) })) };

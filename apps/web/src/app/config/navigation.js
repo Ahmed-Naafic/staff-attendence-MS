@@ -1,4 +1,4 @@
-import { ArrowRightLeft, CalendarCog, ListOrdered, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, UserRound, Users } from 'lucide-react';
+import { Award, ChartColumnBig, ClipboardList, DoorOpen, Grid3x3, LayoutDashboard, NotebookPen, PenLine, SlidersHorizontal, Tags, ArrowRightLeft, CalendarCog, ListOrdered, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, UserRound, Users } from 'lucide-react';
 
 /*
  * Role-aware navigation. Each role gets its own identity and sidebar sections;
@@ -79,6 +79,28 @@ const studentGroup = {
 };
 
 /**
+ * Examinations under one menu (School Owner and Manager), in the order of the work: overview, the
+ * examinations, their configuration and rooms, the timetable, marks, results, analytics, settings.
+ * The pages explain when the school has not had Examinations switched on.
+ */
+const examGroup = {
+  id: 'examinations',
+  label: 'Examinations',
+  icon: NotebookPen,
+  children: [
+    { to: '/examinations', label: 'Overview', icon: LayoutDashboard },
+    { to: '/examinations/list', label: 'Examinations', icon: ClipboardList },
+    { to: '/examinations/setup', label: 'Types & Periods', icon: Tags },
+    { to: '/examinations/rooms', label: 'Rooms', icon: DoorOpen },
+    { to: '/examinations/timetable', label: 'Timetable & Allocation', icon: Grid3x3 },
+    { to: '/examinations/marks', label: 'Marks Entry', icon: PenLine },
+    { to: '/examinations/results', label: 'Results & Report Cards', icon: Award },
+    { to: '/examinations/analytics', label: 'Analytics', icon: ChartColumnBig },
+    { to: '/examinations/settings', label: 'Settings', icon: SlidersHorizontal },
+  ],
+};
+
+/**
  * Sidebar sections per role: [{ label?, items: [item] }], an item being a link { to, label, icon }
  * or a group { id, label, icon, children: [link] } shown as a menu that opens and closes.
  */
@@ -116,6 +138,7 @@ export const navigationByRole = {
         { to: '/subjects', label: 'Subjects', icon: BookOpen },
         { to: '/teaching', label: 'Teaching', icon: Presentation },
         studentGroup,
+        examGroup,
       ],
     },
   ],
@@ -132,6 +155,7 @@ export const navigationByRole = {
         { to: '/subjects', label: 'Subjects', icon: BookOpen },
         { to: '/teaching', label: 'Teaching', icon: Presentation },
         studentGroup,
+        examGroup,
       ],
     },
   ],

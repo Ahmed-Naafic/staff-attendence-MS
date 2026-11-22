@@ -70,7 +70,7 @@ export function genericPushMessage(token, category, sourceKey, language = DEFAUL
   return {
     to: token,
     title: texts.title,
-    body: category === 'ANNOUNCEMENT' ? texts.announcement : texts.attendance,
+    body: category === 'ANNOUNCEMENT' ? texts.announcement : category === 'EXAMINATION' ? texts.examination : texts.attendance,
     sound: 'default',
     priority: 'high',
     channelId: 'default',

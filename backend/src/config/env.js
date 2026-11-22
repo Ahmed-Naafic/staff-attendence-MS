@@ -35,6 +35,12 @@ export const env = {
   // Database and role used to check a staged restore (defaults: neondb and DIRECT_URL's user).
   neonDatabaseName: process.env.NEON_DATABASE_NAME || 'neondb',
   neonRoleName: process.env.NEON_ROLE_NAME || undefined,
+  // Examination paper files (docs/business-rules.md → Examinations → Paper files): a private bucket in
+  // Supabase Storage. The service role key can read and write every file of the project: keep it only in
+  // the server's environment (never sent to a browser). Without URL and key the module shows "not set up".
+  supabaseUrl: (process.env.SUPABASE_URL || '').replace(/\/$/, '') || undefined,
+  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || undefined,
+  supabaseExamBucket: process.env.SUPABASE_EXAM_BUCKET || 'exam-papers',
   // Sample data (e.g. Manager → Staff → Add Sample Staff): only on a test system — the Neon dev
   // branch (EDUTRACK_DB_BRANCH=dev), or where SAMPLE_DATA=on is set. Off in production by default.
   sampleData: process.env.SAMPLE_DATA === 'on' || process.env.EDUTRACK_DB_BRANCH === 'dev',

@@ -23,6 +23,7 @@ const schoolSelect = {
   suspensionReason: true,
   suspendedAt: true,
   studentAttendanceEnabled: true,
+  examinationsEnabled: true,
   owner: { select: { id: true, name: true } },
 };
 
@@ -44,7 +45,7 @@ export const toSchool = (school) => ({
   suspensionReason: school.suspensionReason ?? null,
   suspendedAt: school.suspendedAt?.toISOString() ?? null,
   // Features the Super Admin turns on per school (off by default).
-  features: { studentAttendance: school.studentAttendanceEnabled === true },
+  features: { studentAttendance: school.studentAttendanceEnabled === true, examinations: school.examinationsEnabled === true },
 });
 
 /** Search (name, code, owner, location), status, location, registration-date and no-owner filters, newest first. */
@@ -157,26 +158,35 @@ export async function updateSchool(id, values, user, req) {
   return toSchool(school);
 }
 
+const FEATURES = {
+  studentAttendance: { column: 'studentAttendanceEnabled', label: 'Student Attendance' },
+  examinations: { column: 'examinationsEnabled', label: 'Examinations' },
+};
+
 /**
- * Turns features on or off for a school (Super Admin): { studentAttendance }. Unchanged → no audit
- * event. Allowed whatever the school's status. Turning Student Attendance off hides it from the school;
- * nothing recorded is deleted.
+ * Turns features on or off for a school (Super Admin): { studentAttendance?, examinations? }. Each
+ * change records one audit event; unchanged → none. Allowed whatever the school's status. Turning a
+ * feature off hides it from the school; nothing recorded is deleted.
  */
-export async function updateSchoolFeatures(id, { studentAttendance }, user, req) {
+export async function updateSchoolFeatures(id, values, user, req) {
   const school = await getPrisma().$transaction(async (tx) => {
     const current = await findOrFail(tx, id);
-    if (current.studentAttendanceEnabled === studentAttendance) return current;
-    const updated = await tx.school.update({ where: { id: current.id }, data: { studentAttendanceEnabled: studentAttendance }, select: schoolSelect });
-    await recordAuditEvent({
-      client: tx,
-      action: AUDIT_ACTIONS.SCHOOL_FEATURES_UPDATED,
-      actor: actorOf(user),
-      target: auditTarget(updated),
-      schoolId: updated.id,
-      description: `Student Attendance turned ${studentAttendance ? 'on' : 'off'} for the school.`,
-      change: { field: 'Student Attendance', from: current.studentAttendanceEnabled ? 'On' : 'Off', to: studentAttendance ? 'On' : 'Off' },
-      req,
-    });
+    const changed = Object.keys(FEATURES).filter((k) => values[k] !== undefined && current[FEATURES[k].column] !== values[k]);
+    if (!changed.length) return current;
+    const updated = await tx.school.update({ where: { id: current.id }, data: Object.fromEntries(changed.map((k) => [FEATURES[k].column, values[k]])), select: schoolSelect });
+    for (const k of changed) {
+      const { label, column } = FEATURES[k];
+      await recordAuditEvent({
+        client: tx,
+        action: AUDIT_ACTIONS.SCHOOL_FEATURES_UPDATED,
+        actor: actorOf(user),
+        target: auditTarget(updated),
+        schoolId: updated.id,
+        description: `${label} turned ${values[k] ? 'on' : 'off'} for the school.`,
+        change: { field: label, from: current[column] ? 'On' : 'Off', to: values[k] ? 'On' : 'Off' },
+        req,
+      });
+    }
     return updated;
   });
   return toSchool(school);

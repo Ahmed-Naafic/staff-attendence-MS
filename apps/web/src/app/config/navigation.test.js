@@ -74,3 +74,13 @@ test('the timetable steps: every step is a page of its own, in the order of the 
   assert.equal(sharedSearch('?tab=x'), '');
   assert.equal(BUILDER_TAB_STEP.teachers, 'limits');
 });
+
+test('navigation: the nine Examinations pages are under one Examinations menu for School Owners and Managers', () => {
+  const pages = ['/examinations', '/examinations/list', '/examinations/setup', '/examinations/rooms', '/examinations/timetable', '/examinations/marks', '/examinations/results', '/examinations/analytics', '/examinations/settings'];
+  for (const role of ['OWNER', 'MANAGER']) {
+    const group = navigationByRole[role].flatMap((s) => s.items).find((i) => i.id === 'examinations');
+    assert.ok(group, role);
+    assert.deepEqual(group.children.map((c) => c.to), pages);
+  }
+  assert.ok(!links('SUPER_ADMIN').some((l) => l.to.startsWith('/examinations')));
+});

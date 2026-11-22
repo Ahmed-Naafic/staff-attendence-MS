@@ -19,6 +19,7 @@ export const CATEGORY_LABELS = {
   ANNOUNCEMENT: 'Platform announcements',
   TRANSFER: 'Staff transfers',
   STUDENT_ATTENDANCE: 'Student attendance',
+  EXAMINATION: 'Examinations',
 };
 
 export const CATEGORY_DESCRIPTIONS = {
@@ -33,6 +34,7 @@ export const CATEGORY_DESCRIPTIONS = {
   ANNOUNCEMENT: 'Messages from the EduTrack platform team.',
   TRANSFER: 'A staff member is joining your branch, or a transfer was cancelled.',
   STUDENT_ATTENDANCE: 'Student attendance not taken or incomplete (Managers), and each day’s summary across branches (Owners).',
+  EXAMINATION: 'Invigilation duties and returned marks (staff); results waiting for publication (Owners) or published (Managers).',
 };
 
 /** Owner and Manager pages show absolute times in UTC, labelled (docs/business-rules.md → Owner date display). */

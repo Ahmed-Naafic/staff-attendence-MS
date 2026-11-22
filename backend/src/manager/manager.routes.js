@@ -6,6 +6,7 @@ import { readCurriculum, readSubjectCreation, readSubjectListQuery, readSubjectU
 import { createSubject, deactivateSubject, getCurriculum, getSubject, listSubjects, reactivateSubject, setCurriculum, updateSubject } from '../features/subjects/subjects.service.js';
 import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuery } from '../features/teaching/teachingInput.js';
 import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
+import { mountExaminationRoutes } from '../features/examinations/examinations.routes.js';
 import { mountTimetableBuilderRoutes } from '../features/timetable-builder/builder.routes.js';
 import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
 import { assignTeaching, cancelAssignment, eligibleTeachers, listTeachingAssignments, sectionTeaching, setAssignmentEnd } from '../features/teaching/teaching.service.js';
@@ -178,6 +179,8 @@ managerRouter.get('/teaching/teachers', async (req, res) => {
 mountTimetableRoutes(managerRouter, teachingScope, 'MANAGER');
 // Timetable builder (setup, readiness, generate, review, publish) and the class / teacher / master views.
 mountTimetableBuilderRoutes(managerRouter, teachingScope, 'MANAGER');
+// Examinations (configuration and rooms so far; docs/business-rules.md → Examinations).
+mountExaminationRoutes(managerRouter, teachingScope, 'MANAGER');
 
 // ---- Student attendance (docs/business-rules.md → Student attendance): settings, half-day sessions,
 // marks and excuses of the Manager's branch.
