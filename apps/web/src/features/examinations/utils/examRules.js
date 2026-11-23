@@ -254,3 +254,78 @@ export function sessionChoices(sessions, session) {
   const ofDate = sorted.filter((s) => s.date === session.date);
   return { dates, shifts: [...new Set(ofDate.map((s) => s.shiftName))], list: ofDate.filter((s) => s.shiftName === session.shiftName), session };
 }
+
+// ---- timetable tab: filters, date groups, paper groups ----
+export const EMPTY_TIMETABLE_FILTERS = { from: '', to: '', shift: '', grade: '', subject: '', q: '' };
+
+/** The choices of the timetable filters, from the sessions themselves (never a fixed list). */
+export function timetableFilterOptions(sessions) {
+  const shifts = [...new Set(sessions.map((s) => s.shiftName))].sort((a, b) => a.localeCompare(b));
+  const grades = new Map();
+  const subjects = new Map();
+  for (const s of sessions) {
+    for (const p of s.papers) {
+      grades.set(p.class.id, p.class);
+      subjects.set(p.subject.id, p.subject);
+    }
+  }
+  return {
+    shifts,
+    grades: [...grades.values()].sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0) || a.name.localeCompare(b.name)),
+    subjects: [...subjects.values()].sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+const paperMatches = (p, f, q) =>
+  (!f.grade || p.class.id === f.grade) &&
+  (!f.subject || p.subject.id === f.subject) &&
+  (!q || `${p.subject.name} ${p.subject.code ?? ''} ${p.class.name}`.toLowerCase().includes(q));
+
+/**
+ * The sessions the filters keep (dates inclusive, all filters combined), each with `shown`: its papers
+ * that match the grade / subject / search filters (all of them when none is set).
+ */
+export function filterTimetableSessions(sessions, f = EMPTY_TIMETABLE_FILTERS) {
+  const q = (f.q ?? '').trim().toLowerCase();
+  return [...sessions]
+    .sort(byTime)
+    .filter((s) => (!f.from || s.date >= f.from) && (!f.to || s.date <= f.to) && (!f.shift || s.shiftName === f.shift))
+    .map((s) => ({ ...s, shown: s.papers.filter((p) => paperMatches(p, f, q)) }))
+    .filter((s) => s.shown.length);
+}
+
+/** How many filters are set (the search counts as one). */
+export const activeFilterCount = (f) => Object.values(f).filter((v) => String(v ?? '').trim()).length;
+
+/** Sessions → [{ date, weekday, sessions }] in date and time order. */
+export function groupSessionsByDate(sessions) {
+  const groups = [];
+  for (const s of [...sessions].sort(byTime)) {
+    if (groups.at(-1)?.date !== s.date) groups.push({ date: s.date, weekday: weekdayOf(s.date), sessions: [] });
+    groups.at(-1).sessions.push(s);
+  }
+  return groups;
+}
+
+/** Papers → [{ subject, classes }]: one entry per subject with its grades in class order. */
+export function groupPapersBySubject(papers) {
+  const bySubject = new Map();
+  for (const p of papers) {
+    const g = bySubject.get(p.subject.id) ?? { subject: p.subject, classes: [] };
+    g.classes.push(p.class);
+    bySubject.set(p.subject.id, g);
+  }
+  return [...bySubject.values()].map((g) => ({ ...g, classes: g.classes.sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0)) }));
+}
+
+/** A session's state on `today`: done (before today), today or upcoming. */
+export const sessionState = (s, today) => (s.date < today ? 'done' : s.date === today ? 'today' : 'upcoming');
+export const SESSION_STATES = {
+  done: { label: 'Done', variant: 'neutral' },
+  today: { label: 'Today', variant: 'warning' },
+  upcoming: { label: 'Upcoming', variant: 'info' },
+};
+
+/** "Monday, 23 November 2026" for "2026-11-23" (calendar date, no time zone shift). */
+export const longDate = (date) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });

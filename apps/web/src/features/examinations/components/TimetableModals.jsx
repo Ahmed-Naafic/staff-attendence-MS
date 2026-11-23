@@ -161,13 +161,20 @@ export function GenerateModal({ role, examId, branchId, options, regenerate, ope
   );
 }
 
-/** Moves one paper of a session to another session, or to a new session at a date and time. */
-export function MoveModal({ role, examId, branchId, timetable, session, open, onClose, onDone }) {
+/**
+ * Moves one paper of a session to another session, or to a new session at a date and time.
+ * `adding` (no `session`): Add Session, the same move into a new session, choosing the paper from every
+ * session not yet sat (a session is never empty: it exists through its papers).
+ */
+export function MoveModal({ role, examId, branchId, timetable, session, adding = false, open, onClose, onDone }) {
   const formId = useId();
-  const form = useDialogForm(open, { sitting: session?.papers[0]?.sittingId ?? '', mode: 'existing', session: '', date: session?.date ?? '', start: '' }, failure);
+  const movable = adding ? (timetable?.sessions ?? []).filter((s) => !s.past) : session ? [session] : [];
+  const papers = movable.flatMap((s) => s.papers.map((p) => ({ ...p, from: s })));
+  const form = useDialogForm(open, { sitting: adding ? '' : (session?.papers[0]?.sittingId ?? ''), mode: adding ? 'new' : 'existing', session: '', date: session?.date ?? '', start: '' }, failure);
   const v = form.values;
-  const paper = session?.papers.find((p) => p.sittingId === v.sitting);
-  const targets = (timetable?.sessions ?? []).filter((s) => s.id !== session?.id && !s.past && !s.papers.some((p) => p.class.id === paper?.class.id));
+  const paper = papers.find((p) => p.sittingId === v.sitting);
+  const fromId = paper?.from.id ?? session?.id;
+  const targets = (timetable?.sessions ?? []).filter((s) => s.id !== fromId && !s.past && !s.papers.some((p) => p.class.id === paper?.class.id));
   const save = () => {
     const problems = {};
     if (!v.sitting) problems.sitting = 'Choose the paper.';
@@ -184,21 +191,34 @@ export function MoveModal({ role, examId, branchId, timetable, session, open, on
     <Modal
       open={open}
       onClose={onClose}
-      title="Move a Paper"
-      description="Both sessions are seated and given invigilators again."
+      title={adding ? 'Add a Session' : 'Move a Paper'}
+      description={
+        adding
+          ? 'Choose a paper and when its new session starts. The shift follows the start time; the session lasts as long as the paper, and both sessions are seated and given invigilators again.'
+          : 'Both sessions are seated and given invigilators again.'
+      }
       loading={form.saving}
       error={form.formError}
-      footer={<Footer formId={formId} saving={form.saving} onClose={onClose} label="Move Paper" />}
+      footer={<Footer formId={formId} saving={form.saving} onClose={onClose} label={adding ? 'Add Session' : 'Move Paper'} />}
     >
       <form id={formId} noValidate onSubmit={(e) => { e.preventDefault(); save(); }} className="flex flex-col gap-4">
-        <Select label="Paper" options={(session?.papers ?? []).map((p) => ({ value: p.sittingId, label: `${p.class.name} · ${p.subject.name}` }))} value={v.sitting} error={form.errors.sitting} onChange={(e) => form.set('sitting', e.target.value)} />
-        <RadioGroup
-          name={`${formId}-mode`}
-          legend="Move it to"
-          options={[{ value: 'existing', label: 'Another session' }, { value: 'new', label: 'A new session' }]}
-          value={v.mode}
-          onChange={(next) => form.set('mode', next)}
+        <Select
+          label="Paper"
+          placeholder={adding ? (papers.length ? 'Choose a paper' : 'No paper left to move') : undefined}
+          options={papers.map((p) => ({ value: p.sittingId, label: adding ? `${p.subject.name} · ${p.class.name} (now ${p.from.date} ${p.from.start})` : `${p.class.name} · ${p.subject.name}` }))}
+          value={v.sitting}
+          error={form.errors.sitting}
+          onChange={(e) => form.set('sitting', e.target.value)}
         />
+        {!adding && (
+          <RadioGroup
+            name={`${formId}-mode`}
+            legend="Move it to"
+            options={[{ value: 'existing', label: 'Another session' }, { value: 'new', label: 'A new session' }]}
+            value={v.mode}
+            onChange={(next) => form.set('mode', next)}
+          />
+        )}
         {v.mode === 'existing' ? (
           <Select
             label="Session"

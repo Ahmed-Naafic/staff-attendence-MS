@@ -107,3 +107,56 @@ describe('timetable views', () => {
     assert.deepEqual(c.list.map((s) => s.id), ['a', 'b']);
   });
 });
+
+describe('timetable tab: filters and groups', () => {
+  const g5 = { id: 'g5', name: 'Grade 5', sequence: 5 };
+  const g6 = { id: 'g6', name: 'Grade 6', sequence: 6 };
+  const isl = { id: 'isl', name: 'Islamic Studies', code: 'ISL' };
+  const som = { id: 'som', name: 'Somali', code: 'SOM' };
+  const paper = (subject, cls) => ({ sittingId: `${subject.id}-${cls.id}`, subject, class: cls });
+  const sessions = [
+    { id: 'c', date: '2026-11-24', start: '08:00', shiftName: 'Morning', papers: [paper(som, g5)] },
+    { id: 'b', date: '2026-11-23', start: '10:15', shiftName: 'Morning', papers: [paper(som, g6), paper(som, g5)] },
+    { id: 'a', date: '2026-11-23', start: '08:00', shiftName: 'Morning', papers: [paper(isl, g5), paper(isl, g6)] },
+    { id: 'd', date: '2026-11-24', start: '13:00', shiftName: 'Afternoon', papers: [paper(isl, g6)] },
+  ];
+  const ids = (list) => list.map((s) => s.id);
+
+  test('filter options come from the sessions', () => {
+    const o = rules.timetableFilterOptions(sessions);
+    assert.deepEqual(o.shifts, ['Afternoon', 'Morning']);
+    assert.deepEqual(o.grades.map((x) => x.id), ['g5', 'g6']);
+    assert.deepEqual(o.subjects.map((x) => x.id), ['isl', 'som']);
+  });
+
+  test('filters combine; each session shows its matching papers', () => {
+    const f = rules.EMPTY_TIMETABLE_FILTERS;
+    assert.deepEqual(ids(rules.filterTimetableSessions(sessions, f)), ['a', 'b', 'c', 'd']);
+    assert.deepEqual(ids(rules.filterTimetableSessions(sessions, { ...f, from: '2026-11-24' })), ['c', 'd']);
+    assert.deepEqual(ids(rules.filterTimetableSessions(sessions, { ...f, to: '2026-11-23' })), ['a', 'b']);
+    assert.deepEqual(ids(rules.filterTimetableSessions(sessions, { ...f, shift: 'Afternoon' })), ['d']);
+    const picked = rules.filterTimetableSessions(sessions, { ...f, grade: 'g6', subject: 'som' });
+    assert.deepEqual(ids(picked), ['b']);
+    assert.deepEqual(picked[0].shown.map((p) => p.class.id), ['g6']);
+    assert.equal(picked[0].papers.length, 2);
+    assert.deepEqual(ids(rules.filterTimetableSessions(sessions, { ...f, q: '  islamic ' })), ['a', 'd']);
+    assert.deepEqual(ids(rules.filterTimetableSessions(sessions, { ...f, q: 'grade 6', shift: 'Morning' })), ['a', 'b']);
+    assert.deepEqual(rules.filterTimetableSessions(sessions, { ...f, q: 'som', from: '2026-11-25' }), []);
+    assert.equal(rules.activeFilterCount(f), 0);
+    assert.equal(rules.activeFilterCount({ ...f, q: ' x ', shift: 'Morning' }), 2);
+  });
+
+  test('sessions group by date in time order; papers group by subject', () => {
+    const groups = rules.groupSessionsByDate(sessions);
+    assert.deepEqual(groups.map((x) => [x.date, x.weekday, ids(x.sessions)]), [
+      ['2026-11-23', 'Monday', ['a', 'b']],
+      ['2026-11-24', 'Tuesday', ['c', 'd']],
+    ]);
+    const bySubject = rules.groupPapersBySubject(sessions[1].papers);
+    assert.deepEqual(bySubject.map((x) => [x.subject.id, x.classes.map((c) => c.id)]), [['som', ['g5', 'g6']]]);
+    assert.equal(rules.longDate('2026-11-23'), 'Monday, 23 November 2026');
+    assert.equal(rules.sessionState({ date: '2026-11-23' }, '2026-11-24'), 'done');
+    assert.equal(rules.sessionState({ date: '2026-11-24' }, '2026-11-24'), 'today');
+    assert.equal(rules.sessionState({ date: '2026-11-25' }, '2026-11-24'), 'upcoming');
+  });
+});

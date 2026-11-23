@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { CalendarCheck, CalendarClock, ClipboardList, FilePen, Plus, Search } from 'lucide-react';
 import {
   Alert,
@@ -36,7 +36,10 @@ export default function ExaminationsListPage() {
   const [version, setVersion] = useState(0);
   const [dialog, setDialog] = useState(null);
   const [notice, setNotice] = useState('');
-  const [filters, setFilters] = useState({ yearId: '', period: '', scope: 'all', branch: '', state: 'all', q: '' });
+  // ?state=draft (e.g. from a page that only lists scheduled examinations) opens the list on that status.
+  const [params] = useSearchParams();
+  const startState = EXAM_STATE_OPTIONS.some((o) => o.value === params.get('state')) ? params.get('state') : 'all';
+  const [filters, setFilters] = useState({ yearId: '', period: '', scope: 'all', branch: '', state: startState, q: '' });
   const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value, ...(key === 'yearId' && { period: '' }) }));
 
   const years = useApiData(() => loadAcademicYears(role), `years|${role}`);

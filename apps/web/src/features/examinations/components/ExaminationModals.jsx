@@ -158,7 +158,22 @@ export function ExaminationModal({ role, options, detail, open, onClose, onSaved
           {options && !options.classes.length ? (
             <p className="text-small text-fg-muted">Your school has no active classes yet.</p>
           ) : (
-            <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto rounded-md border border-border p-3 sm:grid-cols-2">
+            <div className="flex flex-col overflow-hidden rounded-md border border-border">
+            {(options?.classes.length ?? 0) > 1 && (() => {
+              const ids = options.classes.map((c) => c.id);
+              const picked = ids.filter((x) => v.classes.includes(x)).length;
+              return (
+                <div className="border-b border-border bg-muted px-3 py-2">
+                  <Checkbox
+                    label={`Select all classes (${picked} of ${ids.length})`}
+                    checked={picked === ids.length}
+                    indeterminate={picked > 0 && picked < ids.length}
+                    onChange={(e) => form.set('classes', e.target.checked ? [...new Set([...v.classes, ...ids])] : v.classes.filter((x) => !ids.includes(x)))}
+                  />
+                </div>
+              );
+            })()}
+            <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto p-3 sm:grid-cols-2">
               {(options?.classes ?? []).map((c) => (
                 <Checkbox
                   key={c.id}
@@ -168,6 +183,7 @@ export function ExaminationModal({ role, options, detail, open, onClose, onSaved
                   onChange={(e) => toggleClass(c.id, e.target.checked)}
                 />
               ))}
+            </div>
             </div>
           )}
           <p className="mt-1.5 text-caption text-fg-muted">Each class gets a paper for every subject of its curriculum. You can change the papers afterwards.</p>

@@ -27,6 +27,7 @@ import { requestFailure, useDialogForm } from '../../../hooks/useDialogForm.js';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { loadOwnerBranches } from '../../classes/data/classesApi.js';
 import { DownloadButton } from '../components/DownloadButton.jsx';
+import { NoScheduledExams } from '../components/NoScheduledExams.jsx';
 import { ExamPage, useExamRole } from '../components/ExamGate.jsx';
 import { approveMarkSheet, downloadMarkSheet, loadExaminations, loadMarkSheet, loadMarkSheets, returnMarkSheet, saveMarkSheet, submitMarkSheet } from '../data/examApi.js';
 import { parseMark, SHEET_STATES } from '../utils/examRules.js';
@@ -241,7 +242,7 @@ export default function ExamMarksPage() {
               </p>
             )}
             {!examId && exams.data ? (
-              <Card className="p-2"><EmptyState icon={PenLine} title="No scheduled examinations" description="Marks are entered for scheduled examinations once their papers are sat." /></Card>
+              <NoScheduledExams items={exams.data.items} icon={PenLine} description="Marks are entered for scheduled examinations once their papers are sat." />
             ) : list.status === 'error' && !list.data ? (
               <ErrorState title="Mark sheets could not be loaded" description="Check your connection and try again." onRetry={list.retry} />
             ) : (

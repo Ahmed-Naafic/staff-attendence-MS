@@ -6,7 +6,10 @@
  *      platform settings (only when the branch has no schools yet);
  *   2. the dev sign-in accounts (scripts/dev-seed/accounts.js; passwords from backend/.env.dev);
  *   3. the demo school: the dev Owner's school filled with consistent data for every feature
- *      (scripts/dev-seed/demoSchool.js; only once — skipped when it already has academic years).
+ *      (scripts/dev-seed/demoSchool.js; only once — skipped when it already has academic years);
+ *   4. the demo school's examinations: configuration, a completed examination with marks and
+ *      published results, a planned one with its timetable and a draft (scripts/dev-seed/examinations.js;
+ *      adds only what is missing, so it also runs on a demo school seeded before).
  *
  *   npm run seed:dev --workspace backend
  *
@@ -18,6 +21,7 @@ import { createMockOwners } from '../../apps/web/src/features/school-owners/data
 import { getPrisma } from '../src/config/prisma.js';
 import { assertDevEnvironment, seedAccounts } from './dev-seed/accounts.js';
 import { seedDemoSchool } from './dev-seed/demoSchool.js';
+import { seedExaminations } from './dev-seed/examinations.js';
 
 assertDevEnvironment();
 const prisma = getPrisma();
@@ -70,6 +74,9 @@ try {
   // 3. The demo school, then the accounts again so the demo teacher's password is set too.
   await seedDemoSchool(prisma);
   await seedAccounts(prisma, () => {});
+
+  // 4. Examinations of the demo school (scripts/dev-seed/examinations.js; adds what is missing).
+  await seedExaminations(prisma);
 } finally {
   await prisma.$disconnect();
 }
