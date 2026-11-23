@@ -29,6 +29,7 @@ import { requestFailure, useDialogForm } from '../../../hooks/useDialogForm.js';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { loadOwnerBranches } from '../../classes/data/classesApi.js';
 import { DownloadButton } from '../components/DownloadButton.jsx';
+import { NoScheduledExams } from '../components/NoScheduledExams.jsx';
 import { ExamPage, useExamRole } from '../components/ExamGate.jsx';
 import { downloadReportCards, handOverFinalResults, loadExaminations, loadFinalResults, loadResults, loadSectionResults, publishAllResults, resultsStep } from '../data/examApi.js';
 import { pctText, RESULT_STATES } from '../utils/examRules.js';
@@ -336,7 +337,7 @@ export default function ExamResultsPage() {
             </Card>
             {notice && <Alert variant={notice.variant} onDismiss={() => setNotice(null)}>{notice.text}</Alert>}
             {!examId && exams.data ? (
-              <Card className="p-2"><EmptyState icon={Award} title="No scheduled examinations" description="Results come from the approved marks of scheduled examinations." /></Card>
+              <NoScheduledExams items={exams.data.items} icon={Award} description="Results come from the approved marks of scheduled examinations." />
             ) : (
               <Card className="overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 pt-3">

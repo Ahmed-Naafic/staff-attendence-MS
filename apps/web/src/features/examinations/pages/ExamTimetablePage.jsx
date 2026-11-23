@@ -1,6 +1,6 @@
 import { useId, useState } from 'react';
 import { useSearchParams } from 'react-router';
-import { ArrowRightLeft, CalendarClock, DoorOpen, Grid3x3, Sparkles, UserCheck, Users } from 'lucide-react';
+import { CalendarClock, DoorOpen, Grid3x3, Sparkles, UserCheck, Users } from 'lucide-react';
 import {
   Alert,
   Badge,
@@ -14,10 +14,8 @@ import {
   Select,
   TabPanel,
   Table,
-  TableActions,
   TableBody,
   TableCell,
-  TableEmpty,
   TableHead,
   TableHeaderCell,
   TableRow,
@@ -30,6 +28,7 @@ import { DownloadButton } from '../components/DownloadButton.jsx';
 import { ExamAttendancePanel } from '../components/ExamAttendancePanel.jsx';
 import { InvigilatorMatrixPanel } from '../components/InvigilatorMatrixPanel.jsx';
 import { RoomAllocationPanel } from '../components/RoomAllocationPanel.jsx';
+import { TimetableSessionsPanel, TimetableSkeleton } from '../components/TimetableSessionsPanel.jsx';
 import { GenerateModal, InvigilatorModal, MoveModal } from '../components/TimetableModals.jsx';
 import { clearTimetable, downloadExamDocument, loadExaminations, loadTimetable, loadTimetableOptions, publishTimetable } from '../data/examApi.js';
 import { UNPLACED_REASONS } from '../utils/examRules.js';
@@ -143,7 +142,7 @@ export default function ExamTimetablePage() {
               <EmptyState icon={Grid3x3} title="No active branches" description="A timetable is prepared for a branch." />
             </Card>
           ) : !t ? (
-            <LoadingState label="Loading the timetable…" />
+            tab === 'timetable' ? <TimetableSkeleton /> : <LoadingState label="Loading the timetable…" />
           ) : (
             <>
               {t.timetable?.changedSincePublish && <Alert variant="warning" title="Changed since it was published">Publish it again so the invigilators see their current duties.</Alert>}
@@ -195,47 +194,19 @@ export default function ExamTimetablePage() {
                   </div>
                   <TabPanel tabsId={tabsId} value={tab}>
                     {tab === 'timetable' && (
-                      <div role="region" aria-label="Sessions" tabIndex={0} className="overflow-x-auto">
-                        <Table caption="Sessions by date and time">
-                          <TableHead>
-                            <TableRow interactive={false}>
-                              <TableHeaderCell>Date</TableHeaderCell>
-                              <TableHeaderCell>Shift</TableHeaderCell>
-                              <TableHeaderCell>Time</TableHeaderCell>
-                              <TableHeaderCell>Papers</TableHeaderCell>
-                              <TableHeaderCell align="right">Students</TableHeaderCell>
-                              <TableHeaderCell>Rooms</TableHeaderCell>
-                              <TableHeaderCell align="right">{t.actions.edit ? 'Actions' : ''}</TableHeaderCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {!t.sessions.length && <TableEmpty columns={7} icon={CalendarClock} title="No sessions" description="No paper could be timetabled." />}
-                            {t.sessions.map((s) => (
-                              <TableRow key={s.id}>
-                                <TableCell className="tabular-nums whitespace-nowrap">{s.date}</TableCell>
-                                <TableCell><Badge variant="info">{s.shiftName}</Badge></TableCell>
-                                <TableCell className="tabular-nums whitespace-nowrap">{s.start}–{s.end}</TableCell>
-                                <TableCell>
-                                  <span className="flex flex-wrap gap-1">
-                                    {s.papers.map((p) => (
-                                      <Badge key={p.sittingId} variant="accent">{p.subject.name} · {p.class.name}</Badge>
-                                    ))}
-                                  </span>
-                                </TableCell>
-                                <TableCell align="right">{s.students}</TableCell>
-                                <TableCell>{s.rooms.map((r) => r.room.name).join(', ') || '—'}</TableCell>
-                                <TableCell align="right">
-                                  {t.actions.edit && !s.past && (
-                                    <TableActions>
-                                      <Button size="sm" variant="ghost" leftIcon={ArrowRightLeft} onClick={() => setDialog({ type: 'move', session: s })}>Move</Button>
-                                    </TableActions>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                      <TimetableSessionsPanel
+                        role={role}
+                        examId={examId}
+                        branch={b}
+                        timetable={t}
+                        onAdd={() => setDialog({ type: 'add' })}
+                        onEdit={(s) => setDialog({ type: 'move', session: s })}
+                        onOpenTab={(next, sessionId) => {
+                          if (sessionId) setSeatSession(sessionId);
+                          set('tab', next);
+                        }}
+                        onNotice={(message) => setNotice({ message })}
+                      />
                     )}
 
                     {tab === 'rooms' && (
@@ -324,6 +295,7 @@ export default function ExamTimetablePage() {
                 onDone={done('Timetable generated.')}
               />
               <MoveModal role={role} examId={examId} branchId={b} timetable={t} session={dialog?.session} open={dialog?.type === 'move'} onClose={() => setDialog(null)} onDone={done('Paper moved.')} />
+              <MoveModal role={role} examId={examId} branchId={b} timetable={t} adding open={dialog?.type === 'add'} onClose={() => setDialog(null)} onDone={done('Session added.')} />
               <InvigilatorModal
                 role={role}
                 examId={examId}

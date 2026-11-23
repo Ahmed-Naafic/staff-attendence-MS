@@ -4,6 +4,7 @@ import { BarChart, DonutChart } from '../../../components/charts';
 import { Alert, Card, CardHeader, EmptyState, ErrorState, KpiCard, LoadingState, Select, Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
 import { loadOwnerBranches } from '../../classes/data/classesApi.js';
+import { NoScheduledExams } from '../components/NoScheduledExams.jsx';
 import { ExamPage, useExamRole } from '../components/ExamGate.jsx';
 import { loadExamAnalytics, loadExaminations } from '../data/examApi.js';
 import { pctText } from '../utils/examRules.js';
@@ -69,7 +70,7 @@ export default function ExamAnalyticsPage() {
             {owner && <Select label="Branch" options={[{ value: '', label: 'All branches' }, ...(branches.data ?? []).map((b) => ({ value: b.id, label: b.name }))]} value={branch} onChange={(e) => set('branch', e.target.value)} />}
           </Card>
           {!examId && exams.data ? (
-            <Card className="p-2"><EmptyState icon={ChartColumnBig} title="No scheduled examinations" description="Analytics come from the results of scheduled examinations." /></Card>
+            <NoScheduledExams items={exams.data.items} icon={ChartColumnBig} description="Analytics come from the results of scheduled examinations." />
           ) : data.status === 'error' && !a ? (
             <ErrorState title="Analytics could not be loaded" description="Check your connection and try again." onRetry={data.retry} />
           ) : !a ? (
