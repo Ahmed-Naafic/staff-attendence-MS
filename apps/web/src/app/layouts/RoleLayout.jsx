@@ -65,7 +65,7 @@ export default function RoleLayout() {
           // smaller screens where the header scrolls away.
           context={title && <span className="lg:hidden">{title}</span>}
           // School Owners and Managers have a notification centre; Super Admins publish announcements instead (N16, N17).
-          actions={user.role === 'OWNER' || user.role === 'MANAGER' ? <NotificationBell role={user.role} /> : null}
+          actions={['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(user.role) ? <NotificationBell role={user.role} /> : null}
           user={
             <UserMenu
               name={user.name}

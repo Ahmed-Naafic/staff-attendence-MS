@@ -9,6 +9,7 @@ import { createSubject, deactivateSubject, getCurriculum, getSubject, listSubjec
 import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuery } from '../features/teaching/teachingInput.js';
 import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
 import { mountExaminationRoutes } from '../features/examinations/examinations.routes.js';
+import { mountFeeRoutes } from '../features/fees/fees.routes.js';
 import { mountTimetableBuilderRoutes } from '../features/timetable-builder/builder.routes.js';
 import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
 import { assignTeaching, cancelAssignment, eligibleTeachers, listTeachingAssignments, sectionTeaching, setAssignmentEnd } from '../features/teaching/teaching.service.js';
@@ -86,8 +87,9 @@ import {
   updateClass,
   updateSection,
 } from '../features/classes/classes.service.js';
-import { readStudentListQuery, readStudentRegistration, readStudentUpdate } from '../features/students/studentInput.js';
-import { getStudent, listStudents, registerStudent, updateStudent } from '../features/students/students.service.js';
+import { readBranchTransfer, readStudentListQuery, readStudentRegistration, readStudentUpdate } from '../features/students/studentInput.js';
+import { getStudent, listStudents, registerStudent, transferStudentBranch, updateStudent } from '../features/students/students.service.js';
+import { syncStudentExamFees } from '../features/fees/feeGeneration.service.js';
 import { getPromotion, listPromotions } from '../features/students/promotions.service.js';
 import { readAcademicYearCreation, readAcademicYearStart, readAcademicYearUpdate } from '../features/academic-years/academicYearInput.js';
 import {
@@ -296,6 +298,8 @@ mountTimetableRoutes(ownerRouter, teachingScope, 'OWNER');
 mountTimetableBuilderRoutes(ownerRouter, teachingScope, 'OWNER');
 // Examinations (configuration and rooms so far; docs/business-rules.md → Examinations).
 mountExaminationRoutes(ownerRouter, teachingScope, 'OWNER');
+// Fee Management (docs/business-rules.md → Fee Management): policies, structures and every branch.
+mountFeeRoutes(ownerRouter, teachingScope, 'OWNER');
 
 // ---- Student attendance (docs/business-rules.md → Student attendance): the school's settings and
 // what branches may change; every branch's attendance and excuses (read only).
@@ -358,6 +362,12 @@ ownerRouter.post('/students', async (req, res) => {
 ownerRouter.patch('/students/:id', async (req, res) => {
   const today = new Date().toISOString().slice(0, 10);
   res.json({ student: await updateStudent(studentScope(req), req.params.id, readStudentUpdate(jsonBody(req), { today }), req.user, req) });
+});
+// Move an enrolled student to another branch (their financial account goes with them; examination fees follow).
+ownerRouter.post('/students/:id/transfer-branch', async (req, res) => {
+  const student = await transferStudentBranch(studentScope(req), req.params.id, readBranchTransfer(jsonBody(req)), req.user, req);
+  await syncStudentExamFees(req.school.id, student.id).catch(() => {});
+  res.json({ student: { id: student.id, branch: student.branch } });
 });
 // Promotions of every branch (read only).
 ownerRouter.get('/promotions', async (req, res) => {

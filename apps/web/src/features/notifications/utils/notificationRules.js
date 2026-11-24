@@ -64,6 +64,8 @@ export function linkTarget(item, role) {
   }
   if (link.kind === 'schedule' && role === 'MANAGER') return '/schedule';
   if (link.kind === 'managers' && role === 'OWNER') return '/managers';
+  if (link.kind === 'feesOverdue' && ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role)) return '/fees/students?status=overdue';
+  if (link.kind === 'feesOverview' && ['OWNER', 'MANAGER', 'ACCOUNTANT'].includes(role)) return '/fees';
   if (link.kind === 'studentAttendanceCompletion' && (role === 'MANAGER' || role === 'OWNER')) return `/student-attendance/completion${link.date ? `?from=${link.date}&to=${link.date}` : ''}`;
   return null;
 }

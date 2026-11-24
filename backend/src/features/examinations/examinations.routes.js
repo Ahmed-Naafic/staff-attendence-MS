@@ -27,6 +27,7 @@ import { clearTimetable, generateTimetable, getTimetable, moveSitting, publishTi
 import { getInvigilatorMatrix, invigilatorMatrixPdf, invigilatorMatrixXlsx } from './examInvigilators.js';
 import { createRoom, listRooms, setRoomActive, updateRoom } from './examRooms.service.js';
 import { getExamSettings, saveExamSettings } from './examSettings.js';
+import { syncExamFees } from '../fees/feeGeneration.service.js';
 
 /**
  * Examination routes (docs/business-rules.md → Examinations), the same for the School Owner
@@ -145,16 +146,25 @@ export function mountExaminationRoutes(router, scopeOf, role) {
     res.json(await getExamination(scopeOf(req), req.params.id));
   });
   router.patch('/exams/examinations/:id', async (req, res) => {
-    res.json(await updateExamination(scopeOf(req), req.params.id, readExamination(jsonBody(req), { creating: false, role }), req.user, req));
+    const result = await updateExamination(scopeOf(req), req.params.id, readExamination(jsonBody(req), { creating: false, role }), req.user, req);
+    // Fee Management: examination fees follow who sits it (never fails the examination change).
+    await syncExamFees(req.params.id);
+    res.json(result);
   });
   router.post('/exams/examinations/:id/schedule', async (req, res) => {
-    res.json(await scheduleExamination(scopeOf(req), req.params.id, req.user, req));
+    const result = await scheduleExamination(scopeOf(req), req.params.id, req.user, req);
+    await syncExamFees(req.params.id);
+    res.json(result);
   });
   router.post('/exams/examinations/:id/unschedule', async (req, res) => {
-    res.json(await unscheduleExamination(scopeOf(req), req.params.id, req.user, req));
+    const result = await unscheduleExamination(scopeOf(req), req.params.id, req.user, req);
+    await syncExamFees(req.params.id);
+    res.json(result);
   });
   router.post('/exams/examinations/:id/cancel', async (req, res) => {
-    res.json(await cancelExamination(scopeOf(req), req.params.id, readCancel(jsonBody(req)), req.user, req));
+    const result = await cancelExamination(scopeOf(req), req.params.id, readCancel(jsonBody(req)), req.user, req);
+    await syncExamFees(req.params.id);
+    res.json(result);
   });
   router.post('/exams/examinations/:id/end', async (req, res) => {
     res.json(await endExamination(scopeOf(req), req.params.id, readCancel(jsonBody(req)), req.user, req));

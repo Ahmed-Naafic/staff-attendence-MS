@@ -7,6 +7,8 @@ import { createSubject, deactivateSubject, getCurriculum, getSubject, listSubjec
 import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuery } from '../features/teaching/teachingInput.js';
 import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
 import { mountExaminationRoutes } from '../features/examinations/examinations.routes.js';
+import { mountFeeRoutes } from '../features/fees/fees.routes.js';
+import { afterEnrollment, afterWithdrawal, syncStudentExamFees } from '../features/fees/feeGeneration.service.js';
 import { mountTimetableBuilderRoutes } from '../features/timetable-builder/builder.routes.js';
 import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
 import { assignTeaching, cancelAssignment, eligibleTeachers, listTeachingAssignments, sectionTeaching, setAssignmentEnd } from '../features/teaching/teaching.service.js';
@@ -181,6 +183,8 @@ mountTimetableRoutes(managerRouter, teachingScope, 'MANAGER');
 mountTimetableBuilderRoutes(managerRouter, teachingScope, 'MANAGER');
 // Examinations (configuration and rooms so far; docs/business-rules.md → Examinations).
 mountExaminationRoutes(managerRouter, teachingScope, 'MANAGER');
+// Fee Management (docs/business-rules.md → Fee Management): the branch's students, payments, closings.
+mountFeeRoutes(managerRouter, teachingScope, 'MANAGER');
 
 // ---- Student attendance (docs/business-rules.md → Student attendance): settings, half-day sessions,
 // marks and excuses of the Manager's branch.
@@ -233,13 +237,22 @@ managerRouter.patch('/students/:id', async (req, res) => {
   res.json({ student: await updateStudent(classScope(req), req.params.id, readStudentUpdate(jsonBody(req), { today: todayDay() }), req.user, req) });
 });
 managerRouter.post('/students/:id/enrollments', async (req, res) => {
-  res.status(201).json({ enrollment: await enrollStudent(classScope(req), req.params.id, readEnrollment(jsonBody(req)), req.user, req) });
+  const enrollment = await enrollStudent(classScope(req), req.params.id, readEnrollment(jsonBody(req)), req.user, req);
+  // Fee Management: monthly fees from the enrollment month, examination fees (never fails the enrollment).
+  await afterEnrollment(req.branch.school.id, req.params.id);
+  res.status(201).json({ enrollment });
 });
 managerRouter.post('/students/:id/transfer-out', async (req, res) => {
-  res.json({ student: await transferOutStudent(classScope(req), req.params.id, readTransferOut(jsonBody(req)), req.user, req) });
+  const student = await transferOutStudent(classScope(req), req.params.id, readTransferOut(jsonBody(req)), req.user, req);
+  // Fee Management: no fees after an official withdrawal; the withdrawal month by the school's policy.
+  await afterWithdrawal(req.branch.school.id, req.params.id);
+  res.json({ student });
 });
 managerRouter.patch('/enrollments/:id', async (req, res) => {
-  res.json({ enrollment: await updateEnrollment(classScope(req), req.params.id, readEnrollmentUpdate(jsonBody(req)), req.user, req) });
+  const enrollment = await updateEnrollment(classScope(req), req.params.id, readEnrollmentUpdate(jsonBody(req)), req.user, req);
+  // A new section may change which examinations the student sits (and so their examination fees).
+  await syncStudentExamFees(req.branch.school.id, enrollment.studentId ?? null).catch(() => {});
+  res.json({ enrollment });
 });
 
 // ---- Bulk Academic Year Enrollment & Promotion (the Manager's branch) ----

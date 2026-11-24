@@ -98,14 +98,14 @@ export function readUpdate(body) {
   return values;
 }
 
-const FEATURE_KEYS = ['studentAttendance', 'examinations'];
+const FEATURE_KEYS = ['studentAttendance', 'examinations', 'fees'];
 
-/** School features (Super Admin): { studentAttendance?: boolean, examinations?: boolean }, at least one. */
+/** School features (Super Admin): { studentAttendance?: boolean, examinations?: boolean, fees?: boolean }, at least one. */
 export function readFeatures(body) {
   const keys = Object.keys(body);
   const unknown = keys.filter((k) => !FEATURE_KEYS.includes(k));
   if (unknown.length) throw badRequest(`Unknown fields: ${unknown.join(', ')}.`);
-  if (!keys.length) throw badRequest('Send studentAttendance or examinations.');
+  if (!keys.length) throw badRequest('Send studentAttendance, examinations or fees.');
   const details = Object.fromEntries(keys.filter((k) => typeof body[k] !== 'boolean').map((k) => [k, 'Must be true or false.']));
   if (Object.keys(details).length) throw badRequest('Check the highlighted fields.', details);
   return Object.fromEntries(keys.map((k) => [k, body[k]]));

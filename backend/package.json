@@ -17,6 +17,7 @@
     "seed:dev": "node --env-file=.env.dev scripts/seed-dev.js",
     "seed:dev-accounts": "node --env-file=.env.dev scripts/seed-dev-accounts.js",
     "seed:dev-exams": "node --env-file=.env.dev scripts/seed-dev-exams.js",
+    "seed:dev-fees": "node --env-file=.env.dev scripts/seed-dev-fees.js",
     "create-super-admin": "node scripts/create-super-admin.js",
     "create-super-admin:dev-branch": "node --env-file=.env.dev scripts/create-super-admin.js",
     "reset-super-admin-password": "node scripts/reset-super-admin-password.js",

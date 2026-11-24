@@ -162,6 +162,24 @@ export class UnicodePdfDocument {
     this.pages = [];
     this.missingCharacters = false;
     this.used = { F1: new Map(), F2: new Map() }; // glyph → character
+    this.images = []; // embedded JPEG images: { data, width, height, components }
+  }
+
+  /**
+   * Draws a JPEG image (a Buffer) in the box x, y, w, h (top-left origin), keeping its proportions
+   * inside the box. Unreadable data draws nothing. Each distinct buffer is embedded once.
+   */
+  image(data, x, y, w, h) {
+    const info = jpegInfo(data);
+    if (!info) return;
+    let index = this.images.findIndex((im) => im.data === data);
+    if (index < 0) index = this.images.push({ data, ...info }) - 1;
+    const scale = Math.min(w / info.width, h / info.height);
+    const dw = info.width * scale;
+    const dh = info.height * scale;
+    const dx = x + (w - dw) / 2;
+    const dy = y + (h - dh) / 2;
+    this.page.push(`q ${num(dw)} 0 0 ${num(dh)} ${num(dx)} ${num(this.height - dy - dh)} cm /Im${index + 1} Do Q`);
   }
 
   #current = -1;
@@ -256,7 +274,12 @@ export class UnicodePdfDocument {
       const cmapId = add({ dict: `<< /Length ${cmap.length} >>`, stream: cmap });
       fontIds[key] = add(`<< /Type /Font /Subtype /Type0 /BaseFont /${f.name} /Encoding /Identity-H /DescendantFonts [${cid} 0 R] /ToUnicode ${cmapId} 0 R >>`);
     }
-    const resources = `<< /Font << ${Object.entries(fontIds).map(([key, id]) => `/${key} ${id} 0 R`).join(' ')} >> /ProcSet [/PDF /Text] >>`;
+    const imageIds = this.images.map((im) => {
+      const space = im.components === 1 ? '/DeviceGray' : im.components === 4 ? '/DeviceCMYK /Decode [1 0 1 0 1 0 1 0]' : '/DeviceRGB';
+      return add({ dict: `<< /Type /XObject /Subtype /Image /Width ${im.width} /Height ${im.height} /ColorSpace ${space} /BitsPerComponent 8 /Filter /DCTDecode /Length ${im.data.length} >>`, stream: im.data });
+    });
+    const xobjects = imageIds.length ? ` /XObject << ${imageIds.map((id, i) => `/Im${i + 1} ${id} 0 R`).join(' ')} >>` : '';
+    const resources = `<< /Font << ${Object.entries(fontIds).map(([key, id]) => `/${key} ${id} 0 R`).join(' ')} >>${xobjects} /ProcSet [/PDF /Text${imageIds.length ? ' /ImageC' : ''}] >>`;
     const pageIds = this.pages.map(({ streams }) => {
       const contents = streams.map((stream) => add({ dict: `<< /Length ${stream.length} /Filter /FlateDecode >>`, stream }));
       return add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${this.width} ${this.height}] /Resources ${resources} /Contents [${contents.map((c) => `${c} 0 R`).join(' ')}] >>`);
@@ -285,6 +308,20 @@ export class UnicodePdfDocument {
     chunks.push(Buffer.from(`${xref}trailer\n<< /Size ${objects.length + 1} /Root ${catalog} 0 R /Info ${info} 0 R >>\nstartxref\n${offset}\n%%EOF\n`, 'latin1'));
     return Buffer.concat(chunks);
   }
+}
+
+/** Width, height and components of a baseline or progressive JPEG (from its SOF marker), or null. */
+export function jpegInfo(data) {
+  if (!Buffer.isBuffer(data) || data.length < 4 || data[0] !== 0xff || data[1] !== 0xd8) return null;
+  let i = 2;
+  while (i + 9 < data.length) {
+    if (data[i] !== 0xff) return null;
+    const marker = data[i + 1];
+    const length = data.readUInt16BE(i + 2);
+    if ([0xc0, 0xc1, 0xc2].includes(marker)) return { height: data.readUInt16BE(i + 5), width: data.readUInt16BE(i + 7), components: data[i + 9] };
+    i += 2 + length;
+  }
+  return null;
 }
 
 // ---- tables -----------------------------------------------------------------------------------------

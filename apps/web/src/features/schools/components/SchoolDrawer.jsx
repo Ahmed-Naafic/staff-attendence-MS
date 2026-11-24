@@ -117,6 +117,12 @@ export function SchoolDrawer({ school, open, onClose, onEdit, onSuspend, onReact
               checked={Boolean(school.features.examinations)}
               onChange={(next) => onFeature(school, next, 'examinations')}
             />
+            <Switch
+              label="Fee Management"
+              description="Lets the school manage fees: monthly fees, payments and receipts, invoices, discounts, fee clearance, cash closing and reports. Off by default; turning it off keeps every financial record."
+              checked={Boolean(school.features.fees)}
+              onChange={(next) => onFeature(school, next, 'fees')}
+            />
           </div>
         </>
       )}

@@ -17,7 +17,7 @@ Platform
 
 | Application | Roles | Notes |
 |---|---|---|
-| Web (`apps/web`) | SUPER_ADMIN, OWNER, MANAGER | One codebase. Navigation and functionality change by the authenticated user's role. |
+| Web (`apps/web`) | SUPER_ADMIN, OWNER, MANAGER, ACCOUNTANT | One codebase. Navigation and functionality change by the authenticated user's role. |
 | Mobile (`apps/mobile`) | STAFF, MANAGER | One app. Managers use it for their own attendance; management functions stay on the web. |
 | Backend (`backend`) | — | One API serving both applications. |
 
@@ -51,6 +51,7 @@ No TypeScript. No Docker Compose. The database is hosted on Neon.
 | OWNER | SCHOOL | Their own school: branches, managers, attendance reports for every branch (staff identity within those reports only, D1); later phases: excuses, school configuration. Staff management and schedules stay with the Manager. |
 | MANAGER | BRANCH | Their current branch only: staff, schedule and shifts, attendance reports of that branch; later phases: excuses. |
 | STAFF | SELF | Their own attendance, check-in/check-out, excuses and history. |
+| ACCOUNTANT | BRANCH | Fee Management of their branch only (payments, receipts, invoices, their own cash closing, reports). Created by the School Owner; web app only; `/api/accountant`. |
 
 No role may access data outside its scope. There is no cross-school access.
 

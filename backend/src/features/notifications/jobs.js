@@ -11,6 +11,7 @@ import { noScheduleItems, processPendingEvents } from './outbox.js';
 import { checkPushReceipts, sendPendingPush } from './push.js';
 import { settleDueTransfers } from '../staff/transfers.service.js';
 import { studentAttendanceNotifications } from '../student-attendance/completion.js';
+import { runFeeJobs } from '../fees/feeJobs.js';
 
 /*
  * The scheduled notification job (docs/notifications/notification-architecture.md → Background
@@ -254,6 +255,8 @@ export async function runNotificationJobs({ now = new Date(), budgetMs = 45_000,
     ['branchesWithoutSchedule', () => notifyBranchesWithoutSchedule({ now })],
     ['digests', () => createDigests({ now })],
     ['studentAttendance', () => studentAttendanceNotifications({ now })],
+    // Fee Management: monthly fees (on the 1st, with catch-up and retries), examination fees, overdue notices.
+    ['fees', () => runFeeJobs({ now, stop })],
     ['announcementPush', () => queueAnnouncementPush({ now })],
     ['push', () => sendPendingPush({ now, stop, ...(send && { send }) })],
     ['pushReceipts', () => checkPushReceipts({ now, ...(getReceipts && { getReceipts }) })],

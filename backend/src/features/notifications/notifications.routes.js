@@ -18,7 +18,7 @@ import { registerDevice, unregisterDevice } from './push.js';
  * they manage announcements and settings under /api/platform.
  */
 export const notificationsRouter = Router();
-notificationsRouter.use(requireAuth, requireRole('OWNER', 'MANAGER', 'STAFF'), async (req, res, next) => {
+notificationsRouter.use(requireAuth, requireRole('OWNER', 'MANAGER', 'STAFF', 'ACCOUNTANT'), async (req, res, next) => {
   try {
     req.viewer = await notificationViewer(req.user);
     next();

@@ -22,6 +22,7 @@ import { getPrisma } from '../src/config/prisma.js';
 import { assertDevEnvironment, seedAccounts } from './dev-seed/accounts.js';
 import { seedDemoSchool } from './dev-seed/demoSchool.js';
 import { seedExaminations } from './dev-seed/examinations.js';
+import { seedFees } from './dev-seed/fees.js';
 
 assertDevEnvironment();
 const prisma = getPrisma();
@@ -77,6 +78,8 @@ try {
 
   // 4. Examinations of the demo school (scripts/dev-seed/examinations.js; adds what is missing).
   await seedExaminations(prisma);
+  // 5. Fee Management of the demo school (scripts/dev-seed/fees.js; adds what is missing).
+  await seedFees(prisma);
 } finally {
   await prisma.$disconnect();
 }
