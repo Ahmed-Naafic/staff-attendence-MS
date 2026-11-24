@@ -182,6 +182,19 @@ SO.EXAM_RESULTS_PUBLISHED = (p) => ({
   body: [`Imtixaanka: ${p.examination}`, p.revision > 1 ? `Sixitaan ${p.revision - 1}` : 'Daabacaaddii koowaad'].join('\n'),
 });
 
+SO.FEES_OVERDUE = (p) => ({
+  title: `Lacag dugsi oo dib u dhacday: ${p.students} arday`,
+  body: [
+    `${p.scope} · Wadarta dib u dhacday: ${p.amount}`,
+    ...(p.top ?? []).slice(0, 5).map((s) => `${s.name} (${s.studentNumber}) · ${s.amount} · ${s.days} maalmood`),
+    ...(p.students > 5 ? [`iyo ${p.students - 5} kale.`] : []),
+  ].join('\n'),
+});
+SO.FEE_GENERATION_FAILED = (p) => ({
+  title: `Khidmadda bisha ${p.month} lama abuuri karin`,
+  body: [`Isku dayo fashilmay: ${p.failures}. EduTrack wuu isku dayi doonaa mar kale.`, 'Waxaad sidoo kale ka bilaabi kartaa Fees → Overview.'].join('\n'),
+});
+
 const TEMPLATES = { so: SO };
 
 /** Generic push texts (N21): never a name, time, status, branch or reason on the lock screen. */

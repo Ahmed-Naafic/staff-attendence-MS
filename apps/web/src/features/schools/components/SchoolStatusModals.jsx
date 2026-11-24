@@ -157,7 +157,7 @@ export function ReactivateSchoolModal({ school, open, onClose, onDone }) {
 
 /** Confirm turning Student Attendance on or off for a school (`enable`). */
 /** The features the Super Admin switches per school, by their API name. */
-export const FEATURE_NAMES = { studentAttendance: 'Student Attendance', examinations: 'Examinations' };
+export const FEATURE_NAMES = { studentAttendance: 'Student Attendance', examinations: 'Examinations', fees: 'Fee Management' };
 
 export function SchoolFeatureModal({ school, enable, feature = 'studentAttendance', open, onClose, onDone }) {
   const formId = useId();

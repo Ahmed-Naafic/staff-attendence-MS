@@ -10,6 +10,7 @@ import { attendanceRouter } from './attendance/attendance.routes.js';
 import { teacherRouter } from './teacher/teacher.routes.js';
 import { managerRouter } from './manager/manager.routes.js';
 import { ownerRouter } from './owner/owner.routes.js';
+import { accountantRouter } from './accountant/accountant.routes.js';
 import { notificationJobHandler, notificationsRouter } from './features/notifications/notifications.routes.js';
 
 const app = express();
@@ -44,6 +45,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/platform', platformRouter);
 app.use('/api/owner', ownerRouter);
 app.use('/api/manager', managerRouter);
+app.use('/api/accountant', accountantRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/teacher', teacherRouter);
 app.use('/api/notifications', notificationsRouter);

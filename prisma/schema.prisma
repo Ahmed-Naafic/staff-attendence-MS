@@ -26,6 +26,7 @@ enum Role {
   OWNER // SCHOOL scope
   MANAGER // BRANCH scope
   STAFF // SELF scope
+  ACCOUNTANT // BRANCH scope: Fee Management of their branch (web app)
 }
 
 enum AccountStatus {
@@ -92,7 +93,7 @@ model User {
   /// Set for a new MANAGER and after their owner gives them a new temporary password: until the
   /// password is changed the API refuses everything except the password change (requireAuth).
   mustChangePassword Boolean       @default(false)
-  /// For MANAGER and STAFF accounts only (required for them; a database check enforces it): their
+  /// For MANAGER, STAFF and ACCOUNTANT accounts only (required for them; a database check enforces it): their
   /// branch. The school is that branch's school. Manager assignment history is in ManagerAssignment.
   branchId           String?
   branch             Branch?       @relation("BranchManagers", fields: [branchId], references: [id], onDelete: Restrict)
@@ -202,6 +203,24 @@ model School {
   studentAttendanceSessions StudentAttendanceSession[]
   studentExcuses            StudentExcuse[]
 
+  /// Fee Management is available to this school (Super Admin; off by default). Changes are in the audit log.
+  feesEnabled            Boolean                 @default(false)
+  feeSettings            FeeSettings?
+  feeBrandings           FeeBranding[]
+  feeStructures          FeeStructure[]
+  examFeeRates           ExamFeeRate[]
+  studentFeeAdjustments  StudentFeeAdjustment[]
+  feeObligations         FeeObligation[]
+  feeDiscountPolicies    FeeDiscountPolicy[]
+  studentDiscounts       StudentDiscount[]
+  feePayments            FeePayment[]
+  feeReceipts            FeeReceipt[]
+  feeInvoices            FeeInvoice[]
+  feeClearanceExceptions FeeClearanceException[]
+  cashClosings           CashClosing[]
+  feeGenerationRuns      FeeGenerationRun[]
+  feeReminderLogs        FeeReminderLog[]
+
   @@index([status])
   @@index([location])
   @@index([registeredAt])
@@ -266,6 +285,11 @@ model Branch {
   studentAttendanceSettings StudentAttendanceSettings?
   studentAttendanceSessions StudentAttendanceSession[]
   studentExcuses            StudentExcuse[]
+
+  feeObligations FeeObligation[]
+  feePayments    FeePayment[]
+  feeInvoices    FeeInvoice[]
+  cashClosings   CashClosing[]
 
   @@unique([schoolId, number])
   @@unique([schoolId, code])
@@ -553,6 +577,7 @@ enum NotificationCategory {
   TRANSFER // a staff member's own branch transfer, and staff joining a Manager's branch (mandatory)
   STUDENT_ATTENDANCE // student attendance not taken (teachers, Managers) and daily summaries (Owners)
   EXAMINATION // examination timetables, marks, approvals and results
+  FEES // overdue fees (staff the school chooses) and fee generation failures (Owners)
 }
 
 /// DRAFT (not visible), PUBLISHED (visible from publishAt until expiresAt; "scheduled" while
@@ -970,6 +995,11 @@ model AcademicYear {
   examinations              Examination[]
   studentAttendanceSessions StudentAttendanceSession[]
 
+  feeStructures         FeeStructure[]
+  examFeeRates          ExamFeeRate[]
+  studentFeeAdjustments StudentFeeAdjustment[]
+  feeObligations        FeeObligation[]
+
   @@unique([schoolId, nameKey])
   @@index([schoolId, startDate])
 }
@@ -1002,6 +1032,10 @@ model SchoolClass {
   subjects           ClassSubject[]
   examinationClasses ExaminationClass[]
   examPapers         ExamPaper[]
+
+  feeStructures  FeeStructure[]
+  examFeeRates   ExamFeeRate[]
+  feeObligations FeeObligation[]
 
   @@unique([schoolId, nameKey])
   @@unique([schoolId, sequence])
@@ -1042,6 +1076,8 @@ model Section {
   examSeats             ExamSeat[]
   examMarkSheets        ExamMarkSheet[]
   examResultSets        ExamResultSet[]
+
+  feeObligations FeeObligation[]
 
   @@unique([classId, academicYearId, branchId, nameKey])
   @@index([schoolId, academicYearId])
@@ -1102,6 +1138,14 @@ model Student {
   examMarks   ExamMark[]
   examResults ExamResult[]
 
+  feeAdjustments         StudentFeeAdjustment[]
+  feeObligations         FeeObligation[]
+  studentDiscounts       StudentDiscount[]
+  feePayments            FeePayment[]
+  feeInvoices            FeeInvoice[]
+  feeClearanceExceptions FeeClearanceException[]
+  feeReminderLogs        FeeReminderLog[]
+
   @@index([schoolId, branchId, status])
   @@index([schoolId, nameKey, dateOfBirth])
 }
@@ -1157,6 +1201,8 @@ model Enrollment {
   promotionItemsFrom   PromotionItem[]          @relation("PromotionItemFromEnrollment")
   promotionItemsResult PromotionItem[]          @relation("PromotionItemResultEnrollment")
   attendanceEntries    StudentAttendanceEntry[]
+
+  feeObligations FeeObligation[]
 
   @@unique([studentId, academicYearId])
   @@index([sectionId, status])
@@ -1974,6 +2020,8 @@ model ExamType {
   updatedAt       DateTime      @updatedAt
   examinations    Examination[]
 
+  examFeeRates ExamFeeRate[]
+
   @@unique([schoolId, nameKey])
 }
 
@@ -2137,6 +2185,10 @@ model Examination {
 
   // Names are unique per year among examinations not cancelled: school-wide ones together, and each
   // branch's together (partial unique indexes in the migration).
+
+  feeObligations         FeeObligation[]
+  feeClearanceExceptions FeeClearanceException[]
+
   @@index([academicYearId, nameKey])
   @@index([schoolId, academicYearId, startDate])
   @@index([schoolId, status, startDate])
@@ -2478,4 +2530,602 @@ model ExamPaperFile {
   removedByName  String?
 
   @@index([paperId, status])
+}
+
+// ---- Fee Management (docs/business-rules.md → Fee Management) ------------------------------------
+// Amounts are whole minor units (cents) of the school's currency (fee settings). Financial records are
+// never deleted or edited in place: obligations are cancelled or adjusted with a change record,
+// payments are reversed, receipts voided, invoices cancelled, cash closings corrected with revisions.
+
+/// What an obligation charges: a month's school fee, an examination fee, or another charge.
+enum FeeObligationKind {
+  MONTHLY
+  EXAM
+  OTHER
+}
+
+/// OPEN: something is still owed. PAID: fully paid. CANCELLED: no longer owed (payments already
+/// allocated to it are kept). Partly paid and overdue are derived, never stored.
+enum FeeObligationStatus {
+  OPEN
+  PAID
+  CANCELLED
+}
+
+enum FeeDiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+enum FeeDiscountCategory {
+  DISCOUNT
+  SCHOLARSHIP
+}
+
+enum FeePaymentStatus {
+  RECORDED
+  REVERSED
+}
+
+/// Invoices have no payment deadline and are never overdue.
+enum FeeInvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum FeeRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum FeeRunTrigger {
+  AUTOMATIC
+  MANUAL
+}
+
+/// Fee policies of a school (School Owner): { settingKey: value } for the keys set
+/// (backend/src/features/fees/feeSettings.js decides keys, limits and defaults).
+model FeeSettings {
+  id            String   @id @default(uuid())
+  schoolId      String   @unique
+  school        School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  values        Json     @default("{}")
+  updatedById   String?
+  updatedByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+/// A version of the school's receipt and invoice branding (School Owner). Never edited: a change adds
+/// a version, so receipts and invoices keep the branding they were issued with.
+model FeeBranding {
+  id             String       @id @default(uuid())
+  schoolId       String
+  school         School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  version        Int
+  schoolName     String
+  /// A small JPEG data URL (the web app converts and shrinks the uploaded image), or null.
+  logo           String?
+  address        String?
+  phone          String?
+  email          String?
+  website        String?
+  footer         String?
+  showSignature  Boolean      @default(true)
+  signatureLabel String?
+  createdById    String?
+  createdByName  String?
+  createdAt      DateTime     @default(now())
+  receipts       FeeReceipt[]
+  invoices       FeeInvoice[]
+
+  @@unique([schoolId, version])
+}
+
+/// Document number counters of a school (receipts, invoices), raised in the transaction that issues a number.
+model FeeCounter {
+  schoolId String
+  key      String
+  value    Int    @default(0)
+
+  @@id([schoolId, key])
+}
+
+/// The monthly fee of a class for an academic year (School Owner). The amount is in its rates: a change
+/// adds a rate from a month on, so obligations already generated never change.
+model FeeStructure {
+  id             String             @id @default(uuid())
+  schoolId       String
+  school         School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear       @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  classId        String
+  class          SchoolClass        @relation(fields: [classId], references: [id], onDelete: Restrict)
+  /// Months of the year with no monthly fee ('YYYY-MM'), e.g. holidays.
+  excludedMonths String[]           @default([])
+  status         ClassStatus        @default(ACTIVE)
+  notes          String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  rates          FeeStructureRate[]
+
+  @@unique([academicYearId, classId])
+  @@index([schoolId])
+}
+
+/// A monthly amount of a fee structure from effectiveMonth (first day of a month) until the next rate.
+model FeeStructureRate {
+  id             String          @id @default(uuid())
+  structureId    String
+  structure      FeeStructure    @relation(fields: [structureId], references: [id], onDelete: Restrict)
+  effectiveMonth DateTime        @db.Date
+  amount         Int
+  reason         String?
+  createdById    String?
+  createdByName  String?
+  createdAt      DateTime        @default(now())
+  obligations    FeeObligation[]
+
+  @@unique([structureId, effectiveMonth])
+}
+
+/// The examination fee of a class for an examination type in an academic year (School Owner). Charged
+/// when students are assigned to a scheduled examination of that type; a change applies to fees
+/// charged afterwards.
+model ExamFeeRate {
+  id             String          @id @default(uuid())
+  schoolId       String
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  classId        String
+  class          SchoolClass     @relation(fields: [classId], references: [id], onDelete: Restrict)
+  examTypeId     String
+  examType       ExamType        @relation(fields: [examTypeId], references: [id], onDelete: Restrict)
+  amount         Int
+  updatedById    String?
+  updatedByName  String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  obligations    FeeObligation[]
+
+  @@unique([academicYearId, classId, examTypeId])
+  @@index([schoolId])
+}
+
+/// A student's own monthly fee (an authorized individual adjustment), from a month until ended. Applied
+/// to the monthly fees generated for those months; the class amount at the time is kept as originalAmount.
+model StudentFeeAdjustment {
+  id             String          @id @default(uuid())
+  schoolId       String
+  school         School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId       String
+  studentId      String
+  student        Student         @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicYearId String
+  academicYear   AcademicYear    @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  originalAmount Int
+  amount         Int
+  fromMonth      DateTime        @db.Date
+  /// Last month it applies to (inclusive); null: until the end of the year or until ended.
+  toMonth        DateTime?       @db.Date
+  reason         String
+  createdById    String?
+  createdByName  String?
+  createdByRole  Role?
+  createdAt      DateTime        @default(now())
+  endedAt        DateTime?
+  endedByName    String?
+  endReason      String?
+  obligations    FeeObligation[]
+
+  @@index([studentId, academicYearId])
+}
+
+/// Something a student owes: one month's fee, one examination's fee, or another charge. Amounts are
+/// fixed when it is created (history never follows later fee changes): standardAmount (class fee),
+/// amount (after the student's own adjustment), discountAmount, netAmount (payable) and paidAmount
+/// (allocations of payments not reversed). The branch is where the student was when it was charged.
+model FeeObligation {
+  id              String                  @id @default(uuid())
+  schoolId        String
+  school          School                  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId        String
+  branch          Branch                  @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  studentId       String
+  student         Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  enrollmentId    String?
+  enrollment      Enrollment?             @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  academicYearId  String
+  academicYear    AcademicYear            @relation(fields: [academicYearId], references: [id], onDelete: Restrict)
+  classId         String?
+  class           SchoolClass?            @relation(fields: [classId], references: [id], onDelete: Restrict)
+  sectionId       String?
+  section         Section?                @relation(fields: [sectionId], references: [id], onDelete: Restrict)
+  kind            FeeObligationKind
+  /// MONTHLY: the first day of the month charged.
+  billingMonth    DateTime?               @db.Date
+  /// EXAM: the examination.
+  examinationId   String?
+  examination     Examination?            @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  title           String
+  standardAmount  Int
+  amount          Int
+  discountAmount  Int                     @default(0)
+  netAmount       Int
+  paidAmount      Int                     @default(0)
+  status          FeeObligationStatus     @default(OPEN)
+  dueDate         DateTime                @db.Date
+  structureRateId String?
+  structureRate   FeeStructureRate?       @relation(fields: [structureRateId], references: [id], onDelete: Restrict)
+  examFeeRateId   String?
+  examFeeRate     ExamFeeRate?            @relation(fields: [examFeeRateId], references: [id], onDelete: Restrict)
+  adjustmentId    String?
+  adjustment      StudentFeeAdjustment?   @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+  generationRunId String?
+  /// GENERATED (monthly run), EXAM_ASSIGNMENT, MANUAL (another charge added by staff).
+  source          String
+  cancelledAt     DateTime?
+  cancelReason    String?
+  cancelledByName String?
+  createdById     String?
+  createdByName   String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  discounts       FeeObligationDiscount[]
+  allocations     FeeAllocation[]
+  changes         FeeObligationChange[]
+  invoiceLines    FeeInvoiceLine[]
+
+  // One monthly fee per student and month and one examination fee per student and examination,
+  // cancelled ones included (partial unique indexes in the migration), so retries never duplicate.
+  @@index([schoolId, academicYearId, kind])
+  @@index([studentId, status])
+  @@index([branchId, academicYearId])
+  @@index([examinationId])
+  @@index([schoolId, dueDate])
+}
+
+/// A discount applied to an obligation (when it was created, or later with a change record).
+model FeeObligationDiscount {
+  id                String              @id @default(uuid())
+  obligationId      String
+  obligation        FeeObligation       @relation(fields: [obligationId], references: [id], onDelete: Restrict)
+  studentDiscountId String?
+  studentDiscount   StudentDiscount?    @relation(fields: [studentDiscountId], references: [id], onDelete: Restrict)
+  name              String
+  category          FeeDiscountCategory
+  type              FeeDiscountType
+  /// Basis points for PERCENTAGE (10000 = 100%), minor units for FIXED.
+  value             Int
+  amount            Int
+  createdAt         DateTime            @default(now())
+
+  @@index([obligationId])
+}
+
+/// The history of an obligation: adjustments, cancellations, reinstatements, discounts applied later.
+model FeeObligationChange {
+  id           String        @id @default(uuid())
+  obligationId String
+  obligation   FeeObligation @relation(fields: [obligationId], references: [id], onDelete: Restrict)
+  type         String
+  fromAmount   Int?
+  toAmount     Int?
+  reason       String?
+  actorId      String?
+  actorName    String?
+  actorRole    Role?
+  createdAt    DateTime      @default(now())
+
+  @@index([obligationId])
+}
+
+/// A discount or scholarship policy (School Owner). Managers assign it to eligible students within its limits.
+model FeeDiscountPolicy {
+  id               String              @id @default(uuid())
+  schoolId         String
+  school           School              @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  name             String
+  nameKey          String
+  description      String?
+  category         FeeDiscountCategory
+  type             FeeDiscountType
+  /// Basis points for PERCENTAGE (10000 = 100%: a full scholarship), minor units for FIXED.
+  value            Int
+  /// The kinds of fee it reduces.
+  appliesTo        FeeObligationKind[]
+  /// Empty: every class / branch.
+  classIds         String[]            @default([])
+  branchIds        String[]            @default([])
+  /// Eligibility rules in words (shown when assigning).
+  eligibility      String?
+  startDate        DateTime?           @db.Date
+  endDate          DateTime?           @db.Date
+  /// Most it takes off one obligation (minor units); null: no limit.
+  maxAmount        Int?
+  /// Most students who may hold it at once; null: no limit.
+  maxStudents      Int?
+  /// Whether it may be added to other combinable discounts (when the school combines discounts).
+  combinable       Boolean             @default(true)
+  managersAssign   Boolean             @default(true)
+  status           ClassStatus         @default(ACTIVE)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  studentDiscounts StudentDiscount[]
+
+  @@unique([schoolId, nameKey])
+}
+
+/// A discount policy given to a student from a month (to a month, or until revoked).
+model StudentDiscount {
+  id             String                  @id @default(uuid())
+  schoolId       String
+  school         School                  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId       String
+  studentId      String
+  student        Student                 @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  policyId       String
+  policy         FeeDiscountPolicy       @relation(fields: [policyId], references: [id], onDelete: Restrict)
+  startMonth     DateTime                @db.Date
+  endMonth       DateTime?               @db.Date
+  reason         String
+  assignedById   String?
+  assignedByName String?
+  assignedByRole Role?
+  createdAt      DateTime                @default(now())
+  revokedAt      DateTime?
+  revokedByName  String?
+  revokeReason   String?
+  applied        FeeObligationDiscount[]
+
+  @@index([studentId])
+  @@index([policyId])
+}
+
+/// A cash payment (version 1: cash only), allocated to the exact obligations it pays. Never edited or
+/// deleted: a mistake is reversed with a reason, which voids its receipt.
+model FeePayment {
+  id                 String           @id @default(uuid())
+  schoolId           String
+  school             School           @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  /// Where the cash was received.
+  branchId           String
+  branch             Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  studentId          String
+  student            Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  amount             Int
+  method             String           @default("CASH")
+  receivedAt         DateTime
+  note               String?
+  /// Sent by the web app with each new payment: a repeated submission returns the first payment.
+  requestKey         String?
+  status             FeePaymentStatus @default(RECORDED)
+  recordedById       String
+  recordedByName     String
+  recordedByRole     Role
+  closingId          String?
+  closing            CashClosing?     @relation("ClosingPayments", fields: [closingId], references: [id], onDelete: Restrict)
+  reversedAt         DateTime?
+  reversedById       String?
+  reversedByName     String?
+  reversedByRole     Role?
+  reversalReason     String?
+  /// Whose cash the reversal comes out of: the recorder while the payment is not closed yet, else the reverser.
+  reversalCashUserId String?
+  reversalClosingId  String?
+  reversalClosing    CashClosing?     @relation("ClosingReversals", fields: [reversalClosingId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now())
+  allocations        FeeAllocation[]
+  receipt            FeeReceipt?
+
+  @@unique([schoolId, requestKey])
+  @@index([schoolId, receivedAt])
+  @@index([studentId])
+  @@index([recordedById, closingId])
+  @@index([reversalCashUserId, reversalClosingId])
+  @@index([branchId, receivedAt])
+}
+
+/// The part of a payment that pays one obligation.
+model FeeAllocation {
+  id           String        @id @default(uuid())
+  paymentId    String
+  payment      FeePayment    @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  obligationId String
+  obligation   FeeObligation @relation(fields: [obligationId], references: [id], onDelete: Restrict)
+  amount       Int
+  createdAt    DateTime      @default(now())
+
+  @@unique([paymentId, obligationId])
+  @@index([obligationId])
+}
+
+/// The receipt of a payment, issued with it. Its content is kept as issued; reversing the payment voids it.
+model FeeReceipt {
+  id            String       @id @default(uuid())
+  schoolId      String
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId      String
+  paymentId     String       @unique
+  payment       FeePayment   @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  number        String
+  brandingId    String?
+  branding      FeeBranding? @relation(fields: [brandingId], references: [id], onDelete: Restrict)
+  /// Everything printed on the receipt, as issued.
+  content       Json
+  voidedAt      DateTime?
+  voidReason    String?
+  printCount    Int          @default(0)
+  lastPrintedAt DateTime?
+  issuedAt      DateTime     @default(now())
+
+  @@unique([schoolId, number])
+}
+
+/// An invoice of a student's fees (made when needed). No payment deadline; its status follows the
+/// payments of its lines' obligations. Separate from receipts.
+model FeeInvoice {
+  id              String           @id @default(uuid())
+  schoolId        String
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branchId        String
+  branch          Branch           @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  studentId       String
+  student         Student          @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  academicYearId  String?
+  /// Given when issued.
+  number          String?
+  status          FeeInvoiceStatus @default(DRAFT)
+  periodFrom      DateTime?        @db.Date
+  periodTo        DateTime?        @db.Date
+  note            String?
+  brandingId      String?
+  branding        FeeBranding?     @relation(fields: [brandingId], references: [id], onDelete: Restrict)
+  /// Student and school details as printed when issued.
+  content         Json             @default("{}")
+  batchId         String?
+  issuedAt        DateTime?
+  createdById     String?
+  createdByName   String?
+  cancelledAt     DateTime?
+  cancelReason    String?
+  cancelledByName String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  lines           FeeInvoiceLine[]
+
+  @@unique([schoolId, number])
+  @@index([schoolId, status])
+  @@index([studentId])
+  @@index([batchId])
+}
+
+model FeeInvoiceLine {
+  id             String        @id @default(uuid())
+  invoiceId      String
+  invoice        FeeInvoice    @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  obligationId   String
+  obligation     FeeObligation @relation(fields: [obligationId], references: [id], onDelete: Restrict)
+  description    String
+  period         String
+  standardAmount Int
+  discountAmount Int
+  amount         Int
+  sortOrder      Int
+
+  @@index([invoiceId])
+  @@index([obligationId])
+}
+
+/// An authorized fee clearance exception: the student is cleared for the examination (or for every
+/// examination, when examinationId is null) whatever their balances.
+model FeeClearanceException {
+  id            String       @id @default(uuid())
+  schoolId      String
+  school        School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  studentId     String
+  student       Student      @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  examinationId String?
+  examination   Examination? @relation(fields: [examinationId], references: [id], onDelete: Restrict)
+  reason        String
+  grantedById   String?
+  grantedByName String?
+  grantedByRole Role?
+  createdAt     DateTime     @default(now())
+  revokedAt     DateTime?
+  revokedByName String?
+  revokeReason  String?
+
+  @@index([studentId])
+  @@index([examinationId])
+}
+
+/// A staff member's cash closing: the payments they recorded since their last closing (and reversals
+/// coming out of their cash), the cash counted and the difference. Each user closes independently.
+model CashClosing {
+  id             String                @id @default(uuid())
+  schoolId       String
+  school         School                @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  /// Null for the School Owner.
+  branchId       String?
+  branch         Branch?               @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  userId         String
+  userName       String
+  userRole       Role
+  closingDate    DateTime              @db.Date
+  closedAt       DateTime              @default(now())
+  paymentsCount  Int
+  reversalsCount Int
+  recordedAmount Int
+  reversedAmount Int
+  expectedAmount Int
+  countedAmount  Int
+  difference     Int
+  explanation    String?
+  correctedAt    DateTime?
+  payments       FeePayment[]          @relation("ClosingPayments")
+  reversals      FeePayment[]          @relation("ClosingReversals")
+  revisions      CashClosingRevision[]
+
+  @@index([schoolId, closingDate])
+  @@index([userId, closedAt])
+}
+
+/// The values of a cash closing: as first closed (no reason) and after each correction.
+model CashClosingRevision {
+  id            String      @id @default(uuid())
+  closingId     String
+  closing       CashClosing @relation(fields: [closingId], references: [id], onDelete: Restrict)
+  countedAmount Int
+  difference    Int
+  explanation   String?
+  reason        String?
+  actorName     String?
+  actorRole     Role?
+  createdAt     DateTime    @default(now())
+
+  @@index([closingId])
+}
+
+/// One attempt to generate a school's monthly fees for a month (automatic, or a manual retry).
+model FeeGenerationRun {
+  id              String        @id @default(uuid())
+  schoolId        String
+  school          School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  billingMonth    DateTime      @db.Date
+  trigger         FeeRunTrigger
+  status          FeeRunStatus  @default(RUNNING)
+  startedAt       DateTime      @default(now())
+  finishedAt      DateTime?
+  createdCount    Int           @default(0)
+  skippedCount    Int           @default(0)
+  /// { noStructure, alreadyCharged, notEnrolled, withdrawn }
+  details         Json          @default("{}")
+  error           String?
+  triggeredById   String?
+  triggeredByName String?
+
+  @@index([schoolId, billingMonth, startedAt])
+}
+
+/// A fee reminder sent to a student's guardian by staff (through their phone's WhatsApp or SMS).
+model FeeReminderLog {
+  id         String   @id @default(uuid())
+  schoolId   String
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  studentId  String
+  student    Student  @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  channel    String
+  amount     Int
+  note       String?
+  sentById   String?
+  sentByName String?
+  sentAt     DateTime @default(now())
+
+  @@index([studentId, sentAt])
 }

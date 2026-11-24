@@ -400,3 +400,43 @@ export async function transferOutStudent(scope, id, { reason }, user, req) {
   });
   return toStudent(result);
 }
+
+/**
+ * Moves an enrolled student to another branch of the school (School Owner), with a reason: their
+ * ACTIVE enrollment moves to a section of the same academic year in the other branch, and the profile
+ * belongs to that branch from now on. Their Student ID, history and financial account stay with them
+ * (fees already charged keep the branch they were charged in; later ones go to the new branch).
+ */
+export async function transferStudentBranch(scope, id, { sectionId, reason }, user, req) {
+  const result = await transaction(async (tx) => {
+    const found = await findStudent(tx, scope, id);
+    const target = isUuid(sectionId) ? await tx.section.findFirst({ where: { id: sectionId, schoolId: scope.school.id }, select: { branchId: true } }) : null;
+    if (!target) throw notFound('Section not found.');
+    if (target.branchId === found.branchId) throw conflict('SAME_BRANCH', 'Choose a section in another branch. To change section in the same branch, edit the enrollment.');
+    // Both branches locked, in a fixed order (no deadlock with a move the other way).
+    for (const branchId of [found.branchId, target.branchId].sort()) await lockBranchForStudents(tx, scope, branchId);
+    const student = await findStudent(tx, scope, id);
+    if (student.status !== 'ENROLLED') throw conflict('INVALID_STATUS', `${fullName(student)} is ${STATUS_LABELS[student.status].toLowerCase()}: only an enrolled student moves between branches.`);
+    const current = await tx.enrollment.findFirst({ where: { studentId: student.id, status: 'ACTIVE' }, include: enrollmentInclude });
+    if (!current) throw conflict('NOT_ENROLLED', `${fullName(student)} has no active enrollment.`);
+    const section = await findPlaceableSection(tx, scope, target.branchId, sectionId);
+    if (section.academicYearId !== current.academicYearId) throw conflict('WRONG_YEAR', `Choose a section of ${current.academicYear.name}.`);
+    await tx.enrollment.update({ where: { id: current.id }, data: { sectionId: section.id, branchId: section.branchId } });
+    const updated = await tx.student.update({ where: { id: student.id }, data: { branchId: section.branchId }, include: { branch: { select: { id: true, name: true, code: true } } } });
+    const from = `${student.branch.name} · ${toEnrollment(current).section.displayName}`;
+    const to = `${updated.branch.name} · ${sectionDisplayName(section.class.name, section.name)}`;
+    await audit(tx, AUDIT_ACTIONS.STUDENT_BRANCH_TRANSFERRED, updated, {
+      scope,
+      user,
+      req,
+      description: `Moved from ${from} to ${to}. Reason: ${reason}`,
+      fields: [
+        { field: 'Branch', from: student.branch.name, to: updated.branch.name },
+        { field: 'Section', from: toEnrollment(current).section.displayName, to: sectionDisplayName(section.class.name, section.name) },
+        { field: 'Reason', from: null, to: reason },
+      ],
+    });
+    return updated;
+  });
+  return result;
+}

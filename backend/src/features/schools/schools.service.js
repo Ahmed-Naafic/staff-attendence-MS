@@ -24,6 +24,7 @@ const schoolSelect = {
   suspendedAt: true,
   studentAttendanceEnabled: true,
   examinationsEnabled: true,
+  feesEnabled: true,
   owner: { select: { id: true, name: true } },
 };
 
@@ -45,7 +46,7 @@ export const toSchool = (school) => ({
   suspensionReason: school.suspensionReason ?? null,
   suspendedAt: school.suspendedAt?.toISOString() ?? null,
   // Features the Super Admin turns on per school (off by default).
-  features: { studentAttendance: school.studentAttendanceEnabled === true, examinations: school.examinationsEnabled === true },
+  features: { studentAttendance: school.studentAttendanceEnabled === true, examinations: school.examinationsEnabled === true, fees: school.feesEnabled === true },
 });
 
 /** Search (name, code, owner, location), status, location, registration-date and no-owner filters, newest first. */
@@ -161,6 +162,7 @@ export async function updateSchool(id, values, user, req) {
 const FEATURES = {
   studentAttendance: { column: 'studentAttendanceEnabled', label: 'Student Attendance' },
   examinations: { column: 'examinationsEnabled', label: 'Examinations' },
+  fees: { column: 'feesEnabled', label: 'Fee Management' },
 };
 
 /**

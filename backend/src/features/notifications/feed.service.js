@@ -35,7 +35,7 @@ export async function notificationViewer(user) {
 /** SQL condition: personal notifications this viewer may see now. */
 const personalVisible = (v, now) => Prisma.sql`
   n."recipientId" = ${v.userId} AND n."expiresAt" > ${now}
-  ${v.role === 'MANAGER' ? Prisma.sql`AND (n."branchId" IS NULL OR n."branchId" = ${v.branchId})` : Prisma.empty}`;
+  ${v.role === 'MANAGER' || v.role === 'ACCOUNTANT' ? Prisma.sql`AND (n."branchId" IS NULL OR n."branchId" = ${v.branchId})` : Prisma.empty}`;
 
 /** SQL condition: announcements this viewer may see now. */
 const announcementVisible = (v, now) => Prisma.sql`
@@ -56,7 +56,7 @@ const personalWhere = (v, now, id) => ({
   ...(id && { id }),
   recipientId: v.userId,
   expiresAt: { gt: now },
-  ...(v.role === 'MANAGER' && { OR: [{ branchId: null }, { branchId: v.branchId }] }),
+  ...((v.role === 'MANAGER' || v.role === 'ACCOUNTANT') && { OR: [{ branchId: null }, { branchId: v.branchId }] }),
 });
 
 /** Where opening a notification leads in the apps (the target page checks its own access). */
@@ -67,6 +67,8 @@ function linkFor(n) {
   if (n.type === 'BRANCH_NO_SCHEDULE') return { kind: 'schedule' };
   if (n.type === 'BRANCH_NO_MANAGER') return { kind: 'managers' };
   if (n.type === 'STUDENT_ATTENDANCE_INCOMPLETE' || n.type === 'STUDENT_ATTENDANCE_SUMMARY') return { kind: 'studentAttendanceCompletion', date: p.date };
+  if (n.type === 'FEES_OVERDUE') return { kind: 'feesOverdue' };
+  if (n.type === 'FEE_GENERATION_FAILED') return { kind: 'feesOverview' };
   if (n.type === 'LESSON_ATTENDANCE_MISSING') return { kind: 'lessons', date: p.date };
   return null;
 }

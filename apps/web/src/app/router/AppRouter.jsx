@@ -16,6 +16,7 @@ import { DashboardPage } from '../../features/dashboard';
 import { ManagersPage } from '../../features/managers';
 import { MyBranchPage } from '../../features/my-branch';
 import { NotificationsPage } from '../../features/notifications';
+import { CashClosingPage, DiscountsPage, FeeClearancePage, FeeOverviewPage, FeeReportsPage, FeeSettingsPage, FeeStructuresPage, InvoicesPage, PaymentsPage, StudentClearancePage, StudentFeeAccountPage, StudentFeesPage } from '../../features/fees';
 import { AnnouncementsPage } from '../../features/announcements';
 import { SchedulePage } from '../../features/schedules';
 import { StaffPage } from '../../features/staff';
@@ -46,6 +47,8 @@ const SUPER_ADMIN = ['SUPER_ADMIN'];
 const OWNER = ['OWNER'];
 const MANAGER = ['MANAGER'];
 const OWNER_OR_MANAGER = ['OWNER', 'MANAGER'];
+// Fee Management: the School Owner, Managers and Accountants (each sees what the API allows).
+const FEE_ROLES = ['OWNER', 'MANAGER', 'ACCOUNTANT'];
 const routes = [
   // Public: the sign-in page. Everything else requires a session.
   { path: '/login', element: <LoginPage /> },
@@ -154,7 +157,21 @@ const routes = [
       { path: 'student-attendance/sessions/:sessionId', element: <AttendanceSessionPage />, handle: { title: 'Student Attendance', roles: OWNER_OR_MANAGER } },
       { path: 'student-excuses', element: <StudentExcusesPage />, handle: { title: 'Student Excuses', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — notification centre (each sees only their own notifications, decided by the API)
-      { path: 'notifications', element: <NotificationsPage />, handle: { title: 'Notifications', roles: OWNER_OR_MANAGER } },
+      { path: 'notifications', element: <NotificationsPage />, handle: { title: 'Notifications', roles: FEE_ROLES } },
+
+      // Fee Management (OWNER, MANAGER, ACCOUNTANT)
+      { path: 'fees', element: <FeeOverviewPage />, handle: { title: 'Fee Management', roles: FEE_ROLES } },
+      { path: 'fees/structures', element: <FeeStructuresPage />, handle: { title: 'Fee Structures', roles: FEE_ROLES } },
+      { path: 'fees/students', element: <StudentFeesPage />, handle: { title: 'Student Fees', roles: FEE_ROLES } },
+      { path: 'fees/students/:studentId', element: <StudentFeeAccountPage />, handle: { title: 'Student Fees', roles: FEE_ROLES } },
+      { path: 'fees/invoices', element: <InvoicesPage />, handle: { title: 'Invoices', roles: FEE_ROLES } },
+      { path: 'fees/payments', element: <PaymentsPage />, handle: { title: 'Payments', roles: FEE_ROLES } },
+      { path: 'fees/discounts', element: <DiscountsPage />, handle: { title: 'Discounts & Scholarships', roles: FEE_ROLES } },
+      { path: 'fees/clearance', element: <FeeClearancePage />, handle: { title: 'Fee Clearance', roles: FEE_ROLES } },
+      { path: 'fees/clearance/:studentId', element: <StudentClearancePage />, handle: { title: 'Fee Clearance', roles: FEE_ROLES } },
+      { path: 'fees/cash-closing', element: <CashClosingPage />, handle: { title: 'Cash Closing', roles: FEE_ROLES } },
+      { path: 'fees/reports', element: <FeeReportsPage />, handle: { title: 'Fee Reports', roles: FEE_ROLES } },
+      { path: 'fees/settings', element: <FeeSettingsPage />, handle: { title: 'Fee Settings', roles: FEE_ROLES } },
 
       { path: '*', element: <NotFoundPage />, handle: { title: 'Page not found' } },
     ],

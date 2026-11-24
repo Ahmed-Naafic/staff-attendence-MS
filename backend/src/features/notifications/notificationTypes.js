@@ -28,6 +28,7 @@ export const CATEGORIES = [
   'TRANSFER',
   'STUDENT_ATTENDANCE',
   'EXAMINATION',
+  'FEES',
 ];
 export const MANDATORY_CATEGORIES = ['STATUS', 'MANAGER_ASSIGNMENT', 'ANNOUNCEMENT', 'TRANSFER'];
 export const isMandatory = (category) => MANDATORY_CATEGORIES.includes(category);
@@ -35,8 +36,9 @@ export const isMandatory = (category) => MANDATORY_CATEGORIES.includes(category)
 /** The categories each role can receive (and so can see in its preferences). */
 export const ROLE_CATEGORIES = {
   STAFF: ['MISSING_CHECK_OUT', 'ASSIGNMENT', 'SCHEDULE', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE', 'EXAMINATION'],
-  MANAGER: ['ATTENDANCE', 'DIGEST', 'BRANCH_SETUP', 'MANAGER_ASSIGNMENT', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE', 'EXAMINATION'],
-  OWNER: ['DIGEST', 'BRANCH_SETUP', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE', 'EXAMINATION'],
+  MANAGER: ['ATTENDANCE', 'DIGEST', 'BRANCH_SETUP', 'MANAGER_ASSIGNMENT', 'TRANSFER', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE', 'EXAMINATION', 'FEES'],
+  OWNER: ['DIGEST', 'BRANCH_SETUP', 'STATUS', 'ANNOUNCEMENT', 'STUDENT_ATTENDANCE', 'EXAMINATION', 'FEES'],
+  ACCOUNTANT: ['STATUS', 'ANNOUNCEMENT', 'FEES'],
 };
 
 /** Notification type → category. The 11 approved Phase 1 events (N3) plus the digests (N6–N8). */
@@ -65,6 +67,8 @@ export const NOTIFICATION_TYPES = {
   EXAM_DUTIES: 'EXAMINATION',
   EXAM_MARKS_RETURNED: 'EXAMINATION',
   EXAM_RESULTS_APPROVED: 'EXAMINATION', // the School Owner: a Manager approved results that wait for publication
+  FEES_OVERDUE: 'FEES', // staff the school chose: students of their branch (or school) with overdue fees
+  FEE_GENERATION_FAILED: 'FEES', // the School Owner: monthly fee generation keeps failing
   EXAM_RESULTS_PUBLISHED: 'EXAMINATION', // the branch's Managers: the School Owner published results // the section's teachers of the subject: marks returned to correct // an invigilator: their duties when an examination timetable is published (again)
 };
 export const categoryOf = (type) => NOTIFICATION_TYPES[type];

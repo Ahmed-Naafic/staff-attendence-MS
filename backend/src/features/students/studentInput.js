@@ -166,6 +166,19 @@ export function readTransferOut(body) {
   return values;
 }
 
+/** Move to another branch (School Owner): the section there and a reason. */
+export function readBranchTransfer(body) {
+  refuseUnknown(body, ['sectionId', 'reason']);
+  const values = {};
+  const errors = {};
+  if (typeof body.sectionId !== 'string' || !body.sectionId) errors.sectionId = 'Choose the section in the other branch.';
+  else values.sectionId = body.sectionId;
+  readText(body, 'reason', { label: 'Reason', required: true, max: 300 }, values, errors);
+  if (!errors.reason && values.reason.length < 3) errors.reason = 'Reason must be at least 3 characters.';
+  check(errors);
+  return values;
+}
+
 /** Student directory query. */
 export function readStudentListQuery(query, { role }) {
   if (role === 'MANAGER' && query.branch !== undefined) {

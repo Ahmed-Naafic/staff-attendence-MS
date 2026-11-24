@@ -28,7 +28,7 @@ const MOBILE_ROLES = ['STAFF', 'MANAGER'];
 // Sign-in events of school owners, Managers and staff are linked to their school (for the audit log's school filter).
 async function schoolIdOf(user) {
   if (user?.role === 'OWNER') return (await getPrisma().school.findUnique({ where: { ownerId: user.id }, select: { id: true } }))?.id ?? null;
-  if (user?.role === 'MANAGER' || user?.role === 'STAFF') {
+  if (user?.role === 'MANAGER' || user?.role === 'STAFF' || user?.role === 'ACCOUNTANT') {
     const manager = await getPrisma().user.findUnique({ where: { id: user.id }, select: { branch: { select: { schoolId: true } } } });
     return manager?.branch?.schoolId ?? null;
   }

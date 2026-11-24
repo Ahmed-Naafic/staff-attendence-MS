@@ -1,4 +1,4 @@
-import { Award, ChartColumnBig, ClipboardList, DoorOpen, Grid3x3, LayoutDashboard, NotebookPen, PenLine, SlidersHorizontal, Tags, ArrowRightLeft, CalendarCog, ListOrdered, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, UserRound, Users } from 'lucide-react';
+import { Banknote, FileText, Lock, Percent, Receipt, ShieldCheck, Wallet, Award, ChartColumnBig, ClipboardList, DoorOpen, Grid3x3, LayoutDashboard, NotebookPen, PenLine, SlidersHorizontal, Tags, ArrowRightLeft, CalendarCog, ListOrdered, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, UserRound, Users } from 'lucide-react';
 
 /*
  * Role-aware navigation. Each role gets its own identity and sidebar sections;
@@ -25,6 +25,34 @@ export const roleProfiles = {
     subtitle: 'Branch Management',
     home: '/my-branch',
   },
+  ACCOUNTANT: {
+    label: 'Accountant',
+    subtitle: 'Fee Management',
+    home: '/fees',
+  },
+};
+
+/**
+ * Fee Management under one menu (School Owner, Managers, Accountants), in the order of the work. Fee
+ * Clearance sits with the others (examination eligibility). The pages explain when the school has not
+ * had Fee Management switched on.
+ */
+const feeGroup = {
+  id: 'fees',
+  label: 'Fees',
+  icon: Wallet,
+  children: [
+    { to: '/fees', label: 'Overview', icon: LayoutDashboard },
+    { to: '/fees/structures', label: 'Fee Structures', icon: Receipt },
+    { to: '/fees/students', label: 'Student Fees', icon: Users },
+    { to: '/fees/invoices', label: 'Invoices', icon: FileText },
+    { to: '/fees/payments', label: 'Payments', icon: Banknote },
+    { to: '/fees/discounts', label: 'Discounts & Scholarships', icon: Percent },
+    { to: '/fees/clearance', label: 'Fee Clearance', icon: ShieldCheck },
+    { to: '/fees/cash-closing', label: 'Cash Closing', icon: Lock },
+    { to: '/fees/reports', label: 'Reports', icon: ChartColumn },
+    { to: '/fees/settings', label: 'Settings', icon: SlidersHorizontal },
+  ],
 };
 
 /**
@@ -139,6 +167,7 @@ export const navigationByRole = {
         { to: '/teaching', label: 'Teaching', icon: Presentation },
         studentGroup,
         examGroup,
+        feeGroup,
       ],
     },
   ],
@@ -156,9 +185,12 @@ export const navigationByRole = {
         { to: '/teaching', label: 'Teaching', icon: Presentation },
         studentGroup,
         examGroup,
+        feeGroup,
       ],
     },
   ],
+  // Branch scope, Fee Management only (payments, receipts, invoices, cash closing, reports).
+  ACCOUNTANT: [{ items: [feeGroup] }],
 };
 
 export function getNavigationForRole(role) {
