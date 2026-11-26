@@ -194,7 +194,9 @@ export const navigationByRole = {
     },
   ],
   // Branch scope, Fee Management only (payments, receipts, invoices, cash closing, reports).
-  ACCOUNTANT: [{ items: [feeGroup] }],
+  // Fee Management is the Accountant's whole workspace: its pages directly, not inside a group. What
+  // each page lets them do is decided by the API (permissions in /fees/status; every change re-checked).
+  ACCOUNTANT: [{ label: 'Fee Management', items: feeGroup.children }],
 };
 
 export function getNavigationForRole(role) {

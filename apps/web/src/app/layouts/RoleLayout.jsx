@@ -4,6 +4,8 @@ import { LogOut, UserRound } from 'lucide-react';
 import { AppShell, Sidebar, Topbar, UserMenu } from '../../components/layout';
 import { Button, EmptyState } from '../../components/ui';
 import { useSession } from '../../features/auth/SessionProvider.jsx';
+import { useApiData } from '../../hooks/useApiData.js';
+import { apiRequest } from '../../lib/api.js';
 import { useBranding } from '../../features/branding';
 import { NotificationBell } from '../../features/notifications';
 import { getNavigationForRole, getRoleProfile } from '../config/navigation.js';
@@ -27,6 +29,7 @@ export default function RoleLayout() {
       navigate('/login', { replace: true });
     }
   };
+  const branchName = useAccountantBranchName(user);
   const allowed = useRouteAllowed(user.role);
   const pageTitle = usePageTitle();
   const title = allowed ? pageTitle : 'Page not found';
@@ -54,7 +57,7 @@ export default function RoleLayout() {
       sidebar={
         <Sidebar
           // The saved platform name (EduTrack when unavailable); a blank line for the moment it loads.
-          brand={{ name: loaded ? platformName : ' ', subtitle: profile.subtitle }}
+          brand={{ name: loaded ? platformName : ' ', subtitle: branchName ? `${branchName} branch · ${profile.subtitle}` : profile.subtitle }}
           roleLabel={profile.label}
           sections={getNavigationForRole(user.role)}
         />
@@ -69,7 +72,7 @@ export default function RoleLayout() {
           user={
             <UserMenu
               name={user.name}
-              roleLabel={profile.label}
+              roleLabel={branchName ? `${profile.label} · ${branchName}` : profile.label}
               items={[
                 // Profile is not available yet (no approved profile features).
                 { label: 'Profile', icon: UserRound, disabled: true },
@@ -87,6 +90,16 @@ export default function RoleLayout() {
       </DisplaySettingsProvider>
     </AppShell>
   );
+}
+
+/**
+ * An Accountant's branch name, for the sidebar and user menu (null for other roles, or until it loads).
+ * The API decides the branch from the account; this is display only.
+ */
+function useAccountantBranchName(user) {
+  const accountant = user.role === 'ACCOUNTANT';
+  const { data } = useApiData(() => (accountant ? apiRequest('/accountant/branch') : Promise.resolve(null)), `workspace-branch|${user.id}|${user.role}`);
+  return accountant ? (data?.branch?.name ?? null) : null;
 }
 
 /** Whether the role may open this page: routes that list `handle.roles` belong to those roles only. */
