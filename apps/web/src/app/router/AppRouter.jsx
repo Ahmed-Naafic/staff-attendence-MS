@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { createBrowserRouter, Navigate, RouterProvider, useSearchParams } from 'react-router';
 import { AcademicYearsPage } from '../../features/academic-years';
 import { AcademicCalendarPage } from '../../features/academic-calendar';
 import { SubjectsPage, TeachingPage } from '../../features/teaching';
@@ -12,7 +12,7 @@ import { ClassDetailsPage, ClassesPage } from '../../features/classes';
 import { PromotionPage, PromotionsPage, StudentProfilePage, StudentsPage } from '../../features/students';
 import { AuditLogsPage } from '../../features/audit-logs';
 import { BranchesPage } from '../../features/branches';
-import { LoginPage, RequireSession, useSession } from '../../features/auth';
+import { RequireSession, safeNext, useSession } from '../../features/auth';
 import { LandingPage } from '../../features/landing';
 import { DashboardPage, SchoolDashboardPage } from '../../features/dashboard';
 import { ManagersPage } from '../../features/managers';
@@ -49,21 +49,20 @@ function RoleHome() {
   return <Navigate to={getRoleProfile(user.role)?.home ?? '/dashboard'} replace />;
 }
 
-// "/": the public landing page when signed out (or when the API cannot be reached: it needs no data);
-// signed in, the role's start page (through RequireSession, which also handles a temporary password).
-function PublicHome() {
+// "/" and "/login": the public landing page when signed out (or when the API cannot be reached: it needs
+// no data). "/login" opens its Sign In dialog (pages that need a session send people there, with ?next=).
+// Signed in: "next" or the role's start page (through RequireSession, which handles a temporary password).
+function PublicHome({ signIn = false }) {
   const { status } = useSession();
+  const [params] = useSearchParams();
+  const next = safeNext(params.get('next'));
   if (status === 'checking') return <div className="min-h-dvh bg-page" />;
   if (status === 'signed-in') {
-    return (
-      <RequireSession>
-        <RoleHome />
-      </RequireSession>
-    );
+    return <RequireSession>{next ? <Navigate to={next} replace /> : <RoleHome />}</RequireSession>;
   }
   return (
-    <Suspense fallback={<div className="min-h-dvh bg-[#041327]" />}>
-      <LandingPage />
+    <Suspense fallback={<div className="min-h-dvh bg-page" />}>
+      <LandingPage signIn={signIn} next={next} />
     </Suspense>
   );
 }
@@ -77,9 +76,9 @@ const OWNER_OR_MANAGER = ['OWNER', 'MANAGER'];
 // Fee Management: the School Owner, Managers and Accountants (each sees what the API allows).
 const FEE_ROLES = ['OWNER', 'MANAGER', 'ACCOUNTANT'];
 const routes = [
-  // Public: the landing page ("/" signed out) and the sign-in page. Everything else requires a session.
+  // Public: the landing page ("/" signed out; "/login" with its Sign In dialog open). Everything else requires a session.
   { path: '/', element: <PublicHome /> },
-  { path: '/login', element: <LoginPage /> },
+  { path: '/login', element: <PublicHome signIn /> },
   {
     // The signed-in application (no path of its own: its pages keep their URLs).
     element: (
