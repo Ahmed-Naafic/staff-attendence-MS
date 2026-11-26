@@ -211,7 +211,7 @@ function Preview({ format, data }) {
 
 function Heading({ head }) {
   return (
-    <div className="border-b-4 border-accent bg-primary px-4 py-4 text-sidebar-fg-strong sm:px-6">
+    <div className="border-b-4 border-accent bg-primary px-4 py-4 text-on-primary sm:px-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-section-title font-bold break-words">{head.title}</p>
@@ -261,7 +261,7 @@ function RecordsTable({ data, caption }) {
       <table className="w-full min-w-[56rem] border-collapse text-left text-caption">
         <caption className="sr-only">{caption}</caption>
         <thead>
-          <tr className="border-b-2 border-accent bg-primary text-sidebar-fg-strong">
+          <tr className="border-b-2 border-accent bg-primary text-on-primary">
             {data.columns.map((c) => (
               <th key={c.header} scope="col" className="px-2 py-2 font-semibold">
                 {c.header}
@@ -337,7 +337,7 @@ function WorkbookPreview({ data }) {
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            <p className="bg-primary px-3 py-2 text-small font-semibold text-sidebar-fg-strong">{`Attendance Records — ${data.head.school} · ${data.head.scope} · ${data.head.period}`}</p>
+            <p className="bg-primary px-3 py-2 text-small font-semibold text-on-primary">{`Attendance Records — ${data.head.school} · ${data.head.scope} · ${data.head.period}`}</p>
             <RecordsTable data={data} caption="Attendance Records sheet (preview)" />
           </div>
         )}

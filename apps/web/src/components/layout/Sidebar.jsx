@@ -8,7 +8,7 @@ import { useDialog } from '../ui/useDialog.js';
 import { useAppShell } from './AppShell.jsx';
 
 /**
- * Navy sidebar showing the product, the signed-in role and the navigation.
+ * Sidebar (same background as the page) showing the product, the signed-in role and the navigation.
  * Role-agnostic: pass the sections for the current role.
  *
  * brand:    { name, subtitle, logo? }        e.g. { name: 'EduTrack', subtitle: 'Platform Administrator' }
@@ -26,7 +26,7 @@ export function Sidebar({ brand, roleLabel, sections, footer }) {
       {/* Desktop */}
       <aside
         className={cn(
-          'sticky top-0 z-30 hidden h-dvh shrink-0 flex-col bg-sidebar text-sidebar-fg [--color-focus:var(--color-sidebar-focus)] transition-[width] duration-200 lg:flex',
+          'sticky top-0 z-30 hidden h-dvh shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-fg [--color-focus:var(--color-sidebar-focus)] transition-[width] duration-200 lg:flex',
           collapsed ? 'w-sidebar-collapsed' : 'w-sidebar',
         )}
       >
@@ -38,7 +38,7 @@ export function Sidebar({ brand, roleLabel, sections, footer }) {
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             aria-expanded={!collapsed}
             className={cn(
-              'flex h-9 w-full items-center gap-3 rounded-md px-3 text-small text-sidebar-fg-muted hover:bg-sidebar-hover hover:text-sidebar-fg',
+              'flex h-9 w-full items-center gap-3 rounded-md px-3 text-small text-sidebar-fg-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-hover-fg',
               collapsed && 'justify-center px-0',
             )}
           >
@@ -67,7 +67,7 @@ export function Sidebar({ brand, roleLabel, sections, footer }) {
           type="button"
           onClick={closeMobileNav}
           aria-label="Close navigation"
-          className="absolute top-4 right-3 grid size-8 place-items-center rounded-md text-sidebar-fg-muted hover:bg-sidebar-hover hover:text-sidebar-fg"
+          className="absolute top-4 right-3 grid size-8 place-items-center rounded-md text-sidebar-fg-muted transition-colors hover:bg-sidebar-hover hover:text-sidebar-hover-fg"
         >
           <X aria-hidden="true" className="size-[1.125rem]" />
         </button>
@@ -88,7 +88,7 @@ function SidebarContent({ brand, roleLabel, sections, footer, collapsed = false,
   return (
     <>
       <div className={cn('flex items-center gap-3 px-5 pt-6 pb-5', collapsed && 'justify-center px-0')}>
-        <span className="grid size-10 shrink-0 place-items-center rounded-md border border-accent/50 bg-sidebar-hover text-accent">
+        <span className="grid size-10 shrink-0 place-items-center rounded-md border border-accent/50 bg-primary text-accent">
           {Logo ? <Logo aria-hidden="true" className="size-6" /> : <BookOpen aria-hidden="true" className="size-5" />}
         </span>
         {!collapsed && (
@@ -97,7 +97,7 @@ function SidebarContent({ brand, roleLabel, sections, footer, collapsed = false,
             <span className="max-w-full text-section-title text-sidebar-fg-strong wrap-anywhere">{brand.name}</span>
             {brand.subtitle && <span className="text-caption text-sidebar-fg-muted">{brand.subtitle}</span>}
             {roleLabel && (
-              <span className="mt-1.5 rounded-sm border border-accent/60 px-1.5 py-px text-caption font-medium text-sidebar-active-fg">
+              <span className="mt-1.5 rounded-sm border border-accent/60 px-1.5 py-px text-caption font-medium text-sidebar-badge-fg">
                 {roleLabel}
               </span>
             )}
@@ -168,13 +168,13 @@ function SidebarGroup({ group, collapsed, onNavigate }) {
         aria-expanded={open}
         aria-controls={listId}
         className={cn(
-          'relative flex h-10 w-full items-center gap-3 rounded-md px-3 text-body font-medium transition-colors hover:bg-sidebar-hover',
-          active && !open ? 'bg-sidebar-active text-sidebar-active-fg' : 'text-sidebar-fg',
+          'group/item relative flex h-10 w-full items-center gap-3 rounded-md px-3 text-body font-medium transition-colors',
+          active && !open ? 'bg-sidebar-active text-sidebar-active-fg' : 'text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-hover-fg',
         )}
       >
         {Icon && <Icon aria-hidden="true" className="size-[1.125rem] shrink-0" />}
         <span className="flex-1 truncate text-left">{group.label}</span>
-        <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 text-sidebar-fg-muted transition-transform duration-200', open && 'rotate-180')} />
+        <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 transition-transform duration-200', active && !open ? 'text-current' : 'text-sidebar-fg-muted group-hover/item:text-current', open && 'rotate-180')} />
       </button>
       <ul id={listId} hidden={!open} className="mt-1 ml-5 flex flex-col gap-1 border-l border-sidebar-border pl-2">
         {children.map((child) => (
@@ -201,8 +201,8 @@ function SidebarLink({ item, collapsed, onNavigate, nested = false }) {
           nested && 'h-9 text-small',
           collapsed && 'justify-center px-0',
           isActive
-            ? 'bg-sidebar-active text-sidebar-active-fg before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-pill before:bg-accent'
-            : 'text-sidebar-fg hover:bg-sidebar-hover',
+            ? 'bg-sidebar-active text-sidebar-active-fg before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-pill before:bg-sidebar-active-bar'
+            : 'text-sidebar-fg hover:bg-sidebar-hover hover:text-sidebar-hover-fg',
         )
       }
     >

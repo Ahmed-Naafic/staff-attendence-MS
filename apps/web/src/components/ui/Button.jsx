@@ -12,8 +12,8 @@ const base =
   'data-unavailable:hover:border-border data-unavailable:hover:bg-muted data-unavailable:hover:text-fg-disabled';
 
 const variants = {
-  // Gold: the main action on a page or dialog. Use once per view.
-  primary: 'border-transparent bg-accent text-on-accent shadow-subtle hover:bg-accent-hover active:bg-accent-hover',
+  // The main action on a page or dialog (navy in light mode, gold in dark mode). Use once per view.
+  primary: 'border-transparent bg-primary-action text-on-primary-action shadow-subtle hover:bg-primary-action-hover active:bg-primary-action-hover',
   // Navy: strong supporting action.
   secondary: 'border-transparent bg-interactive text-on-interactive hover:bg-interactive-hover active:bg-interactive-hover',
   outline: 'border-border-strong bg-surface text-fg hover:bg-muted active:bg-border-subtle',
