@@ -572,4 +572,63 @@ describe('Fee Management', () => {
     assert.equal(branch.body.branch.id, ctx.b1.id);
     assert.equal(branch.body.school.id, ctx.school.id);
   });
+  test('staff Fee Management access: given by the School Owner only, the Accountant workspace of their branch, taken back at once', async () => {
+    const staff = await prisma.user.create({ data: { name: `Cashier ${tag}`, email: userEmail('cashier'), role: 'STAFF', branchId: ctx.b1.id, jobTitle: 'Accountant', staffId: `TFEE${tag}-ST900`, phoneKey: `+9998${Date.now() % 1_000_000_000}`, passwordHash: await hashPassword(PASSWORD) } });
+    await login('CASHIER', userEmail('cashier'));
+    const cashier = api('CASHIER', 'accountant');
+    // A staff member without access has no Fee Management.
+    assert.equal((await cashier('/status')).status, 403);
+    assert.equal((await call('/api/auth/session', { as: 'CASHIER' })).body.user.feeAccess, false);
+    // Only the School Owner of their school gives access.
+    assert.equal((await manager(`/staff-access/${staff.id}`, { method: 'PUT', body: { access: true } })).status, 403);
+    assert.equal((await owner2(`/staff-access/${staff.id}`, { method: 'PUT', body: { access: true } })).status, 404);
+    assert.equal((await owner(`/staff-access/${staff.id}`, { method: 'PUT', body: { access: 'yes' } })).status, 400);
+    const list = await owner('/staff-access');
+    ok(list);
+    assert.ok(list.body.items.some((s) => s.id === staff.id && s.feeAccess === false));
+    const granted = await owner(`/staff-access/${staff.id}`, { method: 'PUT', body: { access: true } });
+    ok(granted);
+    assert.equal(granted.body.staff.feeAccess, true);
+    assert.ok(await prisma.auditEvent.findFirst({ where: { schoolId: ctx.school.id, action: 'FEE_ACCESS_GRANTED', targetId: staff.id } }));
+
+    // Same sign-in: the session says so, and the Accountant workspace of their branch opens.
+    const session = await call('/api/auth/session', { as: 'CASHIER' });
+    assert.equal(session.body.user.role, 'STAFF');
+    assert.equal(session.body.user.feeAccess, true);
+    const status = await cashier('/status');
+    ok(status);
+    assert.equal(status.body.role, 'ACCOUNTANT');
+    assert.equal(status.body.permissions.configure, false);
+    assert.equal(status.body.permissions.recordPayments, true);
+    assert.equal((await call('/api/accountant/branch', { as: 'CASHIER' })).body.branch.id, ctx.b1.id);
+    assert.equal((await cashier(`/students/${S.s4.id}`)).status, 404, 'their branch only');
+    assert.equal((await cashier('/settings', { method: 'PUT', body: { values: { dueDay: 5 } } })).status, 403);
+    assert.equal((await call('/api/manager/students', { as: 'CASHIER' })).status, 403);
+
+    // A payment recorded by them is theirs to close, as an Accountant's.
+    let paid = null;
+    for (const student of [S.s2, S.s3]) {
+      const payable = await cashier(`/students/${student.id}/payable`);
+      ok(payable);
+      const item = payable.body.items[0];
+      if (!item) continue;
+      paid = await cashier('/payments', { method: 'POST', body: { student: student.id, amount: item.balance, allocations: [{ obligation: item.id, amount: item.balance }] } });
+      ok(paid, 201);
+      break;
+    }
+    assert.ok(paid, 'a student of the branch owed something');
+    const payment = await prisma.feePayment.findFirst({ where: { recordedById: staff.id } });
+    assert.equal(payment.recordedByRole, 'ACCOUNTANT');
+    const mine = await cashier('/closings/mine');
+    assert.equal(mine.body.open.paymentsCount, 1);
+    ok(await cashier('/closings', { method: 'POST', body: { counted: mine.body.open.expectedAmount, expected: mine.body.open.expectedAmount } }), 201);
+
+    // Taken back: refused at the next request, without signing out; unchanged again → no new event.
+    ok(await owner(`/staff-access/${staff.id}`, { method: 'PUT', body: { access: false } }));
+    assert.equal((await cashier('/status')).status, 403);
+    ok(await owner(`/staff-access/${staff.id}`, { method: 'PUT', body: { access: false } }));
+    assert.equal(await prisma.auditEvent.count({ where: { action: 'FEE_ACCESS_REVOKED', targetId: staff.id } }), 1);
+    // The database keeps the access to staff members.
+    await assert.rejects(prisma.user.update({ where: { id: ctx.accountantId }, data: { feeAccess: true } }));
+  });
 });

@@ -40,7 +40,7 @@ export async function findSession(token) {
   const prisma = getPrisma();
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: { select: { id: true, name: true, role: true, status: true, mustChangePassword: true } } },
+    include: { user: { select: { id: true, name: true, role: true, status: true, mustChangePassword: true, feeAccess: true } } },
   });
   const now = new Date();
   if (!session || session.expiresAt <= now || session.user.status !== 'ACTIVE') return null;

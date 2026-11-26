@@ -2,7 +2,7 @@ import { badRequest, forbidden } from '../../common/httpError.js';
 import { isUuid, jsonBody } from '../../common/validate.js';
 import { getPrisma } from '../../config/prisma.js';
 import { readManagerCreation, readManagerSuspension, readManagerUpdate, readTemporaryPassword } from '../managers/managerInput.js';
-import { createAccountant, listAccountants, resetAccountantPassword, setAccountantStatus, updateAccountant } from './accountants.service.js';
+import { createAccountant, listAccountants, resetAccountantPassword, setAccountantStatus, updateAccountant, listStaffFeeAccess, setStaffFeeAccess } from './accountants.service.js';
 import { permissions, requireFees } from './feeAccess.js';
 import {
   addCharge,
@@ -237,9 +237,17 @@ export function mountFeeRoutes(router, scopeOf, role) {
     });
     router.post('/fees/accountants/:id/suspend', async (req, res) => res.json({ accountant: await setAccountantStatus(scopeOf(req).school, req.params.id, { suspend: true, reason: readManagerSuspension(jsonBody(req)) }, req.user, req) }));
     router.post('/fees/accountants/:id/reactivate', async (req, res) => res.json({ accountant: await setAccountantStatus(scopeOf(req).school, req.params.id, { suspend: false }, req.user, req) }));
+    // Fee Management access for staff members (the Accountant workspace with their staff sign-in).
+    router.get('/fees/staff-access', async (req, res) => res.json(await listStaffFeeAccess(scopeOf(req).school)));
+    router.put('/fees/staff-access/:id', async (req, res) => {
+      const { access, ...rest } = jsonBody(req);
+      if (typeof access !== 'boolean' || Object.keys(rest).length) throw badRequest('Send { access: true | false }.', { access: 'Choose whether the staff member has access.' });
+      res.json({ staff: await setStaffFeeAccess(scopeOf(req).school, req.params.id, access, req.user, req) });
+    });
     router.post('/fees/accountants/:id/password', async (req, res) => res.json({ accountant: await resetAccountantPassword(scopeOf(req).school, req.params.id, readTemporaryPassword(jsonBody(req)), req.user, req) }));
   } else {
     router.use('/fees/accountants', (req, res, next) => next(forbidden('Only the School Owner manages Accountant accounts.')));
+    router.use('/fees/staff-access', (req, res, next) => next(forbidden('Only the School Owner gives Fee Management access.')));
   }
 }
 

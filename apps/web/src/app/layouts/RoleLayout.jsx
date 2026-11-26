@@ -40,8 +40,12 @@ export default function RoleLayout() {
     return (
       <main className="grid min-h-dvh place-items-center bg-page p-6">
         <EmptyState
-          title="No web workspace for this role yet"
-          description="This account's role does not have web navigation in this version."
+          title={user.role === 'STAFF' ? 'Staff use the EduTrack mobile app' : 'No web workspace for this role yet'}
+          description={
+            user.role === 'STAFF'
+              ? 'Check in and see your attendance in the mobile app. If you take fees for your branch, ask your School Owner to give you Fee Management access, then sign in here again.'
+              : "This account's role does not have web navigation in this version."
+          }
           action={
             <Button variant="outline" onClick={handleSignOut}>
               Sign out

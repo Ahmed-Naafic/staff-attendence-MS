@@ -20,7 +20,8 @@ import {
 
 export const authRouter = Router();
 
-const publicUser = (user) => ({ id: user.id, name: user.name, role: user.role, mustChangePassword: user.mustChangePassword === true });
+// feeAccess: a STAFF member the School Owner gave Fee Management access (the Accountant web workspace).
+const publicUser = (user) => ({ id: user.id, name: user.name, role: user.role, mustChangePassword: user.mustChangePassword === true, ...(user.role === 'STAFF' && { feeAccess: user.feeAccess === true }) });
 const WEB_APP = { type: 'system', name: 'EduTrack web app' };
 const MOBILE_APP = { type: 'system', name: 'EduTrack mobile app' };
 // Roles of the mobile app (docs/architecture.md → Applications).

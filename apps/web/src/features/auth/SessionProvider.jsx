@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { onUnauthorized } from '../../lib/api.js';
 import { changePassword as apiChangePassword, fetchSession, signIn as apiSignIn, signOut as apiSignOut } from './authApi.js';
+import { workspaceUser } from './workspaceUser.js';
 
 // Single source of "who is signed in" for the web app: the API session (an httpOnly cookie the
 // browser sends with every /api request). The browser never sees the session token itself.
@@ -37,7 +38,7 @@ export function SessionProvider({ children }) {
   const signIn = useCallback(async (email, password) => {
     const user = await apiSignIn(email, password);
     setState({ status: 'signed-in', user, ended: false });
-    return user;
+    return workspaceUser(user);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -52,7 +53,7 @@ export function SessionProvider({ children }) {
   const changePassword = useCallback(async (currentPassword, newPassword) => {
     const user = await apiChangePassword(currentPassword, newPassword);
     setState({ status: 'signed-in', user, ended: false });
-    return user;
+    return workspaceUser(user);
   }, []);
 
   const retry = useCallback(() => {
@@ -60,7 +61,8 @@ export function SessionProvider({ children }) {
     setAttempt((n) => n + 1);
   }, []);
 
-  const value = useMemo(() => ({ ...state, signIn, signOut, changePassword, retry }), [state, signIn, signOut, changePassword, retry]);
+  // A staff member with Fee Management access works in the Accountant workspace (workspaceUser).
+  const value = useMemo(() => ({ ...state, user: workspaceUser(state.user), signIn, signOut, changePassword, retry }), [state, signIn, signOut, changePassword, retry]);
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
 
