@@ -5,6 +5,7 @@ import { useApiData } from '../../../hooks/useApiData.js';
 import { requestFailure } from '../../../hooks/useDialogForm.js';
 import { ReasonModal } from '../components/FeeDialogs.jsx';
 import { FeePage, useFeeRole } from '../components/FeeShell.jsx';
+import { StaffFeeAccess } from '../components/StaffFeeAccess.jsx';
 import { createAccountant, loadAccountants, loadBranding, loadFeeSettings, loadGeneration, reactivateAccountant, resetAccountantPassword, runGeneration, saveBranding, saveFeeSettings, suspendAccountant, updateAccountant } from '../data/feeApi.js';
 import { dateTimeText, fromCents, money, toCents } from '../utils/feeFormat.js';
 
@@ -373,7 +374,12 @@ export default function FeeSettingsPage() {
           {tab === 'policies' && <Policies status={status} onNotice={setNotice} />}
           {tab === 'branding' && <Branding onNotice={setNotice} />}
           {tab === 'generation' && <Generation onNotice={setNotice} />}
-          {tab === 'accountants' && <Accountants onNotice={setNotice} />}
+          {tab === 'accountants' && (
+            <div className="flex flex-col gap-5">
+              <Accountants onNotice={setNotice} />
+              <StaffFeeAccess onNotice={setNotice} />
+            </div>
+          )}
         </div>
       )}
     </FeePage>

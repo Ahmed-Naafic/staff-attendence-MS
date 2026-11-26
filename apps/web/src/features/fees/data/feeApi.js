@@ -98,6 +98,8 @@ export const createAccountant = (body) => apiRequest('/owner/fees/accountants', 
 export const updateAccountant = (accountantId, body) => apiRequest(`/owner/fees/accountants/${id(accountantId)}`, { method: 'PATCH', body });
 export const suspendAccountant = (accountantId, reason) => apiRequest(`/owner/fees/accountants/${id(accountantId)}/suspend`, { method: 'POST', body: { reason } });
 export const reactivateAccountant = (accountantId) => apiRequest(`/owner/fees/accountants/${id(accountantId)}/reactivate`, { method: 'POST' });
+export const loadStaffFeeAccess = () => apiRequest('/owner/fees/staff-access');
+export const setStaffFeeAccess = (staffId, access) => apiRequest(`/owner/fees/staff-access/${id(staffId)}`, { method: 'PUT', body: { access } });
 export const resetAccountantPassword = (accountantId, password) => apiRequest(`/owner/fees/accountants/${id(accountantId)}/password`, { method: 'POST', body: { password } });
 
 // Moving a student to another branch (School Owner; the students API).

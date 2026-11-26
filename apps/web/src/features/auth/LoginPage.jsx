@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router';
-import { BookOpen } from 'lucide-react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router';
+import { ArrowLeft, BookOpen } from 'lucide-react';
 import { ThemeToggle } from '../../components/layout';
 import { Alert, Button, Card, Input } from '../../components/ui';
 import { getRoleProfile } from '../../app/config/navigation.js';
@@ -55,7 +55,11 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-page">
-      <div className="flex justify-end p-4">
+      <div className="flex items-center justify-between p-4">
+        <Link to="/" className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-small font-medium text-fg-secondary hover:text-fg">
+          <ArrowLeft aria-hidden="true" className="size-4" />
+          Home
+        </Link>
         <ThemeToggle />
       </div>
       <main id="main-content" tabIndex={-1} className="flex flex-1 items-start justify-center px-4 pt-8 pb-16 sm:items-center sm:pt-0">

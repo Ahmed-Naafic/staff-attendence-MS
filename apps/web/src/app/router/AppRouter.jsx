@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
 import { AcademicYearsPage } from '../../features/academic-years';
 import { AcademicCalendarPage } from '../../features/academic-calendar';
@@ -12,6 +13,7 @@ import { PromotionPage, PromotionsPage, StudentProfilePage, StudentsPage } from 
 import { AuditLogsPage } from '../../features/audit-logs';
 import { BranchesPage } from '../../features/branches';
 import { LoginPage, RequireSession, useSession } from '../../features/auth';
+import { LandingPage } from '../../features/landing';
 import { DashboardPage, SchoolDashboardPage } from '../../features/dashboard';
 import { ManagersPage } from '../../features/managers';
 import { MyBranchPage } from '../../features/my-branch';
@@ -47,6 +49,25 @@ function RoleHome() {
   return <Navigate to={getRoleProfile(user.role)?.home ?? '/dashboard'} replace />;
 }
 
+// "/": the public landing page when signed out (or when the API cannot be reached: it needs no data);
+// signed in, the role's start page (through RequireSession, which also handles a temporary password).
+function PublicHome() {
+  const { status } = useSession();
+  if (status === 'checking') return <div className="min-h-dvh bg-page" />;
+  if (status === 'signed-in') {
+    return (
+      <RequireSession>
+        <RoleHome />
+      </RequireSession>
+    );
+  }
+  return (
+    <Suspense fallback={<div className="min-h-dvh bg-[#041327]" />}>
+      <LandingPage />
+    </Suspense>
+  );
+}
+
 // `handle.title` names the page for the topbar and the browser tab; `handle.roles` lists the roles
 // the page belongs to (another role gets the not-found page; the API enforces access either way).
 const SUPER_ADMIN = ['SUPER_ADMIN'];
@@ -56,18 +77,17 @@ const OWNER_OR_MANAGER = ['OWNER', 'MANAGER'];
 // Fee Management: the School Owner, Managers and Accountants (each sees what the API allows).
 const FEE_ROLES = ['OWNER', 'MANAGER', 'ACCOUNTANT'];
 const routes = [
-  // Public: the sign-in page. Everything else requires a session.
+  // Public: the landing page ("/" signed out) and the sign-in page. Everything else requires a session.
+  { path: '/', element: <PublicHome /> },
   { path: '/login', element: <LoginPage /> },
   {
-    path: '/',
+    // The signed-in application (no path of its own: its pages keep their URLs).
     element: (
       <RequireSession>
         <RoleLayout />
       </RequireSession>
     ),
     children: [
-      { index: true, element: <RoleHome /> },
-
       // SUPER_ADMIN — platform scope
       { path: 'dashboard', element: <DashboardRoute />, handle: { title: 'Dashboard', roles: ['SUPER_ADMIN', 'OWNER', 'MANAGER'] } },
       {

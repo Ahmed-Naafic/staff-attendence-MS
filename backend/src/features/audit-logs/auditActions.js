@@ -224,6 +224,9 @@ export const AUDIT_ACTIONS = {
   ACCOUNTANT_SUSPENDED: 'ACCOUNTANT_SUSPENDED',
   ACCOUNTANT_REACTIVATED: 'ACCOUNTANT_REACTIVATED',
   ACCOUNTANT_PASSWORD_RESET: 'ACCOUNTANT_PASSWORD_RESET',
+  // A staff member given (or no longer given) the Accountant workspace by the School Owner.
+  FEE_ACCESS_GRANTED: 'FEE_ACCESS_GRANTED',
+  FEE_ACCESS_REVOKED: 'FEE_ACCESS_REVOKED',
 };
 
 /** Actions the audit filter accepts: the recorded actions only. */
@@ -424,6 +427,8 @@ export const FILTERABLE_ACTIONS = [
   'ACCOUNTANT_SUSPENDED',
   'ACCOUNTANT_REACTIVATED',
   'ACCOUNTANT_PASSWORD_RESET',
+  'FEE_ACCESS_GRANTED',
+  'FEE_ACCESS_REVOKED',
 ];
 
 /**
@@ -677,6 +682,8 @@ export const FEE_ACTIONS = [
   'ACCOUNTANT_SUSPENDED',
   'ACCOUNTANT_REACTIVATED',
   'ACCOUNTANT_PASSWORD_RESET',
+  'FEE_ACCESS_GRANTED',
+  'FEE_ACCESS_REVOKED',
 ];
 
 /**
@@ -883,6 +890,8 @@ export const ACTION_LABELS = {
   ACCOUNTANT_SUSPENDED: 'Suspend Accountant',
   ACCOUNTANT_REACTIVATED: 'Reactivate Accountant',
   ACCOUNTANT_PASSWORD_RESET: 'Reset Accountant Password',
+  FEE_ACCESS_GRANTED: 'Give Staff Fee Management Access',
+  FEE_ACCESS_REVOKED: 'Take Back Staff Fee Management Access',
 };
 
 export const ROLE_LABELS = { SUPER_ADMIN: 'Super Admin', OWNER: 'School Owner', MANAGER: 'Manager', STAFF: 'Staff' };
