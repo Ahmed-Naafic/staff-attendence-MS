@@ -520,4 +520,56 @@ describe('Fee Management', () => {
     assert.equal((await accountant(`/obligations/${ctx.months.oct.id}/cancel`, { method: 'POST', body: { reason: 'x' } })).status, 403);
     assert.equal((await manager2(`/payments/${ctx.payment1.id}/reverse`, { method: 'POST', body: { reason: 'Not ours' } })).status, 403, 'reversed only in the branch that received it');
   });
+  test('Accountant workspace: reads of their branch work; every sensitive change and other workspaces are refused by the API', async () => {
+    // Reads: school policies are visible but not editable; nothing of another branch.
+    const structures = await accountant('/structures');
+    ok(structures);
+    assert.equal(structures.body.canEdit, false);
+    const settings = await accountant('/settings');
+    ok(settings);
+    assert.equal(settings.body.canEdit, false);
+    const policies = await accountant('/discount-policies');
+    ok(policies);
+    assert.equal(policies.body.canEdit, false);
+    ok(await accountant('/student-discounts'));
+    ok(await accountant('/overview'));
+    ok(await accountant('/reports/collection'));
+    const students = await accountant('/students');
+    ok(students);
+    const listed = JSON.stringify(students.body);
+    assert.ok(listed.includes(S.s2.id), 'their branch');
+    assert.ok(!listed.includes(S.s4.id), 'not another branch');
+    assert.equal((await accountant(`/students/${S.s4.id}`)).status, 404);
+    const closings = await accountant('/closings');
+    ok(closings);
+    assert.ok(closings.body.items.every((c) => !c.branch || c.branch.id === ctx.b1.id), 'closings of their branch only');
+
+    // Changes reserved for the School Owner (or the Owner and Managers) are refused.
+    const policy = await prisma.feeDiscountPolicy.findFirst({ where: { schoolId: ctx.school.id } });
+    const refused = [
+      ['/structures', 'POST', { class: ctx.class.id, monthlyFee: 1 }],
+      [`/structures/${ctx.structure.id}`, 'PATCH', { monthlyFee: 1 }],
+      ['/exam-fees', 'PUT', { rates: [] }],
+      ['/settings', 'PUT', { values: { dueDay: 5 } }],
+      ['/discount-policies', 'POST', { name: 'X', category: 'discount', type: 'fixed', value: 1, appliesTo: ['monthly'] }],
+      [`/discount-policies/${policy.id}/deactivate`, 'POST', {}],
+      ['/student-discounts', 'POST', { student: S.s2.id, policy: policy.id, startMonth: month.slice(0, 7), reason: 'x' }],
+      [`/students/${S.s2.id}/charges`, 'POST', { title: 'X', amount: 100, reason: 'x' }],
+      ['/accountants', 'GET', undefined],
+    ];
+    for (const [path, method, body] of refused) assert.equal((await accountant(path, { method, body })).status, 403, `${method} ${path}`);
+    // Another person's closing (the Manager's) cannot be corrected by the Accountant.
+    const managerClosing = await prisma.cashClosing.findFirst({ where: { schoolId: ctx.school.id, userRole: 'MANAGER' } });
+    assert.equal((await accountant(`/closings/${managerClosing.id}/correct`, { method: 'POST', body: { counted: 1, reason: 'x' } })).status, 403);
+
+    // No Owner or Manager workspace, whatever the URL.
+    for (const path of ['/api/owner/fees/status', '/api/manager/fees/status', '/api/owner/dashboard', '/api/manager/dashboard', '/api/owner/branches']) {
+      assert.equal((await call(path, { as: 'ACCOUNTANT' })).status, 403, path);
+    }
+    // The branch comes from the account: the Accountant's own branch and school only.
+    const branch = await call('/api/accountant/branch', { as: 'ACCOUNTANT' });
+    ok(branch);
+    assert.equal(branch.body.branch.id, ctx.b1.id);
+    assert.equal(branch.body.school.id, ctx.school.id);
+  });
 });

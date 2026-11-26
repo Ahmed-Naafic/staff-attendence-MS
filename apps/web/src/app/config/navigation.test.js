@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { navigationByRole } from './navigation.js';
+import { navigationByRole, roleProfiles } from './navigation.js';
 
 const links = (role) => navigationByRole[role].flatMap((s) => s.items.flatMap((i) => i.children ?? [i]));
 const SCHEDULE_PAGES = ['/academic-years', '/academic-calendar', '/bell-schedules', '/timetable-builder', '/timetable-views', '/timetables'];
@@ -92,4 +92,15 @@ test('navigation: School Owners and Managers start on their Dashboard, the first
     assert.equal(navigationByRole[role][0].items[0].to, '/dashboard', role);
   }
   assert.ok(!links('ACCOUNTANT').some((l) => l.to === '/dashboard'), 'Accountants keep the Fee overview');
+});
+
+test('navigation: the Accountant works only in Fee Management, its pages listed directly', () => {
+  const sections = navigationByRole.ACCOUNTANT;
+  assert.equal(sections.length, 1);
+  assert.equal(sections[0].label, 'Fee Management');
+  assert.ok(sections[0].items.every((i) => !i.children), 'no nested group');
+  const pages = sections[0].items.map((i) => i.to);
+  for (const to of ['/fees', '/fees/structures', '/fees/students', '/fees/invoices', '/fees/payments', '/fees/discounts', '/fees/cash-closing', '/fees/reports', '/fees/settings']) assert.ok(pages.includes(to), to);
+  assert.ok(pages.every((to) => to.startsWith('/fees')), 'nothing outside Fee Management');
+  assert.equal(roleProfiles.ACCOUNTANT.home, '/fees');
 });

@@ -7,6 +7,7 @@ import { useApiData } from '../../../hooks/useApiData.js';
 import { requestFailure } from '../../../hooks/useDialogForm.js';
 import { FeeFilters, FeePage, Stat, StatRow, useFeeRole } from '../components/FeeShell.jsx';
 import { PaymentDrawer } from '../components/PaymentDrawer.jsx';
+import { AccountantDay } from '../components/AccountantDay.jsx';
 import { loadOverview, runGeneration } from '../data/feeApi.js';
 import { CLOSING_RESULT, dateTimeText, dayText, money, rate } from '../utils/feeFormat.js';
 
@@ -75,6 +76,7 @@ function Overview({ status }) {
   return (
     <div className="flex flex-col gap-5">
       {notice && <Alert variant="info" onDismiss={() => setNotice('')}>{notice}</Alert>}
+      {role === 'ACCOUNTANT' && <AccountantDay role={role} currency={currency} overview={d} version={version} />}
       <Card className="p-4">
         <FeeFilters status={status} value={filters} onChange={setFilters} show={['academicYear', 'branch', 'class', 'section', 'dates']} />
       </Card>
