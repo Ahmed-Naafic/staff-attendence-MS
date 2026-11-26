@@ -2,7 +2,7 @@ import { ContentSection, PageContainer, PageHeader } from '../../components/layo
 import { Card, CardContent } from '../../components/ui';
 
 const colorGroups = [
-  { title: 'Brand', tokens: ['primary', 'secondary', 'accent', 'interactive'] },
+  { title: 'Brand', tokens: ['primary', 'primary-action', 'secondary', 'accent', 'interactive'] },
   { title: 'Background', tokens: ['page', 'surface', 'elevated', 'muted'] },
   { title: 'Text', tokens: ['fg', 'fg-secondary', 'fg-muted', 'fg-inverse', 'fg-disabled'] },
   { title: 'Border', tokens: ['border', 'border-strong', 'border-subtle', 'border-input'] },
@@ -10,7 +10,7 @@ const colorGroups = [
     title: 'Status',
     tokens: ['success', 'success-soft', 'warning', 'warning-soft', 'error', 'error-soft', 'info', 'info-soft'],
   },
-  { title: 'Sidebar', tokens: ['sidebar', 'sidebar-active', 'sidebar-fg', 'sidebar-active-fg'] },
+  { title: 'Sidebar', tokens: ['sidebar', 'sidebar-fg', 'sidebar-hover', 'sidebar-hover-fg', 'sidebar-active', 'sidebar-active-fg'] },
 ];
 
 const typeScale = [

@@ -75,7 +75,7 @@ export function Pagination({
                   className={cn(
                     pageButton,
                     item === page
-                      ? 'border-interactive bg-interactive text-on-interactive'
+                      ? 'border-primary-action bg-primary-action text-on-primary-action'
                       : 'border-border bg-surface text-fg hover:bg-muted',
                   )}
                 >

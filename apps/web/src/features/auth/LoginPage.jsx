@@ -61,7 +61,7 @@ export default function LoginPage() {
       <main id="main-content" tabIndex={-1} className="flex flex-1 items-start justify-center px-4 pt-8 pb-16 sm:items-center sm:pt-0">
         <Card className="w-full max-w-sm gap-6 p-6 sm:p-8">
           <div className="flex flex-col items-center gap-3 text-center">
-            <span className="grid size-12 place-items-center rounded-md border border-accent/50 bg-sidebar text-accent">
+            <span className="grid size-12 place-items-center rounded-md border border-accent/50 bg-primary text-accent">
               <BookOpen aria-hidden="true" className="size-6" />
             </span>
             <div className="flex flex-col gap-1">

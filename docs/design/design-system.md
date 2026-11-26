@@ -11,7 +11,7 @@ The visual foundation for the EduTrack web application. Visual references: `docs
 
 1. Components use **semantic tokens only** (`bg-surface`, `text-fg`, `border-border`…). Tailwind's default palette, radius, shadow and font-size scales are disabled, so classes like `bg-blue-500` or `text-lg` do not exist.
 2. Never hardcode hex/rgb values in components. Add or adjust a token in `index.css` instead.
-3. Gold is an accent: one primary (gold) button per view, selected states, key highlights.
+3. Primary actions are navy in light mode and gold in dark mode (`primary-action` tokens); gold stays the accent for highlights and dark-mode selection.
 4. Status colors are functional and separate from the brand palette. Status is never shown by color alone — badges always carry text.
 5. Shared components stay generic. Feature-specific UI (e.g. a schools table) lives in `src/features/<feature>/`.
 
@@ -51,10 +51,12 @@ Two themes, switched with `data-theme="light|dark"` on `<html>`. The choice is s
 | `overlay` | Modal/drawer backdrop | | |
 | `tooltip` | Tooltip background (text: `fg-inverse`) | Navy 900 | Steel 100 |
 | `chart-1`, `chart-2` | Chart data series (added Phase 3) | Navy 800 / Blue `#2B7FC1` | Gold 400 / Gold 300 |
-| `sidebar*` | Sidebar background, text, hover, active, border, focus | Navy in both themes | |
+| `sidebar*` | Sidebar background, text, hover, active, border, focus | Page background; navy text; hover navy-700 / white; active navy-800 / white | Page background (`#071C2B`); light text; hover muted olive-gold `#5B5326` / white; active gold `#FBBF24` / navy |
+| `primary-action`, `primary-action-hover`, `on-primary-action` | Primary button and current page in pagination | Navy 800 / white text | Gold `#E5B13B` / navy text |
+| `on-primary` | Text on `bg-primary` (report headers, logo tiles) | White | White |
 
-**Light theme:** near-white page, white surfaces, subtle borders, controlled shadows, navy sidebar, gold accents.
-**Dark theme:** deep-navy page, slightly lighter navy surfaces with a three-step hierarchy (`page` → `surface` → `elevated`), borders instead of heavy shadows, brighter gold and blue for contrast. It is designed separately, not inverted.
+**Light theme:** near-white page (`#F8FAFC`) shared by the sidebar, white surfaces, subtle borders, controlled shadows, navy primary actions, gold accents.
+**Dark theme:** deep-navy page (`#071C2B`) shared by the sidebar, slightly lighter navy surfaces with a three-step hierarchy (`page` → `surface` → `elevated`), borders instead of heavy shadows, brighter gold and blue for contrast. It is designed separately, not inverted.
 
 ## Typography
 
@@ -118,7 +120,7 @@ Import from `components/ui` (barrel `index.js`).
 
 | Component | Variants / states | Notes |
 |---|---|---|
-| **Button** | `primary` (gold), `secondary` (navy), `outline`, `ghost`, `danger`; sizes `sm`/`md`/`lg`; `iconOnly`; default, hover, active, focus, disabled, `loading`, unavailable (`unavailableReason`) | Primary uses navy text on gold. Icon-only needs `aria-label`. Loading shows a spinner and ignores clicks. Unavailable (added Phase 4): looks disabled and ignores clicks but stays focusable; the reason shows as a tooltip and is announced as the button's description. Use it for actions that exist but can't be used yet; use `disabled` when no explanation is needed. |
+| **Button** | `primary` (navy in light, gold in dark), `secondary` (navy), `outline`, `ghost`, `danger`; sizes `sm`/`md`/`lg`; `iconOnly`; default, hover, active, focus, disabled, `loading`, unavailable (`unavailableReason`) | Primary uses white text on navy (light) and navy text on gold (dark). Icon-only needs `aria-label`. Loading shows a spinner and ignores clicks. Unavailable (added Phase 4): looks disabled and ignores clicks but stays focusable; the reason shows as a tooltip and is announced as the button's description. Use it for actions that exist but can't be used yet; use `disabled` when no explanation is needed. |
 | **Input** | text, email, tel, password (show/hide), search, number, date, time; default, focus, error, disabled, read-only; `hideLabel` | Always labelled; hint and error linked with `aria-describedby`. |
 | **Textarea** | same states as Input | |
 | **Select** | default/placeholder, selected, disabled, error; open state is the native list | Native `<select>` for keyboard, screen reader and mobile support. |
@@ -158,7 +160,7 @@ Chart colors: `chart-1` for the main series, `chart-2` for a second series, stat
 | Component | Purpose |
 |---|---|
 | **AppShell** | Sidebar + topbar + main area; "Skip to main content" link; shares sidebar state (collapsed, mobile open). Role-agnostic. |
-| **Sidebar** | Navy navigation showing product, subtitle, current role badge and grouped links. Active link: gold text, gold-tinted background and gold left bar (`aria-current="page"`). Collapsible to icons (tooltips show labels). Each role passes its own sections. |
+| **Sidebar** | Navigation on the page background showing product, subtitle, current role badge and grouped links. Light: navy text; hover navy-700 with white text; active navy-800 with white text and a gold left bar. Dark: light text; hover muted olive-gold with white text; active bright gold with navy text (`aria-current="page"`). Hover never changes the active item. Collapsible to icons (tooltips show labels). Each role passes its own sections. |
 | **Topbar** | Sticky bar with slots: `context`, `search`, `actions` (e.g. notifications once approved), `user`; theme toggle always present; menu button on tablet/phone. |
 | **UserMenu** | Avatar, name and role with a dropdown; the caller supplies the items. |
 | **ThemeToggle** | Light/dark switch. |

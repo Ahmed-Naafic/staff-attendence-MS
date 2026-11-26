@@ -65,8 +65,15 @@
   --color-interactive-soft: #e0f0fe;
   --color-on-interactive: #ffffff;
 
+  /* Primary action (Button variant "primary"): navy in light, gold in dark */
+  --color-primary-action: var(--color-navy-800);
+  --color-primary-action-hover: var(--color-navy-700);
+  --color-on-primary-action: #ffffff;
+  /* Text on bg-primary (navy in both themes): report headers, logo tiles */
+  --color-on-primary: #ffffff;
+
   /* Backgrounds */
-  --color-page: var(--color-steel-50);
+  --color-page: #f8fafc;
   --color-surface: #ffffff;
   --color-elevated: #ffffff;
   --color-muted: #eef3f8;
@@ -118,16 +125,21 @@
   --color-overlay: rgb(4 21 33 / 0.5);
   --color-tooltip: var(--color-navy-900); /* text: fg-inverse */
 
-  /* Sidebar (navy in both themes, per reference) */
-  --color-sidebar: var(--color-navy-900);
-  --color-sidebar-fg-strong: #ffffff;
-  --color-sidebar-fg: #d7e1ec;
-  --color-sidebar-fg-muted: #93a6ba;
-  --color-sidebar-hover: rgb(255 255 255 / 0.06);
-  --color-sidebar-active: rgb(214 152 45 / 0.2);
-  --color-sidebar-active-fg: var(--color-gold-300);
-  --color-sidebar-border: rgb(255 255 255 / 0.08);
-  --color-sidebar-focus: var(--color-gold-400);
+  /* Sidebar: shares the page background in both themes.
+     Light: navy text; hover navy-700, active navy-800 (both with white text).
+     Dark: light text; hover muted olive-gold with white text, active bright gold with navy text. */
+  --color-sidebar: var(--color-page);
+  --color-sidebar-fg-strong: var(--color-navy-900);
+  --color-sidebar-fg: var(--color-navy-900);
+  --color-sidebar-fg-muted: var(--color-steel-600);
+  --color-sidebar-hover: var(--color-navy-700);
+  --color-sidebar-hover-fg: #ffffff;
+  --color-sidebar-active: var(--color-navy-800);
+  --color-sidebar-active-fg: #ffffff;
+  --color-sidebar-active-bar: var(--color-gold-400);
+  --color-sidebar-badge-fg: var(--color-gold-700); /* role chip text */
+  --color-sidebar-border: var(--color-border);
+  --color-sidebar-focus: var(--color-navy-600);
 
   /* ---------- Typography ---------- */
   --font-sans: "Inter Variable", ui-sans-serif, system-ui, "Segoe UI", Roboto, Arial, sans-serif;
@@ -206,10 +218,15 @@
   --color-interactive-soft: rgb(75 154 212 / 0.16);
   --color-on-interactive: var(--color-navy-950);
 
-  --color-page: #051622;
-  --color-surface: #081e2e;
-  --color-elevated: #0e2536;
-  --color-muted: #0b2232;
+  --color-primary-action: #e5b13b;
+  --color-primary-action-hover: var(--color-gold-300);
+  --color-on-primary-action: var(--color-navy-900);
+
+  /* Deep navy page shared with the sidebar; cards are slightly lighter navy */
+  --color-page: #071c2b;
+  --color-surface: #0c2739;
+  --color-elevated: #113046;
+  --color-muted: #0f2b3f;
 
   --color-fg: #e8eef5;
   --color-fg-secondary: #b4c1d0;
@@ -252,8 +269,18 @@
   --color-overlay: rgb(0 8 15 / 0.7);
   --color-tooltip: var(--color-steel-100);
 
-  --color-sidebar: #001a2d;
-  --color-sidebar-border: rgb(255 255 255 / 0.07);
+  --color-sidebar: var(--color-page);
+  --color-sidebar-fg-strong: #ffffff;
+  --color-sidebar-fg: var(--color-steel-100);
+  --color-sidebar-fg-muted: var(--color-steel-400);
+  --color-sidebar-hover: #5b5326; /* muted olive-gold */
+  --color-sidebar-hover-fg: #ffffff;
+  --color-sidebar-active: #fbbf24; /* bright gold */
+  --color-sidebar-active-fg: var(--color-navy-900);
+  --color-sidebar-active-bar: var(--color-navy-900);
+  --color-sidebar-badge-fg: var(--color-gold-300);
+  --color-sidebar-border: rgb(255 255 255 / 0.08);
+  --color-sidebar-focus: var(--color-gold-400);
 
   /* Dark mode relies on surface contrast and borders more than shadows */
   --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.3);
