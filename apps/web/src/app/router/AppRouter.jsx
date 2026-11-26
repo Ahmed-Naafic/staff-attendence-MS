@@ -12,7 +12,7 @@ import { PromotionPage, PromotionsPage, StudentProfilePage, StudentsPage } from 
 import { AuditLogsPage } from '../../features/audit-logs';
 import { BranchesPage } from '../../features/branches';
 import { LoginPage, RequireSession, useSession } from '../../features/auth';
-import { DashboardPage } from '../../features/dashboard';
+import { DashboardPage, SchoolDashboardPage } from '../../features/dashboard';
 import { ManagersPage } from '../../features/managers';
 import { MyBranchPage } from '../../features/my-branch';
 import { NotificationsPage } from '../../features/notifications';
@@ -33,6 +33,12 @@ import NotFoundPage from './NotFoundPage.jsx';
 function StaffRoute() {
   const { user } = useSession();
   return user.role === 'OWNER' ? <OwnerStaffPage /> : <StaffPage />;
+}
+
+// /dashboard: the platform overview (Super Admin), the school's (School Owner) or the branch's (Manager).
+function DashboardRoute() {
+  const { user } = useSession();
+  return user.role === 'SUPER_ADMIN' ? <DashboardPage /> : <SchoolDashboardPage />;
 }
 
 // "/" sends the user to their role's start page.
@@ -63,7 +69,7 @@ const routes = [
       { index: true, element: <RoleHome /> },
 
       // SUPER_ADMIN — platform scope
-      { path: 'dashboard', element: <DashboardPage />, handle: { title: 'Dashboard', roles: SUPER_ADMIN } },
+      { path: 'dashboard', element: <DashboardRoute />, handle: { title: 'Dashboard', roles: ['SUPER_ADMIN', 'OWNER', 'MANAGER'] } },
       {
         path: 'schools',
         element: <SchoolsPage />,

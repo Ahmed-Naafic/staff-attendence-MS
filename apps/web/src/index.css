@@ -102,6 +102,17 @@
   --color-chart-1: var(--color-navy-800);
   --color-chart-2: #2b7fc1;
 
+  /* Brand series and tiles (School Owner / Manager dashboards): navy, gold and steel */
+  --color-brand-navy: var(--color-navy-800);
+  --color-brand-gold: var(--color-gold-500);
+  --color-brand-steel: var(--color-steel-300);
+  --color-tile-navy: var(--color-navy-50);
+  --color-tile-navy-fg: var(--color-navy-700);
+  --color-tile-gold: var(--color-gold-50);
+  --color-tile-gold-fg: var(--color-gold-700);
+  --color-tile-steel: var(--color-steel-100);
+  --color-tile-steel-fg: var(--color-steel-700);
+
   /* Focus, overlay, tooltip */
   --color-focus: var(--color-navy-600);
   --color-overlay: rgb(4 21 33 / 0.5);
@@ -226,6 +237,16 @@
 
   --color-chart-1: var(--color-gold-400);
   --color-chart-2: var(--color-gold-300);
+
+  --color-brand-navy: var(--color-navy-300);
+  --color-brand-gold: var(--color-gold-400);
+  --color-brand-steel: var(--color-steel-500);
+  --color-tile-navy: rgb(75 154 212 / 0.16);
+  --color-tile-navy-fg: var(--color-navy-200);
+  --color-tile-gold: rgb(241 178 55 / 0.14);
+  --color-tile-gold-fg: var(--color-gold-300);
+  --color-tile-steel: rgb(142 157 177 / 0.16);
+  --color-tile-steel-fg: var(--color-steel-200);
 
   --color-focus: var(--color-gold-400);
   --color-overlay: rgb(0 8 15 / 0.7);

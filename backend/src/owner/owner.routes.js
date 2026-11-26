@@ -10,6 +10,7 @@ import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuer
 import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
 import { mountExaminationRoutes } from '../features/examinations/examinations.routes.js';
 import { mountFeeRoutes } from '../features/fees/fees.routes.js';
+import { readDashboardQuery, schoolDashboard } from '../features/dashboard/schoolDashboard.service.js';
 import { mountTimetableBuilderRoutes } from '../features/timetable-builder/builder.routes.js';
 import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
 import { assignTeaching, cancelAssignment, eligibleTeachers, listTeachingAssignments, sectionTeaching, setAssignmentEnd } from '../features/teaching/teaching.service.js';
@@ -300,6 +301,11 @@ mountTimetableBuilderRoutes(ownerRouter, teachingScope, 'OWNER');
 mountExaminationRoutes(ownerRouter, teachingScope, 'OWNER');
 // Fee Management (docs/business-rules.md → Fee Management): policies, structures and every branch.
 mountFeeRoutes(ownerRouter, teachingScope, 'OWNER');
+
+// ---- Dashboard (read only): the school, or one of its branches.
+ownerRouter.get('/dashboard', async (req, res) => {
+  res.json(await schoolDashboard({ ...teachingScope(req), role: 'OWNER', user: req.user }, readDashboardQuery(req.query, { role: 'OWNER' })));
+});
 
 // ---- Student attendance (docs/business-rules.md → Student attendance): the school's settings and
 // what branches may change; every branch's attendance and excuses (read only).

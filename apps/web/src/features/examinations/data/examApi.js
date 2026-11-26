@@ -125,20 +125,38 @@ export const loadExamAnalytics = (role, examId, branch) => apiRequest(`${base(ro
 
 // ---- paper files (private storage; 503 STORAGE_NOT_CONFIGURED until set up) ----
 const files = (role, paperId, path = '') => `${base(role)}/papers/${id(paperId)}/files${path}`;
-/** { configured, canChange, maxBytes, types, files: [{ id, kind, fileName, size, status, uploadedBy, createdAt }] } */
+/** { configured, canChange, maxBytes, accept, allowed, downloadSeconds, files: [{ id, kind, fileName, type, size, status, uploadedBy, createdAt, removedBy }] } */
 export const loadPaperFiles = (role, paperId) => apiRequest(files(role, paperId));
-/** Uploads a File: asks for a signed link, sends the file straight to storage, then confirms it. */
-export async function uploadPaperFile(role, paperId, file, kind) {
-  const { file: record, upload } = await apiRequest(files(role, paperId), { method: 'POST', body: { kind, fileName: file.name, contentType: file.type, size: file.size } });
-  let response;
-  try {
-    response = await fetch(upload.url, { method: upload.method, headers: upload.headers, body: file });
-  } catch {
-    throw new Error('The file could not be sent to storage. Check your connection and try again.');
-  }
-  if (!response.ok) throw new Error('Storage did not accept the file. Try again.');
+
+/**
+ * PUTs the bytes to the one-time signed upload URL the server gave (no credentials involved),
+ * reporting progress (0–1). XMLHttpRequest because fetch cannot report upload progress.
+ */
+function sendToStorage(upload, file, onProgress, signal) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(upload.method, upload.url);
+    Object.entries(upload.headers ?? {}).forEach(([k, v]) => xhr.setRequestHeader(k, v));
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => (xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error('Storage did not accept the file. Try again.')));
+    xhr.onerror = () => reject(new Error('The file could not be sent to storage. Check your connection and try again.'));
+    xhr.onabort = () => reject(Object.assign(new Error('The upload was cancelled.'), { name: 'AbortError' }));
+    signal?.addEventListener('abort', () => xhr.abort(), { once: true });
+    xhr.send(file);
+  });
+}
+
+/**
+ * Uploads a File (or replaces the file `replaces`): the server records it and returns a one-time
+ * signed upload URL; the bytes go there; the server then checks size and content and confirms it.
+ */
+export async function uploadPaperFile(role, paperId, file, { kind, replaces, onProgress, signal } = {}) {
+  const body = { fileName: file.name, contentType: file.type || undefined, size: file.size, ...(replaces ? { replaces } : { kind }) };
+  const { file: record, upload } = await apiRequest(files(role, paperId), { method: 'POST', body });
+  await sendToStorage(upload, file, onProgress, signal);
+  onProgress?.(1);
   return apiRequest(files(role, paperId, `/${id(record.id)}/confirm`), { method: 'POST' });
 }
-/** { url, expiresAt } — a short-lived link (the download is recorded). */
-export const paperFileLink = (role, paperId, fileId) => apiRequest(files(role, paperId, `/${id(fileId)}/download`), { method: 'POST' });
+/** { url, expiresAt, fileName } — a fresh short-lived link every time (the access is recorded). */
+export const paperFileLink = (role, paperId, fileId, mode = 'download') => apiRequest(files(role, paperId, `/${id(fileId)}/download`), { method: 'POST', body: { mode } });
 export const removePaperFile = (role, paperId, fileId) => apiRequest(files(role, paperId, `/${id(fileId)}/remove`), { method: 'POST' });

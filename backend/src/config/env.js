@@ -35,12 +35,20 @@ export const env = {
   // Database and role used to check a staged restore (defaults: neondb and DIRECT_URL's user).
   neonDatabaseName: process.env.NEON_DATABASE_NAME || 'neondb',
   neonRoleName: process.env.NEON_ROLE_NAME || undefined,
-  // Examination paper files (docs/business-rules.md → Examinations → Paper files): a private bucket in
-  // Supabase Storage. The service role key can read and write every file of the project: keep it only in
-  // the server's environment (never sent to a browser). Without URL and key the module shows "not set up".
-  supabaseUrl: (process.env.SUPABASE_URL || '').replace(/\/$/, '') || undefined,
-  supabaseServiceKey: process.env.SUPABASE_SERVICE_ROLE_KEY || undefined,
-  supabaseExamBucket: process.env.SUPABASE_EXAM_BUCKET || 'exam-papers',
+  // File storage (docs/storage/supabase-storage.md): one PRIVATE Supabase Storage bucket for every
+  // module (examination papers first). The secret key (sb_secret_…, or a legacy service_role key) can
+  // read and write every file of the project and bypasses Storage RLS: it stays in the server's
+  // environment only — never in the web app (VITE_…) or the Staff app (EXPO_PUBLIC_…). Without URL and
+  // key, storage features say "not set up" (503 STORAGE_NOT_CONFIGURED). Checked at startup
+  // (common/storage/storageConfig.js); STORAGE_REQUIRED=true makes a missing or invalid configuration
+  // stop the server instead of only being reported.
+  supabaseUrl: (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '') || undefined,
+  supabaseSecretKey: (process.env.SUPABASE_SECRET_KEY || '').trim() || undefined,
+  storageBucket: (process.env.SUPABASE_STORAGE_BUCKET || '').trim() || 'edutrack-files',
+  // Largest file accepted, in MB (default 20, the examination paper rule). Keep the bucket's own
+  // "file size limit" in the Supabase dashboard at least this large.
+  storageMaxFileMb: process.env.STORAGE_MAX_FILE_MB === undefined ? 20 : Number(process.env.STORAGE_MAX_FILE_MB),
+  storageRequired: process.env.STORAGE_REQUIRED === 'true',
   // Sample data (e.g. Manager → Staff → Add Sample Staff): only on a test system — the Neon dev
   // branch (EDUTRACK_DB_BRANCH=dev), or where SAMPLE_DATA=on is set. Off in production by default.
   sampleData: process.env.SAMPLE_DATA === 'on' || process.env.EDUTRACK_DB_BRANCH === 'dev',

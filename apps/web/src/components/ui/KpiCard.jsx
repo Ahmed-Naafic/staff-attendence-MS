@@ -8,6 +8,10 @@ const tones = {
   success: { tile: 'bg-success-soft text-success-fg', line: 'var(--color-success)' },
   warning: { tile: 'bg-warning-soft text-warning-fg', line: 'var(--color-warning)' },
   error: { tile: 'bg-error-soft text-error-fg', line: 'var(--color-error)' },
+  // Brand tones (School Owner / Manager dashboards).
+  navy: { tile: 'bg-tile-navy text-tile-navy-fg', line: 'var(--color-brand-navy)' },
+  gold: { tile: 'bg-tile-gold text-tile-gold-fg', line: 'var(--color-brand-gold)' },
+  steel: { tile: 'bg-tile-steel text-tile-steel-fg', line: 'var(--color-brand-steel)' },
 };
 
 const directions = {

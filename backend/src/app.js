@@ -12,6 +12,11 @@ import { managerRouter } from './manager/manager.routes.js';
 import { ownerRouter } from './owner/owner.routes.js';
 import { accountantRouter } from './accountant/accountant.routes.js';
 import { notificationJobHandler, notificationsRouter } from './features/notifications/notifications.routes.js';
+import { validateStorageConfigAtStartup } from './common/storage/storageConfig.js';
+
+// File storage (Supabase): configuration problems are logged once, without secrets; with
+// STORAGE_REQUIRED=true a missing or invalid configuration stops the server here.
+validateStorageConfigAtStartup();
 
 const app = express();
 

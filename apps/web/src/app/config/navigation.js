@@ -18,12 +18,12 @@ export const roleProfiles = {
   OWNER: {
     label: 'School Owner',
     subtitle: 'School Administration',
-    home: '/branches',
+    home: '/dashboard',
   },
   MANAGER: {
     label: 'Manager',
     subtitle: 'Branch Management',
-    home: '/my-branch',
+    home: '/dashboard',
   },
   ACCOUNTANT: {
     label: 'Accountant',
@@ -156,6 +156,8 @@ export const navigationByRole = {
   OWNER: [
     {
       items: [
+        // School-wide overview (every branch, or one): figures, trends, alerts and shortcuts.
+        { to: '/dashboard', label: 'Dashboard', icon: House },
         { to: '/branches', label: 'Branches', icon: Building2 },
         { to: '/managers', label: 'Managers', icon: UserCog },
         staffGroup('OWNER'),
@@ -175,6 +177,8 @@ export const navigationByRole = {
   MANAGER: [
     {
       items: [
+        // The branch's overview and the day's operations.
+        { to: '/dashboard', label: 'Dashboard', icon: House },
         { to: '/my-branch', label: 'My Branch', icon: Building2 },
         staffGroup('MANAGER'),
         scheduleGroup,

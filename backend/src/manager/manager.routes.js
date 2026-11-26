@@ -8,6 +8,7 @@ import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuer
 import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
 import { mountExaminationRoutes } from '../features/examinations/examinations.routes.js';
 import { mountFeeRoutes } from '../features/fees/fees.routes.js';
+import { readDashboardQuery, schoolDashboard } from '../features/dashboard/schoolDashboard.service.js';
 import { afterEnrollment, afterWithdrawal, syncStudentExamFees } from '../features/fees/feeGeneration.service.js';
 import { mountTimetableBuilderRoutes } from '../features/timetable-builder/builder.routes.js';
 import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
@@ -185,6 +186,11 @@ mountTimetableBuilderRoutes(managerRouter, teachingScope, 'MANAGER');
 mountExaminationRoutes(managerRouter, teachingScope, 'MANAGER');
 // Fee Management (docs/business-rules.md → Fee Management): the branch's students, payments, closings.
 mountFeeRoutes(managerRouter, teachingScope, 'MANAGER');
+
+// ---- Dashboard (read only): the Manager’s branch only (a branch filter is ignored).
+managerRouter.get('/dashboard', async (req, res) => {
+  res.json(await schoolDashboard({ ...teachingScope(req), role: 'MANAGER', user: req.user }, readDashboardQuery(req.query, { role: 'MANAGER' })));
+});
 
 // ---- Student attendance (docs/business-rules.md → Student attendance): settings, half-day sessions,
 // marks and excuses of the Manager's branch.

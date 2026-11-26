@@ -3,3 +3,4 @@ export { BarChart } from './BarChart.jsx';
 export { DonutChart } from './DonutChart.jsx';
 export { LineChart } from './LineChart.jsx';
 export { Sparkline } from './Sparkline.jsx';
+export { MultiLineChart } from './MultiLineChart.jsx';

@@ -12,6 +12,7 @@ import { checkPushReceipts, sendPendingPush } from './push.js';
 import { settleDueTransfers } from '../staff/transfers.service.js';
 import { studentAttendanceNotifications } from '../student-attendance/completion.js';
 import { runFeeJobs } from '../fees/feeJobs.js';
+import { runStorageMaintenance } from '../storage/storageMaintenance.js';
 
 /*
  * The scheduled notification job (docs/notifications/notification-architecture.md → Background
@@ -261,6 +262,8 @@ export async function runNotificationJobs({ now = new Date(), budgetMs = 45_000,
     ['push', () => sendPendingPush({ now, stop, ...(send && { send }) })],
     ['pushReceipts', () => checkPushReceipts({ now, ...(getReceipts && { getReceipts }) })],
     ['retention', () => purgeExpired({ now })],
+    // File storage: clear unconfirmed uploads and retry deletes that failed (docs/storage/).
+    ['storage', () => runStorageMaintenance({ now, stop })],
   ];
   const result = {};
   for (const [name, task] of tasks) {
