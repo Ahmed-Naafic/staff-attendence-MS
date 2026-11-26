@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router';
-import { BadgeCheck, CalendarCheck, CalendarDays, ChartColumnIncreasing, ChevronRight, Coins, Crown, FileText, GraduationCap, Menu, Play, Settings, ShieldCheck, UserRound, Users, X } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router';
+import { BadgeCheck, CalendarCheck, CalendarDays, ChartColumnIncreasing, ChevronRight, Coins, Crown, FileText, GraduationCap, Menu, Moon, Play, Settings, ShieldCheck, Sun, UserRound, Users, X } from 'lucide-react';
+import { useTheme } from '../../app/providers/ThemeProvider.jsx';
 import { useBranding } from '../branding';
 import { EduTrackMark, BookStack, GraduationCap as CapArt } from './components/LandingArt.jsx';
 import { HeroScene } from './components/HeroScene.jsx';
 import { PhoneCheckIn } from './components/PhoneCheckIn.jsx';
+import { SignInDialog } from './components/SignInDialog.jsx';
 import { landingConfig } from './landingConfig.js';
 import { useActiveSection, useReveal, useScrolled } from './useLandingMotion.js';
 import './landing.css';
@@ -12,8 +14,9 @@ import './landing.css';
 /*
  * The public landing page ("/" when signed out). Sections: header, hero, key features (the real EduTrack
  * modules), how EduTrack works (the four roles, the staff check-in app), facts, the call to action and the
- * footer. Sign In opens the existing sign-in page; Get Started leads to the call to action, whose button
- * writes to EduTrack (VITE_CONTACT_EMAIL) or opens sign-in when no contact address is configured.
+ * footer. Sign In opens the sign-in form in a dialog on this page ("/login" opens with it shown); Get
+ * Started leads to the call to action, whose button writes to EduTrack (VITE_CONTACT_EMAIL) or opens Sign
+ * In when no contact address is configured. The header switches the light and dark theme.
  */
 
 const NAV = [
@@ -44,42 +47,52 @@ const ROLES = [
 const STAT_ICONS = { schools: Users, students: Users, staff: GraduationCap, uptime: ShieldCheck };
 const STAT_ACCENTS = { gold: '#f5b82e', blue: '#4aa3ff', green: '#2fd98f' };
 
-export default function LandingPage() {
+export default function LandingPage({ signIn = false, next = null }) {
   const rootRef = useRef(null);
   const { platformName, loaded } = useBranding();
   const name = loaded && platformName ? platformName : 'EduTrack';
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const [signInOpen, setSignInOpen] = useState(signIn);
+  useEffect(() => setSignInOpen(signIn), [signIn]);
+  const openSignIn = () => setSignInOpen(true);
+  const closeSignIn = () => {
+    setSignInOpen(false);
+    // Closed on /login (e.g. after a redirect): back to the plain landing page address.
+    if (pathname === '/login') navigate('/', { replace: true });
+  };
   useReveal(rootRef);
 
   useEffect(() => {
-    document.title = `${name} · School Management System`;
+    document.title = signInOpen ? `Sign in · ${name}` : `${name} · School Management System`;
+  }, [name, signInOpen]);
+
+  useEffect(() => {
     const html = document.documentElement;
     const previous = html.style.scrollBehavior;
-    // The page's own navy also behind overscroll and short windows (the app's page colour otherwise).
-    const previousBg = document.body.style.background;
-    document.body.style.background = '#041327';
     if (!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) html.style.scrollBehavior = 'smooth';
     return () => {
       html.style.scrollBehavior = previous;
-      document.body.style.background = previousBg;
     };
-  }, [name]);
+  }, []);
 
   return (
     <div ref={rootRef} className="lp">
       <Waves />
-      <Header name={name} />
+      <Header name={name} onSignIn={openSignIn} />
       <main id="main-content">
         <Hero />
         <Features />
         <HowItWorks />
-        <FinalCta />
+        <FinalCta onSignIn={openSignIn} />
       </main>
-      <Footer name={name} />
+      <Footer name={name} onSignIn={openSignIn} />
+      <SignInDialog open={signInOpen} onClose={closeSignIn} name={name} next={next} />
     </div>
   );
 }
 
-function Header({ name }) {
+function Header({ name, onSignIn }) {
   const scrolled = useScrolled();
   const active = useActiveSection(NAV.map((n) => n.id));
   const [open, setOpen] = useState(false);
@@ -104,13 +117,17 @@ function Header({ name }) {
           ))}
         </nav>
         <div className="lp-header__actions">
-          <Link to="/login" className="lp-btn lp-btn--ghost">
+          <ThemeButton />
+          <button type="button" className="lp-btn lp-btn--ghost" onClick={onSignIn}>
             Sign In
-          </Link>
+          </button>
           <a href="#get-started" className="lp-btn lp-btn--gold">
             Get Started
           </a>
         </div>
+        <span className="lp-theme-mobile">
+          <ThemeButton />
+        </span>
         <button type="button" className="lp-menu-btn" aria-label={open ? 'Close menu' : 'Open menu'} aria-expanded={open} aria-controls="lp-mobile-nav" onClick={() => setOpen((v) => !v)}>
           {open ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
         </button>
@@ -124,9 +141,16 @@ function Header({ name }) {
               </a>
             ))}
             <div className="lp-mobile-actions">
-              <Link to="/login" className="lp-btn lp-btn--ghost">
+              <button
+                type="button"
+                className="lp-btn lp-btn--ghost"
+                onClick={() => {
+                  setOpen(false);
+                  onSignIn();
+                }}
+              >
                 Sign In
-              </Link>
+              </button>
               <a href="#get-started" className="lp-btn lp-btn--gold" onClick={() => setOpen(false)}>
                 Get Started
               </a>
@@ -268,7 +292,7 @@ function Stats() {
   );
 }
 
-function FinalCta() {
+function FinalCta({ onSignIn }) {
   const contact = landingConfig.contactHref;
   return (
     <section id="get-started" className="lp-section" aria-labelledby="lp-cta-title">
@@ -293,10 +317,10 @@ function FinalCta() {
               <ChevronRight aria-hidden="true" />
             </a>
           ) : (
-            <Link to="/login" className="lp-btn lp-btn--gold lp-btn--lg">
+            <button type="button" className="lp-btn lp-btn--gold lp-btn--lg" onClick={onSignIn}>
               Get Started Today
               <ChevronRight aria-hidden="true" />
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -304,7 +328,7 @@ function FinalCta() {
   );
 }
 
-function Footer({ name }) {
+function Footer({ name, onSignIn }) {
   const { contactHref, socials } = landingConfig;
   return (
     <footer id="about" className="lp-footer">
@@ -336,7 +360,11 @@ function Footer({ name }) {
               <li><a href="#about">About</a></li>
               {contactHref && <li><a href={contactHref}>Contact</a></li>}
               {contactHref && <li><a href={contactHref}>Support</a></li>}
-              <li><Link to="/login">Sign In</Link></li>
+              <li>
+                <button type="button" className="lp-link-btn" onClick={onSignIn}>
+                  Sign In
+                </button>
+              </li>
             </ul>
           </div>
           {socials.length > 0 && (
@@ -356,6 +384,17 @@ function Footer({ name }) {
         </p>
       </div>
     </footer>
+  );
+}
+
+/** Switches the light and dark theme (the same setting as in the app). */
+function ThemeButton() {
+  const { theme, toggleTheme } = useTheme();
+  const label = theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme';
+  return (
+    <button type="button" className="lp-theme-btn" onClick={toggleTheme} aria-label={label} title={label}>
+      {theme === 'dark' ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />}
+    </button>
   );
 }
 

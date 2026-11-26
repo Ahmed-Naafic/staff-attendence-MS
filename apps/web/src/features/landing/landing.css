@@ -1433,3 +1433,173 @@
     transform: none;
   }
 }
+
+/* ---------- Theme switch, text buttons ---------- */
+.lp-theme-btn {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 10px;
+  border: 1px solid var(--lp-line-strong);
+  background: rgb(255 255 255 / 0.04);
+  color: var(--lp-fg);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s,
+    transform 0.25s var(--lp-ease);
+}
+.lp-theme-btn:hover {
+  border-color: var(--lp-gold);
+  color: var(--lp-gold);
+  transform: rotate(-12deg);
+}
+.lp-theme-btn svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+.lp-theme-mobile {
+  margin-left: auto;
+}
+.lp-theme-mobile + .lp-menu-btn {
+  margin-left: 0.5rem;
+}
+@media (min-width: 1024px) {
+  .lp-theme-mobile {
+    display: none;
+  }
+}
+.lp-link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.lp-link-btn:hover {
+  color: var(--lp-gold-2);
+}
+
+/* The page colour behind overscroll and short windows. */
+body:has(.lp) {
+  background: #041327;
+}
+[data-theme='light'] body:has(.lp) {
+  background: #f3f7fc;
+}
+
+/* ---------- Light theme ---------- */
+[data-theme='light'] .lp {
+  --lp-bg: #f3f7fc;
+  --lp-bg-2: #e8f0fa;
+  --lp-panel: rgb(255 255 255 / 0.8);
+  --lp-line: rgb(16 46 90 / 0.1);
+  --lp-line-strong: rgb(16 46 90 / 0.18);
+  --lp-fg: #0b1d36;
+  --lp-fg-2: #3f5068;
+  --lp-fg-3: #64748b;
+  --lp-gold-deep: #b97609;
+  background:
+    radial-gradient(1200px 700px at 78% 8%, rgb(47 140 255 / 0.14), transparent 60%),
+    radial-gradient(900px 600px at 10% 30%, rgb(245 184 46 / 0.08), transparent 60%),
+    radial-gradient(1000px 700px at 50% 100%, rgb(47 140 255 / 0.1), transparent 60%),
+    linear-gradient(180deg, var(--lp-bg) 0%, var(--lp-bg-2) 50%, var(--lp-bg) 100%);
+}
+[data-theme='light'] .lp-gold-text {
+  background: linear-gradient(180deg, #f2b531, #d69212 55%, #a86a05);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+[data-theme='light'] .lp-header.is-scrolled,
+[data-theme='light'] .lp-mobile-nav {
+  background: rgb(255 255 255 / 0.88);
+}
+[data-theme='light'] .lp-nav a:hover,
+[data-theme='light'] .lp-nav a[aria-current='true'] {
+  color: var(--lp-fg);
+}
+[data-theme='light'] .lp-btn--ghost {
+  color: var(--lp-fg);
+  background: rgb(255 255 255 / 0.7);
+  border-color: rgb(11 29 54 / 0.35);
+}
+[data-theme='light'] .lp-btn--ghost:hover {
+  background: #fff;
+  border-color: var(--lp-fg);
+}
+[data-theme='light'] .lp-menu-btn,
+[data-theme='light'] .lp-theme-btn {
+  color: var(--lp-fg);
+  background: rgb(255 255 255 / 0.75);
+}
+[data-theme='light'] .lp-badge {
+  color: #8a5a00;
+  background: rgb(245 184 46 / 0.14);
+}
+[data-theme='light'] .lp-eyebrow {
+  color: #b77a06;
+}
+[data-theme='light'] .lp-card {
+  background: linear-gradient(180deg, #ffffff, #f6f9fd);
+  border-color: rgb(16 46 90 / 0.12);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    0 18px 40px -26px rgb(16 46 90 / 0.45);
+}
+[data-theme='light'] .lp-feature:hover,
+[data-theme='light'] .lp-role:hover .lp-role__card {
+  border-color: rgb(214 152 45 / 0.6);
+}
+[data-theme='light'] .lp-feature__icon {
+  filter: drop-shadow(0 6px 10px color-mix(in srgb, var(--accent, #f5b82e) 55%, transparent));
+}
+[data-theme='light'] .lp-role__icon {
+  box-shadow:
+    0 0 0 3px #f3f7fc,
+    0 0 0 5px var(--c1),
+    0 0 18px 0 var(--c1);
+}
+[data-theme='light'] .lp-roles::before {
+  border-top-color: rgb(16 46 90 / 0.28);
+}
+[data-theme='light'] .lp-scene__glow-blue {
+  background: rgb(47 140 255 / 0.22);
+}
+[data-theme='light'] .lp-scene__glow-gold {
+  background: rgb(245 184 46 / 0.35);
+}
+[data-theme='light'] .lp-chip {
+  background: rgb(255 255 255 / 0.9);
+  color: var(--lp-fg-2);
+}
+[data-theme='light'] .lp-chip b {
+  color: var(--lp-fg);
+}
+[data-theme='light'] .lp-footer ul a:hover,
+[data-theme='light'] .lp-link-btn:hover {
+  color: #b77a06;
+}
+[data-theme='light'] .lp-socials a:hover,
+[data-theme='light'] .lp-theme-btn:hover {
+  color: #b77a06;
+  border-color: #d69212;
+}
+/* Objects keep their own colours in both themes: the laptop and phone screens and the navy banner. */
+.lp-phone__screen,
+.lp-cta {
+  color: #fff;
+}
+.lp-cta p {
+  color: #c9d6e8;
+}
+.lp-cta__note {
+  color: #9fb2cc;
+}
+.lp-phone__label {
+  color: #c9d6e8;
+}
+[data-theme='light'] .lp-waves path[fill] {
+  opacity: 0.1;
+}
