@@ -15,8 +15,6 @@ import { calendarToday } from '../src/features/academic-calendar/calendar.servic
 import { addDays, asDbDay } from '../src/features/academic-calendar/schoolDays.js';
 import { hashPassword } from '../src/features/auth/password.js';
 import { resetLimiter } from '../src/features/auth/rateLimit.js';
-import { setStorageTransport } from '../src/common/supabaseStorage.js';
-import { env } from '../src/config/env.js';
 
 if (process.env.EDUTRACK_DB_BRANCH !== 'dev') throw new Error('Examination tests only run against the Neon dev branch (npm test).');
 
@@ -383,85 +381,4 @@ describe('analytics', () => {
   });
 });
 
-describe('paper files (private storage)', () => {
-  const KEY = `test-service-key-${tag}`;
-  const objects = new Map();
-  const calls = [];
-  let bucket = null;
-  const files = () => `${O}/papers/${ctx.papers.Math.id}/files`;
-  before(() => {
-    // A stand-in for Supabase Storage: buckets, signed upload links, objects, signed download links.
-    setStorageTransport(async (url, init) => {
-      const path = url.replace('https://storage.test/storage/v1', '');
-      calls.push({ method: init.method, path, auth: init.headers.authorization });
-      const json = (status, data) => ({ status, ok: status < 300, headers: new Map(), text: async () => JSON.stringify(data) });
-      if (init.method === 'GET' && path.startsWith('/bucket/')) return bucket ? json(200, bucket) : json(404, { error: 'not found' });
-      if (init.method === 'POST' && path === '/bucket') {
-        bucket = JSON.parse(init.body);
-        return json(200, { name: bucket.id });
-      }
-      if (init.method === 'POST' && path.startsWith('/object/upload/sign/')) return json(200, { url: `${path}?token=up` });
-      if (init.method === 'HEAD') {
-        const key = decodeURIComponent(path.replace(/^\/object\/authenticated\/[^/]+\//, ''));
-        return objects.has(key) ? { status: 200, ok: true, headers: new Map([['content-length', String(objects.get(key))]]) } : { status: 404, ok: false, headers: new Map() };
-      }
-      if (init.method === 'POST' && path.startsWith('/object/sign/')) return json(200, { signedURL: `${path}?token=down` });
-      if (init.method === 'DELETE') {
-        for (const key of JSON.parse(init.body).prefixes) objects.delete(key);
-        return json(200, []);
-      }
-      return json(400, { error: 'unexpected' });
-    });
-  });
-  after(() => {
-    setStorageTransport(null);
-    env.supabaseUrl = undefined;
-    env.supabaseServiceKey = undefined;
-  });
-
-  test('not set up: the list says so and uploads are refused', async () => {
-    env.supabaseUrl = undefined;
-    env.supabaseServiceKey = undefined;
-    const list = await owner(files());
-    assert.equal(list.status, 200);
-    assert.equal(list.body.configured, false);
-    const start = await owner(files(), { method: 'POST', body: { kind: 'question_paper', fileName: 'math.pdf', contentType: 'application/pdf', size: 1000 } });
-    assert.equal(start.status, 503);
-    assert.equal(start.body.code, 'STORAGE_NOT_CONFIGURED');
-  });
-
-  test('upload through a signed link, confirm by size, download (audited), remove (record kept)', async () => {
-    env.supabaseUrl = 'https://storage.test';
-    env.supabaseServiceKey = KEY;
-    const bad = await owner(files(), { method: 'POST', body: { kind: 'question_paper', fileName: 'run.exe', contentType: 'application/x-msdownload', size: 10 } });
-    assert.equal(bad.status, 400);
-    const big = await owner(files(), { method: 'POST', body: { kind: 'question_paper', fileName: 'big.pdf', contentType: 'application/pdf', size: 30 * 1024 * 1024 } });
-    assert.equal(big.status, 400);
-    const start = await owner(files(), { method: 'POST', body: { kind: 'question_paper', fileName: 'Xisaab – Mid-Term.pdf', contentType: 'application/pdf', size: 1234 } });
-    assert.equal(start.status, 201, JSON.stringify(start.body));
-    assert.equal(bucket.public, false, 'the bucket is created private');
-    assert.match(start.body.upload.url, /^https:\/\/storage\.test\/storage\/v1\/object\/upload\/sign\/exam-papers\/.+\?token=up$/);
-    assert.ok(!JSON.stringify(start.body).includes(KEY), 'the service key never reaches the browser');
-    const fileId = start.body.file.id;
-    const key = (await prisma.examPaperFile.findUnique({ where: { id: fileId } })).storageKey;
-    assert.ok(key.startsWith(`${ctx.school.id}/${ctx.exam.id}/${ctx.papers.Math.id}/`));
-    assert.equal((await owner(`${files()}/${fileId}/confirm`, { method: 'POST' })).body.code, 'UPLOAD_INCOMPLETE', 'nothing stored yet');
-    objects.set(key, 1000);
-    assert.equal((await owner(`${files()}/${fileId}/confirm`, { method: 'POST' })).body.code, 'UPLOAD_INCOMPLETE', 'wrong size');
-    objects.set(key, 1234);
-    const ready = await owner(`${files()}/${fileId}/confirm`, { method: 'POST' });
-    assert.equal(ready.body.file.status, 'ready');
-    const link = await owner(`${files()}/${fileId}/download`, { method: 'POST' });
-    assert.equal(link.status, 200);
-    assert.match(link.body.url, /token=down&download=Xisaab/);
-    assert.ok(Date.parse(link.body.expiresAt) - Date.now() <= 120_000);
-    const removed = await owner(`${files()}/${fileId}/remove`, { method: 'POST' });
-    assert.equal(removed.body.file.status, 'removed');
-    assert.equal(objects.has(key), false, 'the stored file is deleted');
-    const list = await owner(files());
-    assert.deepEqual(list.body.files.map((f) => f.status), ['removed'], 'the record stays');
-    assert.ok(calls.every((c) => c.auth === `Bearer ${KEY}`));
-    const actions = new Set((await prisma.auditEvent.findMany({ where: { schoolId: ctx.school.id }, select: { action: true } })).map((e) => e.action));
-    for (const a of ['EXAM_PAPER_FILE_UPLOADED', 'EXAM_PAPER_FILE_DOWNLOADED', 'EXAM_PAPER_FILE_REMOVED']) assert.ok(actions.has(a), a);
-  });
-});
+// Paper files (private storage): see examPaperFiles.test.js.

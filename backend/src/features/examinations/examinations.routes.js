@@ -20,7 +20,7 @@ import {
 import { getSessionAttendance, saveSessionAttendance } from './examAttendance.service.js';
 import { examDocument, markSheetDocument, sendPdf } from './examDocuments.service.js';
 import { examAnalytics } from './examAnalytics.service.js';
-import { confirmPaperUpload, listPaperFiles, paperFileDownload, readPaperUpload, removePaperFile, startPaperUpload } from './examFiles.service.js';
+import { confirmPaperUpload, listPaperFiles, paperFileDownload, readDownloadRequest, readPaperUpload, removePaperFile, startPaperUpload } from './examFiles.service.js';
 import { approveResults, correctResults, finalResults, getSectionResults, handOverFinalResults, listResults, publishAllResults, publishResults, reopenResults, reportCards } from './examResults.service.js';
 import { approveMarkSheet, getMarkSheet, listMarkSheets, returnMarkSheet, saveMarkSheet, submitMarkSheet } from './examMarks.service.js';
 import { clearTimetable, generateTimetable, getTimetable, moveSitting, publishTimetable, sessionSeats, setInvigilators, timetableOptions } from './examTimetable.service.js';
@@ -273,7 +273,8 @@ export function mountExaminationRoutes(router, scopeOf, role) {
   router.get('/exams/examinations/:id/analytics', async (req, res) => {
     res.json(await examAnalytics(scopeOf(req), req.params.id, branchQuery(req)));
   });
-  // Paper files (private storage): list, upload (signed URL, then confirm), download link (audited), remove.
+  // Paper files (private storage, docs/storage/supabase-storage.md): list; upload or replace (a signed
+  // upload URL, then confirm — size and content checked); download/view link (two minutes, audited); remove.
   router.get('/exams/papers/:paperId/files', async (req, res) => {
     res.json(await listPaperFiles(scopeOf(req), req.params.paperId));
   });
@@ -284,7 +285,7 @@ export function mountExaminationRoutes(router, scopeOf, role) {
     res.json(await confirmPaperUpload(scopeOf(req), req.params.paperId, req.params.fileId, req.user, req));
   });
   router.post('/exams/papers/:paperId/files/:fileId/download', async (req, res) => {
-    res.json(await paperFileDownload(scopeOf(req), req.params.paperId, req.params.fileId, req.user, req));
+    res.json(await paperFileDownload(scopeOf(req), req.params.paperId, req.params.fileId, req.user, req, readDownloadRequest(req.is('application/json') ? jsonBody(req) : {})));
   });
   router.post('/exams/papers/:paperId/files/:fileId/remove', async (req, res) => {
     res.json(await removePaperFile(scopeOf(req), req.params.paperId, req.params.fileId, req.user, req));

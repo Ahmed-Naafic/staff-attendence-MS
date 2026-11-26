@@ -2506,30 +2506,53 @@ enum ExamPaperFileStatus {
   READY
   /// Removed: the stored file is deleted; the record stays.
   REMOVED
+  /// Replaced by a newer upload (replacedById); the stored file is deleted; the record stays.
+  REPLACED
+  /// The uploaded bytes failed the check (size or content); the stored file is deleted.
+  REJECTED
+  /// Started but never confirmed; cleared by storage maintenance.
+  ABANDONED
 }
 
 /// A file of a paper (question paper, marking scheme…) kept in the private storage bucket.
 model ExamPaperFile {
-  id             String              @id @default(uuid())
-  schoolId       String
-  paperId        String
-  paper          ExamPaper           @relation(fields: [paperId], references: [id], onDelete: Restrict)
-  kind           ExamPaperFileKind
+  id              String              @id @default(uuid())
+  schoolId        String
+  paperId         String
+  paper           ExamPaper           @relation(fields: [paperId], references: [id], onDelete: Restrict)
+  kind            ExamPaperFileKind
   /// As uploaded (shown and used when downloading), at most 120 characters.
-  fileName       String
-  contentType    String
-  size           Int
-  /// Path in the bucket: <schoolId>/<examinationId>/<paperId>/<id>.<ext>
-  storageKey     String              @unique
-  status         ExamPaperFileStatus @default(PENDING)
-  uploadedById   String?
-  uploadedByName String?
-  createdAt      DateTime            @default(now())
-  confirmedAt    DateTime?
-  removedAt      DateTime?
-  removedByName  String?
+  fileName        String
+  contentType     String
+  size            Int
+  /// Lower-case extension decided by the server (pdf, doc, docx, png, jpg).
+  extension       String
+  /// The examination's branch (null: school-wide examination).
+  branchId        String?
+  /// Storage bucket holding the object (SUPABASE_STORAGE_BUCKET when uploaded).
+  bucket          String
+  /// Object key: schools/<schoolId>/examinations/papers|attachments/<id>.<ext>
+  /// (records of the first release: <schoolId>/<examinationId>/<paperId>/<id>.<ext>).
+  storageKey      String              @unique
+  status          ExamPaperFileStatus @default(PENDING)
+  /// Why the upload was rejected (size, content) — REJECTED only.
+  statusReason    String?
+  /// The READY file this upload replaces once it is confirmed.
+  replacesId      String?
+  /// The upload that replaced this file (REPLACED only).
+  replacedById    String?
+  uploadedById    String?
+  uploadedByName  String?
+  createdAt       DateTime            @default(now())
+  confirmedAt     DateTime?
+  removedAt       DateTime?
+  removedByName   String?
+  /// When the stored object was deleted (null while it may still be in storage). Records that are
+  /// no longer READY or PENDING but still null here are retried by storage maintenance.
+  objectDeletedAt DateTime?
 
   @@index([paperId, status])
+  @@index([status, createdAt])
 }
 
 // ---- Fee Management (docs/business-rules.md → Fee Management) ------------------------------------
