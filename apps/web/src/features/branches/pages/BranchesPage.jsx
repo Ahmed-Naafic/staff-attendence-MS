@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { Building2, CircleOff, Plus, Power } from 'lucide-react';
 import { PageContainer, PageHeader } from '../../../components/layout';
 import { Alert, Button, Card, ErrorState, Input, KpiCard, Select, Skeleton } from '../../../components/ui';
@@ -36,7 +36,9 @@ export default function BranchesPage() {
   const closeDetails = () => navigate({ pathname: '/branches', search });
 
   // { type: 'create' | 'edit' | 'location' | 'cancel-location' | 'suspend' | 'reactivate', branch? }
-  const [dialog, setDialog] = useState(null);
+  // ?new=1 (e.g. the dashboard's Add Branch) opens the new-branch form.
+  const [params] = useSearchParams();
+  const [dialog, setDialog] = useState(() => (params.get('new') === '1' ? { type: 'create' } : null));
   const [notice, setNotice] = useState('');
   const open = (type) => (branch) => {
     setNotice('');

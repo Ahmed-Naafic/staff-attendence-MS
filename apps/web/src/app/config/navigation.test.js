@@ -84,3 +84,12 @@ test('navigation: the nine Examinations pages are under one Examinations menu fo
   }
   assert.ok(!links('SUPER_ADMIN').some((l) => l.to.startsWith('/examinations')));
 });
+
+test('navigation: School Owners and Managers start on their Dashboard, the first item of their menu', async () => {
+  const { roleProfiles } = await import('./navigation.js');
+  for (const role of ['OWNER', 'MANAGER']) {
+    assert.equal(roleProfiles[role].home, '/dashboard', role);
+    assert.equal(navigationByRole[role][0].items[0].to, '/dashboard', role);
+  }
+  assert.ok(!links('ACCOUNTANT').some((l) => l.to === '/dashboard'), 'Accountants keep the Fee overview');
+});

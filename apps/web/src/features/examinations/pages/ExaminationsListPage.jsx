@@ -34,7 +34,9 @@ export default function ExaminationsListPage() {
   const owner = role === 'OWNER';
   const navigate = useNavigate();
   const [version, setVersion] = useState(0);
-  const [dialog, setDialog] = useState(null);
+  // ?new=1 (e.g. the dashboard's Create Examination) opens the new-examination form.
+  const [newParams] = useSearchParams();
+  const [dialog, setDialog] = useState(() => (newParams.get('new') === '1' ? { type: 'create' } : null));
   const [notice, setNotice] = useState('');
   // ?state=draft (e.g. from a page that only lists scheduled examinations) opens the list on that status.
   const [params] = useSearchParams();

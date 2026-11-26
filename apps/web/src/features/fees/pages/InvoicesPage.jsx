@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 import { CheckCircle2, Clock, FileStack, FileText, Plus, XCircle } from 'lucide-react';
 import { Alert, Button, Card, DropdownMenu, ErrorState, Input, Pagination, Select, Table, TableBody, TableCell, TableEmpty, TableHead, TableHeaderCell, TableLoading, TableRow } from '../../../components/ui';
 import { useApiData } from '../../../hooks/useApiData.js';
@@ -113,7 +114,9 @@ function Invoices({ status, creating, setCreating }) {
 }
 
 export default function InvoicesPage() {
-  const [creating, setCreating] = useState(null);
+  // ?new=single | bulk (e.g. the dashboard's Generate Invoice) opens that form.
+  const [params] = useSearchParams();
+  const [creating, setCreating] = useState(() => (['single', 'bulk'].includes(params.get('new')) ? params.get('new') : null));
   return (
     <FeePage
       title="Invoices"

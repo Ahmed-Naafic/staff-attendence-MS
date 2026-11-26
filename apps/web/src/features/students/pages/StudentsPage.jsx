@@ -55,7 +55,8 @@ export default function StudentsPage() {
       },
       { replace: true },
     );
-  const [registering, setRegistering] = useState(false);
+  // ?new=1 (e.g. the dashboard's Add Student) opens the registration form.
+  const [registering, setRegistering] = useState(() => params.get('new') === '1');
   const [notice, setNotice] = useState('');
 
   const years = useApiData(() => loadAcademicYears(role), `years|${role}`);

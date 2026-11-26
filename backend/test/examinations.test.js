@@ -144,7 +144,7 @@ describe('the switch', () => {
     assert.equal((await manager1(`${M}/rooms`)).status, 403);
     const on = await admin(`/api/platform/schools/${schools.A.id}/features`, { method: 'PUT', body: { examinations: true } });
     assert.equal(on.status, 200, JSON.stringify(on.body));
-    assert.deepEqual(on.body.school.features, { studentAttendance: false, examinations: true });
+    assert.deepEqual(on.body.school.features, { studentAttendance: false, examinations: true, fees: false });
     const event = await prisma.auditEvent.findFirst({ where: { action: 'SCHOOL_FEATURES_UPDATED', targetId: schools.A.id }, orderBy: { occurredAt: 'desc' } });
     assert.match(event.description, /Examinations turned on/);
     assert.equal((await owner(`${O}/overview`)).body.featureEnabled, true);
