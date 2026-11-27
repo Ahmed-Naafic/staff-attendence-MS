@@ -76,58 +76,78 @@ function receiptContent({ number, school, branding, branch, student, enrollment,
 export async function recordPayment(scope, values, user, req) {
   const prisma = getPrisma();
   const settings = await feeSettingsOf(scope.school.id);
-  if (values.requestKey) {
-    const existing = await prisma.feePayment.findUnique({ where: { schoolId_requestKey: { schoolId: scope.school.id, requestKey: values.requestKey } }, include: paymentInclude });
-    if (existing) return { payment: toPayment(existing), repeated: true };
-  }
+  const earlier = await repeatedPayment(scope, values);
+  if (earlier) return earlier;
   const today = await calendarToday();
-  const payment = await prisma.$transaction(async (tx) => {
-    await lockOperating(tx, scope);
-    const student = await findScopedStudent(tx, scope, values.studentId);
-    await lockStudentAccount(tx, student.id);
-    const obligations = await tx.feeObligation.findMany({ where: { id: { in: values.allocations.map((a) => a.obligationId) }, studentId: student.id } });
-    const map = new Map(obligations.map((o) => [o.id, o]));
-    const { problems } = checkAllocations(values.amount, values.allocations, map, { allowPartial: settings.allowPartialPayments, minimumPartial: settings.minimumPartialPayment, currency: settings.currency });
-    if (Object.keys(problems).length) throw badRequest(Object.values(problems)[0], problems);
-    const branchId = scope.branch?.id ?? student.branchId;
-    const now = new Date();
-    const created = await tx.feePayment.create({
-      data: { schoolId: scope.school.id, branchId, studentId: student.id, amount: values.amount, receivedAt: now, note: values.note, requestKey: values.requestKey, recordedById: user.id, recordedByName: user.name, recordedByRole: user.role },
-    });
-    for (const a of values.allocations) {
-      const o = map.get(a.obligationId);
-      await tx.feeAllocation.create({ data: { paymentId: created.id, obligationId: o.id, amount: a.amount } });
-      // Guarded update: never beyond the balance even under a race (the account lock also prevents it).
-      const updated = await tx.feeObligation.updateMany({ where: { id: o.id, status: 'OPEN', paidAmount: o.paidAmount }, data: { paidAmount: o.paidAmount + a.amount, status: statusAfterPayment(o, o.paidAmount + a.amount) } });
-      if (updated.count !== 1) throw conflict('BALANCE_CHANGED', 'This account changed while the payment was being recorded. Open it again and retry.');
-    }
-    const [school, branch, branding, enrollment, remaining] = await Promise.all([
-      tx.school.findUnique({ where: { id: scope.school.id } }),
-      tx.branch.findUnique({ where: { id: branchId } }),
-      currentBranding(scope.school.id, tx),
-      tx.enrollment.findFirst({ where: { studentId: student.id, status: 'ACTIVE' }, include: { section: { include: { class: true } } }, orderBy: { enrolledAt: 'desc' } }),
-      tx.feeObligation.findMany({ where: { studentId: student.id, status: 'OPEN' }, select: { netAmount: true, paidAmount: true } }),
-    ]);
-    const number = await nextNumber(tx, scope.school.id, 'receipt', settings.receiptNumberFormat, today, branch.number);
-    const lines = values.allocations.map((a) => {
-      const o = map.get(a.obligationId);
-      return { title: o.title, kind: o.kind.toLowerCase(), period: o.billingMonth ? monthLabel(fromDbDate(o.billingMonth)) : o.title, due: o.netAmount, paid: a.amount, balance: o.netAmount - o.paidAmount - a.amount };
-    });
-    const content = receiptContent({ number, school, branding, branch, student, enrollment, payment: created, lines, currency: settings.currency, receivedBy: { name: user.name, role: user.role }, balanceAfter: remaining.reduce((n, o) => n + o.netAmount - o.paidAmount, 0) });
-    await tx.feeReceipt.create({ data: { schoolId: scope.school.id, branchId, paymentId: created.id, number, brandingId: branding?.id ?? null, content } });
-    await refreshInvoicesOf(tx, values.allocations.map((a) => a.obligationId));
-    await recordAuditEvent({
-      client: tx,
-      action: AUDIT_ACTIONS.FEE_PAYMENT_RECORDED,
-      actor: actorOf(user),
-      target: { type: 'student', id: student.id, name: `${fullName(student)} (${student.studentNumber})` },
-      schoolId: scope.school.id,
-      description: `Cash payment of ${formatMoney(values.amount, settings.currency)} recorded (receipt ${number}) for ${lines.map((l) => l.period).join(', ')}.`,
-      req,
-    });
-    return tx.feePayment.findUnique({ where: { id: created.id }, include: paymentInclude });
-  }, TX);
+  let payment;
+  try {
+    payment = await prisma.$transaction(async (tx) => {
+      await lockOperating(tx, scope);
+      const student = await findScopedStudent(tx, scope, values.studentId);
+      await lockStudentAccount(tx, student.id);
+      const obligations = await tx.feeObligation.findMany({ where: { id: { in: values.allocations.map((a) => a.obligationId) }, studentId: student.id } });
+      const map = new Map(obligations.map((o) => [o.id, o]));
+      const { problems } = checkAllocations(values.amount, values.allocations, map, { allowPartial: settings.allowPartialPayments, minimumPartial: settings.minimumPartialPayment, currency: settings.currency });
+      if (Object.keys(problems).length) throw badRequest(Object.values(problems)[0], problems);
+      const branchId = scope.branch?.id ?? student.branchId;
+      const now = new Date();
+      const created = await tx.feePayment.create({
+        data: { schoolId: scope.school.id, branchId, studentId: student.id, amount: values.amount, receivedAt: now, note: values.note, requestKey: values.requestKey, recordedById: user.id, recordedByName: user.name, recordedByRole: user.role },
+      });
+      for (const a of values.allocations) {
+        const o = map.get(a.obligationId);
+        await tx.feeAllocation.create({ data: { paymentId: created.id, obligationId: o.id, amount: a.amount } });
+        // Guarded update: never beyond the balance even under a race (the account lock also prevents it).
+        const updated = await tx.feeObligation.updateMany({ where: { id: o.id, status: 'OPEN', paidAmount: o.paidAmount }, data: { paidAmount: o.paidAmount + a.amount, status: statusAfterPayment(o, o.paidAmount + a.amount) } });
+        if (updated.count !== 1) throw conflict('BALANCE_CHANGED', 'This account changed while the payment was being recorded. Open it again and retry.');
+      }
+      const [school, branch, branding, enrollment, remaining] = await Promise.all([
+        tx.school.findUnique({ where: { id: scope.school.id } }),
+        tx.branch.findUnique({ where: { id: branchId } }),
+        currentBranding(scope.school.id, tx),
+        tx.enrollment.findFirst({ where: { studentId: student.id, status: 'ACTIVE' }, include: { section: { include: { class: true } } }, orderBy: { enrolledAt: 'desc' } }),
+        tx.feeObligation.findMany({ where: { studentId: student.id, status: 'OPEN' }, select: { netAmount: true, paidAmount: true } }),
+      ]);
+      const number = await nextNumber(tx, scope.school.id, 'receipt', settings.receiptNumberFormat, today, branch.number);
+      const lines = values.allocations.map((a) => {
+        const o = map.get(a.obligationId);
+        return { title: o.title, kind: o.kind.toLowerCase(), period: o.billingMonth ? monthLabel(fromDbDate(o.billingMonth)) : o.title, due: o.netAmount, paid: a.amount, balance: o.netAmount - o.paidAmount - a.amount };
+      });
+      const content = receiptContent({ number, school, branding, branch, student, enrollment, payment: created, lines, currency: settings.currency, receivedBy: { name: user.name, role: user.role }, balanceAfter: remaining.reduce((n, o) => n + o.netAmount - o.paidAmount, 0) });
+      await tx.feeReceipt.create({ data: { schoolId: scope.school.id, branchId, paymentId: created.id, number, brandingId: branding?.id ?? null, content } });
+      await refreshInvoicesOf(tx, values.allocations.map((a) => a.obligationId));
+      await recordAuditEvent({
+        client: tx,
+        action: AUDIT_ACTIONS.FEE_PAYMENT_RECORDED,
+        actor: actorOf(user),
+        target: { type: 'student', id: student.id, name: `${fullName(student)} (${student.studentNumber})` },
+        schoolId: scope.school.id,
+        description: `Cash payment of ${formatMoney(values.amount, settings.currency)} recorded (receipt ${number}) for ${lines.map((l) => l.period).join(', ')}.`,
+        req,
+      });
+      return tx.feePayment.findUnique({ where: { id: created.id }, include: paymentInclude });
+    }, TX);
+  } catch (error) {
+    // The same request sent twice at once (e.g. a mobile retry): the second meets the unique key.
+    const first = error?.code === 'P2002' ? await repeatedPayment(scope, values) : null;
+    if (first) return first;
+    throw error;
+  }
   return { payment: toPayment(payment), repeated: false };
+}
+
+/**
+ * The payment already recorded for this request key, or null. The same key with a different student
+ * or amount is refused: it is a different payment, never the repeat of one.
+ */
+async function repeatedPayment(scope, values) {
+  if (!values.requestKey) return null;
+  const existing = await getPrisma().feePayment.findUnique({ where: { schoolId_requestKey: { schoolId: scope.school.id, requestKey: values.requestKey } }, include: paymentInclude });
+  if (!existing) return null;
+  if (existing.studentId !== values.studentId || existing.amount !== values.amount) {
+    throw conflict('IDEMPOTENCY_CONFLICT', 'This payment request was already used for a different payment. Start a new payment.');
+  }
+  return { payment: toPayment(existing), repeated: true };
 }
 
 async function findScopedPayment(client, scope, id) {

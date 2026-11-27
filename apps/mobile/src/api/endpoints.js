@@ -3,15 +3,21 @@
  */
 import { checkExamDuties, checkExamRoom, checkMarkSheet, checkMarkSheets, checkEventResponse, checkHistory, checkLessonMarks, checkLessons, checkLogin, checkProfile, checkSession, checkTeaching, checkTimetable, checkToday, checkUser } from './contracts';
 
-export const signIn = (api, { phone, password }) =>
+export const signIn = (api, { phone, password, device }) =>
   api
-    .request('/api/auth/login', { method: 'POST', auth: false, body: { identifier: phone, password, client: 'mobile' } })
+    .request('/api/auth/login', { method: 'POST', auth: false, body: { identifier: phone, password, client: 'mobile', ...(device && { device }) } })
     .then(({ data }) => checkLogin(data));
 
 export const readSession = (api) => api.request('/api/auth/session').then(({ data }) => checkSession(data).user);
 
 /** Ends the session on the server (idempotent; 204). */
 export const signOut = (api) => api.request('/api/auth/logout', { method: 'POST' });
+
+/** Saves the account's theme ('light' | 'dark'), shared with the web app. */
+export const saveTheme = (api, theme) => api.request('/api/auth/preferences', { method: 'PUT', body: { theme } }).then(({ data }) => checkUser(data.user));
+
+/** Checks the signed-in account's password (the app lock after three failed attempts): 204, or 422 WRONG_PASSWORD. */
+export const verifyPassword = (api, password) => api.request('/api/auth/verify-password', { method: 'POST', body: { password } }).then(() => true);
 
 /** Replaces the temporary password; the current session stays valid. */
 export const changeTemporaryPassword = (api, { currentPassword, newPassword }) =>

@@ -513,7 +513,7 @@ describe('staff app reads: profile, history, branch location', () => {
       phone: staff.phone,
       jobTitle: 'Teacher',
       email: staff.email,
-      branch: { code: branches.A.code, name: branches.A.name },
+      branch: { id: branches.A.id, code: branches.A.code, name: branches.A.name },
       school: { code: schools.A.code, name: schools.A.name },
       // No branch transfer scheduled (docs/staff/staff-transfers.md).
       upcomingTransfer: null,

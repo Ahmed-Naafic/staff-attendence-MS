@@ -9,6 +9,9 @@ export async function fetchSession() {
 export const signIn = async (identifier, password) =>
   (await apiRequest('/auth/login', { method: 'POST', body: { identifier, password }, quietUnauthorized: true })).user;
 
+/** Saves the signed-in account's theme ('light' | 'dark'), shared with the mobile app. */
+export const saveTheme = (theme) => apiRequest('/auth/preferences', { method: 'PUT', body: { theme } });
+
 export const signOut = () => apiRequest('/auth/logout', { method: 'POST', quietUnauthorized: true });
 
 /** Replaces a temporary password (first sign-in or after a reset) → the user, now without mustChangePassword. */

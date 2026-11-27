@@ -29,17 +29,24 @@ global.__openTestDatabase = (file = ':memory:') => wrapSqlite(new DatabaseSync(f
 
 jest.mock('expo-sqlite', () => ({
   openDatabaseAsync: jest.fn(async () => global.__openTestDatabase()),
+  deleteDatabaseAsync: jest.fn(async () => {}),
 }));
 
 const secure = new Map();
 global.__secureStore = secure;
 jest.mock('expo-secure-store', () => ({
+  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 6,
   getItemAsync: jest.fn(async (key) => (global.__secureStore.has(key) ? global.__secureStore.get(key) : null)),
   setItemAsync: jest.fn(async (key, value) => void global.__secureStore.set(key, value)),
   deleteItemAsync: jest.fn(async (key) => void global.__secureStore.delete(key)),
 }));
 
-jest.mock('expo-crypto', () => ({ randomUUID: jest.fn(() => require('node:crypto').randomUUID()) }));
+jest.mock('expo-crypto', () => ({
+  randomUUID: jest.fn(() => require('node:crypto').randomUUID()),
+  getRandomBytesAsync: jest.fn(async (n) => new Uint8Array(require('node:crypto').randomBytes(n))),
+  digestStringAsync: jest.fn(async (_alg, value) => require('node:crypto').createHash('sha256').update(value).digest('hex')),
+  CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+}));
 
 jest.mock('expo-location', () => ({
   Accuracy: { Highest: 5 },
@@ -79,6 +86,13 @@ jest.mock('expo-notifications', () => ({
   addPushTokenListener: jest.fn(() => ({ remove: jest.fn() })),
   dismissAllNotificationsAsync: jest.fn(async () => {}),
   setBadgeCountAsync: jest.fn(async () => true),
+}));
+// Fingerprint / face unlock: not enrolled unless a test says so.
+global.__biometric = { available: false, success: false };
+jest.mock('expo-local-authentication', () => ({
+  hasHardwareAsync: jest.fn(async () => global.__biometric.available),
+  isEnrolledAsync: jest.fn(async () => global.__biometric.available),
+  authenticateAsync: jest.fn(async () => (global.__biometric.success ? { success: true } : { success: false, error: 'user_cancel' })),
 }));
 jest.mock('expo-task-manager', () => ({ defineTask: jest.fn(), isTaskDefined: jest.fn(() => false) }));
 jest.mock('expo-constants', () => ({ __esModule: true, default: { expoConfig: { extra: { eas: { projectId: 'test-project' } } } } }));

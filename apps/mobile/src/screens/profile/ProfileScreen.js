@@ -8,11 +8,12 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 import { userMessage } from '../../api/errors';
 import { useAttendance } from '../../attendance/AttendanceProvider';
 import { useSession } from '../../auth/SessionProvider';
-import { AppText, Card, Divider, ListRow, Notice, Screen } from '../../components/ui';
+import { AppText, Card, Divider, ListRow, Notice, Screen, ScreenHeader } from '../../components/ui';
 import { APP_VERSION } from '../../config';
 import { initials } from '../../lib/format';
 import { useTheme } from '../../theme/ThemeProvider';
 import { radius, space } from '../../theme/tokens';
+import { useWorkspace } from '../../workspace/WorkspaceProvider';
 import { useSignOut } from './useSignOut';
 
 export default function ProfileScreen({ navigation }) {
@@ -21,14 +22,13 @@ export default function ProfileScreen({ navigation }) {
   const { profile, pendingCount, loadError, refresh } = useAttendance();
   const { requestSignOut, dialog } = useSignOut();
   const name = profile?.name ?? user?.name ?? '';
+  const staff = user?.role === 'STAFF';
+  const { branch } = useWorkspace();
+  const roleLabel = { MANAGER: 'Manager', ACCOUNTANT: 'Accountant' }[user?.role];
 
   return (
     <Screen>
-      <View style={styles.header}>
-        <AppText variant="section" accessibilityRole="header">
-          Profile
-        </AppText>
-      </View>
+      <ScreenHeader title="Profile" onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined} />
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={styles.identity}>
           <View style={[styles.avatar, { backgroundColor: colors.interactive }]} importantForAccessibility="no-hide-descendants">
@@ -38,6 +38,11 @@ export default function ProfileScreen({ navigation }) {
           </View>
           <View style={{ marginLeft: space(4), flex: 1 }}>
             <AppText variant="section">{name}</AppText>
+            {!staff && roleLabel ? (
+              <AppText variant="small" color={colors.fgSecondary}>
+                {branch ? `${roleLabel} · ${branch.name}` : roleLabel}
+              </AppText>
+            ) : null}
             {profile?.jobTitle ? (
               <AppText variant="small" color={colors.fgSecondary}>
                 {profile.jobTitle}
@@ -81,6 +86,7 @@ export default function ProfileScreen({ navigation }) {
           </Card>
         ) : null}
 
+        {staff ? (
         <Card style={styles.list}>
           <ListRow testID="profile-teaching" icon="people-outline" label="My classes & subjects" onPress={() => navigation.navigate('Teaching')} />
           <Divider />
@@ -90,9 +96,16 @@ export default function ProfileScreen({ navigation }) {
           <Divider />
           <ListRow testID="profile-exam-marks" icon="create-outline" label="Examination marks" onPress={() => navigation.navigate('ExamMarks')} />
         </Card>
+        ) : null}
 
         <Card style={styles.list}>
-          <ListRow testID="open-sync" icon="sync" label="Sync status" value={pendingCount ? `${pendingCount} pending` : 'All uploaded'} onPress={() => navigation.navigate('Sync')} />
+          {staff ? (
+            <>
+              <ListRow testID="open-sync" icon="sync" label="Sync status" value={pendingCount ? `${pendingCount} pending` : 'All uploaded'} onPress={() => navigation.navigate('Sync')} />
+              <Divider />
+            </>
+          ) : null}
+          <ListRow testID="open-devices" icon="phone-portrait-outline" label="My devices" onPress={() => navigation.navigate('Devices')} />
           <Divider />
           <ListRow testID="open-settings" icon="settings-outline" label="Settings" onPress={() => navigation.navigate('Settings')} />
           <Divider />

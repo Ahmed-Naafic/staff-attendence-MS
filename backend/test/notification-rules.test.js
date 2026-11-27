@@ -188,3 +188,14 @@ test('outbox retries back off and stop after the last attempt', () => {
   assert.deepEqual([1, 2, 3, 4, 5, 8].map((n) => retryDelayMs(n) / 60000), [1, 5, 15, 60, 180, 180]);
   assert.equal(MAX_ATTEMPTS, 8);
 });
+
+test('notification groups: every category is in exactly one group of the notification center', async () => {
+  const { CATEGORIES, NOTIFICATION_GROUPS, groupOf } = await import('../src/features/notifications/notificationTypes.js');
+  const all = Object.values(NOTIFICATION_GROUPS).flat();
+  assert.deepEqual([...all].sort(), [...CATEGORIES].sort());
+  assert.equal(new Set(all).size, all.length);
+  assert.equal(groupOf('FEES'), 'finance');
+  assert.equal(groupOf('EXAMINATION'), 'examinations');
+  assert.equal(groupOf('STUDENT_ATTENDANCE'), 'teaching');
+  assert.equal(groupOf('ANNOUNCEMENT'), 'system');
+});

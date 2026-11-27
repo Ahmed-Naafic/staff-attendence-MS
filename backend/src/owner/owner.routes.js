@@ -10,6 +10,7 @@ import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuer
 import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
 import { mountExaminationRoutes } from '../features/examinations/examinations.routes.js';
 import { mountFeeRoutes } from '../features/fees/fees.routes.js';
+import { mountDeviceAdminRoutes } from '../features/devices/devices.routes.js';
 import { readDashboardQuery, schoolDashboard } from '../features/dashboard/schoolDashboard.service.js';
 import { mountTimetableBuilderRoutes } from '../features/timetable-builder/builder.routes.js';
 import { mountStudentAttendanceRoutes } from '../features/student-attendance/studentAttendance.routes.js';
@@ -248,6 +249,9 @@ ownerRouter.get('/calendar/days', async (req, res) => {
 // ---- Subjects and class curricula (School Owner manages; Managers read) and teaching
 // assignments (docs/business-rules.md → Subjects; Teaching assignments).
 const teachingScope = (req) => ({ school: req.school, branch: null });
+
+// Phones of the school's mobile accounts (docs/mobile/devices.md).
+mountDeviceAdminRoutes(ownerRouter, teachingScope, 'OWNER');
 
 ownerRouter.get('/subjects', async (req, res) => {
   res.json(await listSubjects(req.school, readSubjectListQuery(req.query)));

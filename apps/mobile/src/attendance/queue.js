@@ -23,14 +23,18 @@ const toItem = (row) => ({
   serverEvent: row.server_event ? JSON.parse(row.server_event) : null,
   createdAt: row.created_at,
   dismissedAt: row.dismissed_at,
+  branch: row.branch_id || row.branch_name ? { id: row.branch_id, name: row.branch_name } : null,
 });
 
-/** Stores a new event as pending. `event`: { clientEventId, type, occurredAt (ISO), position, distanceEstimate }. */
+/**
+ * Stores a new event as pending. `event`: { clientEventId, type, occurredAt (ISO), position, distanceEstimate,
+ * branch? { id, name } } — the branch it was made in, kept for display (the server decides the branch).
+ */
 export async function enqueue(db, userId, event, now = new Date()) {
   await db.runAsync(
-    `INSERT INTO attendance_queue (client_event_id, user_id, type, occurred_at, latitude, longitude, accuracy, distance_estimate, state, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-    [event.clientEventId, userId, event.type, event.occurredAt, event.position.latitude, event.position.longitude, event.position.accuracy, event.distanceEstimate ?? null, now.toISOString()],
+    `INSERT INTO attendance_queue (client_event_id, user_id, type, occurred_at, latitude, longitude, accuracy, distance_estimate, state, created_at, branch_id, branch_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+    [event.clientEventId, userId, event.type, event.occurredAt, event.position.latitude, event.position.longitude, event.position.accuracy, event.distanceEstimate ?? null, now.toISOString(), event.branch?.id ?? null, event.branch?.name ?? null],
   );
   return getItem(db, event.clientEventId);
 }

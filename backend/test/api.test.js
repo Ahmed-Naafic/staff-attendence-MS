@@ -84,7 +84,7 @@ describe('authentication', () => {
     const { email, password } = accounts.SUPER_ADMIN;
     const res = await call('/api/auth/login', { method: 'POST', body: { email: email.toUpperCase(), password } });
     assert.equal(res.status, 200);
-    assert.deepEqual(Object.keys(res.body.user).sort(), ['id', 'mustChangePassword', 'name', 'role']);
+    assert.deepEqual(Object.keys(res.body.user).sort(), ['id', 'mustChangePassword', 'name', 'role', 'theme']);
     assert.equal(res.body.user.mustChangePassword, false);
     const cookie = res.headers.get('set-cookie');
     assert.match(cookie, /^edutrack_session=[\w-]{40,};/);
@@ -148,6 +148,20 @@ describe('authentication', () => {
     assert.equal((await call('/api/auth/logout', { method: 'POST', cookie })).status, 204);
     assert.deepEqual((await call('/api/auth/session', { cookie })).body, { user: null });
     assert.equal((await call('/api/platform/schools', { cookie })).status, 401, 'old cookie no longer works');
+  });
+
+  test('the account theme is light by default, saved with PUT /api/auth/preferences and returned with the session', async () => {
+    resetLimiter();
+    const cookie = await signIn('MANAGER');
+    assert.equal((await call('/api/auth/session', { cookie })).body.user.theme, 'light');
+    const saved = await call('/api/auth/preferences', { method: 'PUT', cookie, body: { theme: 'dark' } });
+    assert.equal(saved.status, 200);
+    assert.equal(saved.body.user.theme, 'dark');
+    assert.equal((await call('/api/auth/session', { cookie })).body.user.theme, 'dark');
+    assert.equal((await call('/api/auth/preferences', { method: 'PUT', cookie, body: { theme: 'blue' } })).status, 400);
+    assert.equal((await call('/api/auth/preferences', { method: 'PUT', cookie, body: { theme: 'light', extra: 1 } })).status, 400);
+    assert.equal((await call('/api/auth/preferences', { method: 'PUT', body: { theme: 'light' } })).status, 401);
+    await prisma.user.update({ where: { id: accounts.MANAGER.id }, data: { theme: 'LIGHT' } });
   });
 
   test('expired sessions and forged cookies are rejected', async () => {

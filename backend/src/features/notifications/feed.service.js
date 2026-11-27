@@ -4,6 +4,7 @@ import { isUuid } from '../../common/validate.js';
 import { pageWindow } from '../../common/listQuery.js';
 import { getPrisma } from '../../config/prisma.js';
 import { settleIfDue } from '../staff/transfers.service.js';
+import { groupOf, NOTIFICATION_GROUPS } from './notificationTypes.js';
 import { render } from './templates.js';
 
 /*
@@ -70,6 +71,7 @@ function linkFor(n) {
   if (n.type === 'FEES_OVERDUE') return { kind: 'feesOverdue' };
   if (n.type === 'FEE_GENERATION_FAILED') return { kind: 'feesOverview' };
   if (n.type === 'LESSON_ATTENDANCE_MISSING') return { kind: 'lessons', date: p.date };
+  if (n.type === 'DEVICE_REPORTED_LOST' || n.type === 'DEVICE_APPROVAL_NEEDED') return { kind: 'devices' };
   return null;
 }
 
@@ -80,6 +82,7 @@ export function toItem(n) {
     id: n.id,
     type: n.type,
     category: n.category,
+    group: groupOf(n.category),
     language: n.language,
     title,
     body,
@@ -99,6 +102,7 @@ export function toAnnouncementItem(a, readAt) {
     type: 'ANNOUNCEMENT',
     kind: a.kind,
     category: 'ANNOUNCEMENT',
+    group: groupOf('ANNOUNCEMENT'),
     language: a.language,
     title: a.title,
     body: a.body,
@@ -114,18 +118,20 @@ export function toAnnouncementItem(a, readAt) {
 
 /**
  * One page of the viewer's notifications and announcements, newest first.
- * filters: { unread?: boolean, category?: string, page, pageSize }.
+ * filters: { unread?: boolean, category?: string, group?: string (NOTIFICATION_GROUPS), page, pageSize }.
  */
-export async function listNotifications(viewer, { unread = false, category, page = 1, pageSize = 20 } = {}, now = new Date()) {
+export async function listNotifications(viewer, { unread = false, category, group, page = 1, pageSize = 20 } = {}, now = new Date()) {
   const prisma = getPrisma();
-  const wantPersonal = category !== 'ANNOUNCEMENT';
-  const wantAnnouncements = !category || category === 'ANNOUNCEMENT';
+  const categories = category ? [category] : group ? NOTIFICATION_GROUPS[group] : null;
+  const personal = categories?.filter((c) => c !== 'ANNOUNCEMENT');
+  const wantPersonal = !categories || personal.length > 0;
+  const wantAnnouncements = !categories || categories.includes('ANNOUNCEMENT');
   const parts = [];
   if (wantPersonal) {
     parts.push(Prisma.sql`
       SELECT 'notification' AS "source", n."id", n."createdAt" AS "at" FROM "Notification" n
       WHERE ${personalVisible(viewer, now)}
-      ${category ? Prisma.sql`AND n."category" = ${category}::"NotificationCategory"` : Prisma.empty}
+      ${personal ? Prisma.sql`AND n."category"::text IN (${Prisma.join(personal)})` : Prisma.empty}
       ${unread ? Prisma.sql`AND n."readAt" IS NULL` : Prisma.empty}`);
   }
   if (wantAnnouncements) {

@@ -17,6 +17,8 @@ import { formatDay } from '../../lib/format';
 import { countText, lessonState, STATE_LABELS } from '../../lessons/lessonRules';
 import { useTheme } from '../../theme/ThemeProvider';
 import { space } from '../../theme/tokens';
+import { inBranch } from '../../workspace/workspaces';
+import { useWorkspace } from '../../workspace/WorkspaceProvider';
 
 const STATE_TONES = { upcoming: 'neutral', open: 'info', closed: 'neutral' };
 
@@ -28,6 +30,7 @@ export default function LessonsScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [offlineCopy, setOfflineCopy] = useState(false);
+  const { branchId, branches, version } = useWorkspace();
 
   const load = useCallback(async () => {
     const db = await openDatabase();
@@ -48,7 +51,9 @@ export default function LessonsScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [api, openDatabase, user.id]);
+    // A new branch chosen in the header reloads (version).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, openDatabase, user.id, version]);
 
   useFocusEffect(
     useCallback(() => {
@@ -69,7 +74,7 @@ export default function LessonsScreen({ navigation }) {
   return (
     <Screen>
       <FlatList
-        data={data?.lessons ?? []}
+        data={(data?.lessons ?? []).filter((l) => branches.length < 2 || inBranch(l, branchId))}
         keyExtractor={(l) => l.key}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
         contentContainerStyle={{ padding: space(5), paddingTop: 0, flexGrow: 1 }}

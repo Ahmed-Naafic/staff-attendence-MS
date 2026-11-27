@@ -27,13 +27,19 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "POST_NOTIFICATIONS"
-      ]
+      ],
+      "allowBackup": false
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-sqlite",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
       "expo-secure-store",
       [
         "expo-splash-screen",
@@ -68,7 +74,13 @@
           "defaultChannel": "default"
         }
       ],
-      "expo-task-manager"
+      "expo-task-manager",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "EduTrack can use Face ID to unlock the app, if you turn it on in Settings."
+        }
+      ]
     ],
     "extra": {
       "eas": {

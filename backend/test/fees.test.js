@@ -303,6 +303,10 @@ describe('Fee Management', () => {
     ok(again, 200);
     assert.equal(again.body.repeated, true);
     assert.equal(again.body.payment.id, first.body.payment.id);
+    // The same request key for a different payment is refused, never treated as a repeat.
+    const reused = await accountant('/payments', { method: 'POST', body: { ...body, amount: 900, allocations: [{ obligation: ctx.months.oct.id, amount: 900 }] } });
+    assert.equal(reused.status, 409);
+    assert.equal(reused.body.code, 'IDEMPOTENCY_CONFLICT');
     ctx.partial = first.body.payment;
     assert.equal((await prisma.feeObligation.findUnique({ where: { id: ctx.months.oct.id } })).paidAmount, 1000);
     ok(await owner('/settings', { method: 'PUT', body: { values: { allowPartialPayments: false } } }));

@@ -7,7 +7,7 @@ import { requireAuth, requireRole } from '../../middleware/requireAuth.js';
 import { getNotification, listNotifications, markAllRead, markRead, notificationViewer, unreadCount } from './feed.service.js';
 import { runNotificationJobs } from './jobs.js';
 import { getPreferences, updatePreferences } from './notificationSettings.service.js';
-import { CATEGORIES } from './notificationTypes.js';
+import { CATEGORIES, NOTIFICATION_GROUPS } from './notificationTypes.js';
 import { registerDevice, unregisterDevice } from './push.js';
 
 /**
@@ -32,6 +32,7 @@ notificationsRouter.get('/', async (req, res) => {
     await listNotifications(req.viewer, {
       unread: optionalEnum(req.query, 'unread', ['true', 'false']) === 'true',
       category: optionalEnum(req.query, 'category', CATEGORIES),
+      group: optionalEnum(req.query, 'group', Object.keys(NOTIFICATION_GROUPS)),
       page: optionalInt(req.query, 'page', { min: 1, max: 100000, fallback: 1 }),
       pageSize: optionalInt(req.query, 'pageSize', { min: 1, max: 50, fallback: 20 }),
     }),

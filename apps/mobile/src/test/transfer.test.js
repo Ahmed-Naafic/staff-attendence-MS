@@ -62,7 +62,7 @@ function transferServer() {
 
 test('the profile shows a scheduled transfer; there is no transfer action for staff', async () => {
   await renderApp(transferServer());
-  fireEvent.press(await screen.findByText('Profile'));
+  fireEvent.press(await screen.findByTestId('header-profile'));
   expect(await screen.findByText('CIT-001-B002 · North Campus from 2026-11-02')).toBeOnTheScreen();
   expect(screen.queryByText(/Transfer/i)).toBeNull();
 });

@@ -29,6 +29,12 @@ enum Role {
   ACCOUNTANT // BRANCH scope: Fee Management of their branch (web app)
 }
 
+/// The account's interface theme (web and mobile).
+enum ThemePreference {
+  LIGHT
+  DARK
+}
+
 enum AccountStatus {
   ACTIVE
   PENDING
@@ -107,12 +113,16 @@ model User {
   /// STAFF only: the School Owner gave this staff member Fee Management access (the Accountant web
   /// workspace of their branch). Checked on every request; a database check keeps it false for other roles.
   feeAccess          Boolean       @default(false)
+  /// The account's light or dark theme, shared by the web and mobile apps (light for new accounts).
+  theme              ThemePreference @default(LIGHT)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
   /// For OWNER accounts: the one school they own.
   ownedSchool              School?                   @relation("SchoolOwner")
   sessions                 Session[]
+  devices                  Device[]
+  deviceRequests           DeviceRequest[]
   auditEvents              AuditEvent[]              @relation("AuditActor")
   managerAssignments       ManagerAssignment[]
   staffAssignments         StaffAssignment[]
@@ -487,6 +497,9 @@ model Session {
   ipAddress  String?
   userAgent  String?
   pushDevice PushDevice?
+  /// The registered phone this mobile session was opened on (null: web, or an app without device registration).
+  deviceId   String?
+  device     Device?     @relation(fields: [deviceId], references: [id], onDelete: SetNull)
 
   @@index([userId])
   @@index([expiresAt])
@@ -3154,4 +3167,81 @@ model FeeReminderLog {
   sentAt     DateTime @default(now())
 
   @@index([studentId, sentAt])
+}
+
+/// A phone registered to an account for the mobile app (at most three ACTIVE per account; more only
+/// with an approved DeviceRequest). The app makes a random installation id on first use and gets a
+/// device secret once at registration (only its hash is stored); the secret lets the phone ask for
+/// its status and receive a remote wipe even when it has no valid session.
+/// REVOKED: blocked (its sessions ended). LOST: reported lost or stolen: blocked and wiped.
+/// A revoked or lost registration is never reactivated: the phone registers again, as new.
+model Device {
+  id                  String       @id @default(uuid())
+  userId              String
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installationId      String
+  secretHash          String       @unique
+  name                String
+  platform            String
+  model               String?
+  appVersion          String?
+  status              DeviceStatus @default(ACTIVE)
+  registeredAt        DateTime     @default(now())
+  lastSeenAt          DateTime     @default(now())
+  revokedAt           DateTime?
+  revokedById         String?
+  revokedByName       String?
+  revokeReason        String?
+  /// Remote wipe: REQUESTED (by an Owner, a Manager or the staff member), DELIVERED (the phone
+  /// received it), COMPLETED (the phone reported its data deleted). A wipe is never cancelled.
+  wipeState           WipeState?
+  wipeRequestedAt     DateTime?
+  wipeRequestedById   String?
+  wipeRequestedByName String?
+  wipeDeliveredAt     DateTime?
+  wipeCompletedAt     DateTime?
+  sessions            Session[]
+
+  @@index([userId, status])
+  @@index([installationId])
+}
+
+enum DeviceStatus {
+  ACTIVE
+  REVOKED
+  LOST
+}
+
+enum WipeState {
+  REQUESTED
+  DELIVERED
+  COMPLETED
+}
+
+/// A phone that could not register because the account already has three: an Owner (any branch) or
+/// a Manager (their branch) approves or rejects it. An approved request is used by the next sign-in
+/// from that phone.
+model DeviceRequest {
+  id             String              @id @default(uuid())
+  userId         String
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  installationId String
+  name           String
+  platform       String
+  model          String?
+  status         DeviceRequestStatus @default(PENDING)
+  requestedAt    DateTime            @default(now())
+  decidedAt      DateTime?
+  decidedById    String?
+  decidedByName  String?
+  usedAt         DateTime?
+
+  @@index([userId, status])
+}
+
+enum DeviceRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  USED
 }

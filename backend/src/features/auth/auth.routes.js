@@ -1,10 +1,11 @@
 import { Router } from 'express';
-import { badRequest, conflict, forbidden, unauthorized } from '../../common/httpError.js';
+import { badRequest, conflict, forbidden, HttpError, unauthorized } from '../../common/httpError.js';
 import { jsonBody, requiredString } from '../../common/validate.js';
 import { getPrisma } from '../../config/prisma.js';
 import { requireAuth } from '../../middleware/requireAuth.js';
 import { AUDIT_ACTIONS } from '../audit-logs/auditActions.js';
 import { clientIp, recordAuditEvent } from '../audit-logs/auditService.js';
+import { readDeviceInfo, registerForSignIn } from '../devices/devices.service.js';
 import { sessionLifetime } from './authPolicy.js';
 import { hashPassword, passwordProblem, verifyAgainstDummy, verifyPassword } from './password.js';
 import { isValidPhone, phoneKey } from '../schools/schoolInput.js';
@@ -21,11 +22,19 @@ import {
 export const authRouter = Router();
 
 // feeAccess: a STAFF member the School Owner gave Fee Management access (the Accountant web workspace).
-const publicUser = (user) => ({ id: user.id, name: user.name, role: user.role, mustChangePassword: user.mustChangePassword === true, ...(user.role === 'STAFF' && { feeAccess: user.feeAccess === true }) });
+const publicUser = (user) => ({
+  id: user.id,
+  name: user.name,
+  role: user.role,
+  mustChangePassword: user.mustChangePassword === true,
+  theme: user.theme === 'DARK' ? 'dark' : 'light',
+  ...(user.role === 'STAFF' && { feeAccess: user.feeAccess === true }),
+});
 const WEB_APP = { type: 'system', name: 'EduTrack web app' };
 const MOBILE_APP = { type: 'system', name: 'EduTrack mobile app' };
 // Roles of the mobile app (docs/architecture.md → Applications).
-const MOBILE_ROLES = ['STAFF', 'MANAGER'];
+// Staff (Teacher workspace, and Accountant with Fee Management access), Managers and Accountants.
+const MOBILE_ROLES = ['STAFF', 'MANAGER', 'ACCOUNTANT'];
 // Sign-in events of school owners, Managers and staff are linked to their school (for the audit log's school filter).
 async function schoolIdOf(user) {
   if (user?.role === 'OWNER') return (await getPrisma().school.findUnique({ where: { ownerId: user.id }, select: { id: true } }))?.id ?? null;
@@ -107,7 +116,12 @@ authRouter.post('/login', async (req, res) => {
   await deleteExpiredSessions();
   // The lifetime in force at sign-in (Platform Settings → Authentication); it never changes afterwards.
   const { hours } = await sessionLifetime();
-  const { token, expiresAt } = await createSession(user.id, { ipAddress: ip, userAgent: req.get('user-agent'), lifetimeHours: hours });
+  // The phone of a mobile sign-in (docs/mobile/devices.md): its registration, a new one, or a refusal
+  // (403 DEVICE_LIMIT) with a request for an administrator. Apps without device details (earlier
+  // versions) sign in without a registration.
+  const deviceInfo = mobile ? readDeviceInfo(body.device) : null;
+  const registration = deviceInfo ? await registerForSignIn(user, deviceInfo, req) : null;
+  const { token, expiresAt } = await createSession(user.id, { ipAddress: ip, userAgent: req.get('user-agent'), lifetimeHours: hours, deviceId: registration?.device.id ?? null });
   await getPrisma().user.update({ where: { id: user.id }, data: { lastSignInAt: new Date() } });
   await recordAuditEvent({
     action: AUDIT_ACTIONS.SIGN_IN,
@@ -119,7 +133,10 @@ authRouter.post('/login', async (req, res) => {
   });
 
   // The mobile app gets the same session as a token, once, to keep in secure storage (no cookie).
-  if (mobile) return res.json({ user: publicUser(user), token, expiresAt: expiresAt.toISOString() });
+  if (mobile) {
+    const device = registration ? { id: registration.device.id, ...(registration.secret && { secret: registration.secret }) } : null;
+    return res.json({ user: publicUser(user), token, expiresAt: expiresAt.toISOString(), device });
+  }
   setSessionCookie(res, token, expiresAt);
   res.json({ user: publicUser(user) });
 });
@@ -159,6 +176,43 @@ authRouter.post('/logout', async (req, res) => {
  * The new hash, clearing the flag, ending the account's other sessions and the PASSWORD_CHANGED
  * security event are written in one transaction. Passwords are never logged or recorded.
  */
+/**
+ * PUT /api/auth/preferences { theme: 'light' | 'dark' } → { user }. The account's theme, shared by the
+ * web and mobile apps: each app applies the stored theme when it reads the session.
+ */
+authRouter.put('/preferences', requireAuth, async (req, res) => {
+  const body = jsonBody(req);
+  const unknown = Object.keys(body).filter((key) => key !== 'theme');
+  if (unknown.length) throw badRequest(`Unknown field: ${unknown[0]}.`);
+  if (body.theme !== 'light' && body.theme !== 'dark') throw badRequest('"theme" must be "light" or "dark".');
+  const user = await getPrisma().user.update({ where: { id: req.user.id }, data: { theme: body.theme === 'dark' ? 'DARK' : 'LIGHT' } });
+  res.json({ user: publicUser(user) });
+});
+
+/**
+ * POST /api/auth/verify-password { password } → 204 when it is the signed-in account's password.
+ * The mobile app's lock asks for it after three failed PIN or fingerprint attempts (the app lock is
+ * a convenience on the phone; this keeps the account password as the real check). Failures count
+ * towards the same limiter as sign-in (429 when limited) and answer 422 WRONG_PASSWORD (not 401:
+ * the session itself is still valid).
+ */
+authRouter.post('/verify-password', requireAuth, async (req, res) => {
+  const body = jsonBody(req);
+  const unknown = Object.keys(body).filter((key) => key !== 'password');
+  if (unknown.length) throw badRequest(`Unknown field: ${unknown[0]}.`);
+  if (typeof body.password !== 'string' || !body.password || body.password.length > 1024) throw badRequest('Enter your password.', { password: 'Enter your password.' });
+  const limiterKey = `unlock:${req.user.id}`;
+  const ip = clientIp(req);
+  assertNotLimited(limiterKey, ip);
+  const account = await getPrisma().user.findUnique({ where: { id: req.user.id }, select: { passwordHash: true } });
+  if (!account?.passwordHash || !(await verifyPassword(body.password, account.passwordHash))) {
+    recordFailure(limiterKey, ip);
+    throw new HttpError(422, 'WRONG_PASSWORD', 'That is not your password.');
+  }
+  clearFailures(limiterKey, ip);
+  res.status(204).end();
+});
+
 authRouter.post('/password', requireAuth.allowingPasswordChange, async (req, res) => {
   if (!req.user.mustChangePassword) throw forbidden('Your password cannot be changed here.');
   const body = jsonBody(req);

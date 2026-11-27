@@ -3,13 +3,16 @@
  * device for offline use), the offline queue, connectivity, and recording an event. An event is
  * written to the queue before it is sent; its outcome is what the server answers
  * (src/attendance/sync.js). Uploads run on start, when the connection returns, when the app comes
- * to the foreground and on "Sync now".
+ * to the foreground and on "Sync now" — and only once the server has confirmed the account
+ * (`verified`); until then waiting records stay on the phone. Staff check-in is for STAFF accounts:
+ * Manager and Accountant accounts load no attendance day.
  */
 import NetInfo from '@react-native-community/netinfo';
 import * as Crypto from 'expo-crypto';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { fetchProfile, fetchToday } from '../api/endpoints';
+import { ApiError } from '../api/client';
 import { userMessage } from '../api/errors';
 import { useSession } from '../auth/SessionProvider';
 import { getDatabase, readValue, writeValue } from '../db/database';
@@ -20,6 +23,9 @@ import { countPending, dismissRejected, enqueue, getItem, itemsSince, outstandin
 import { syncPending } from './sync';
 import { countPendingMarks } from '../lessons/lessonQueue';
 import { syncLessonMarks } from '../lessons/lessonSync';
+import { cleanUpHistory } from '../sync/history';
+import { countPendingOutbox } from '../sync/outbox';
+import { syncOutbox } from '../sync/outboxSync';
 
 const AttendanceContext = createContext(null);
 
@@ -28,8 +34,9 @@ const isOnline = (state) => state?.isConnected !== false && state?.isInternetRea
 const systemClock = () => new Date();
 
 export function AttendanceProvider({ children, openDatabase = getDatabase, clock = systemClock, newId = Crypto.randomUUID }) {
-  const { api, user } = useSession();
+  const { api, user, verified, refreshAccount } = useSession();
   const userId = user?.id;
+  const staff = user?.role === 'STAFF';
   const [today, setToday] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -39,27 +46,37 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
   const [outstanding, setOutstanding] = useState([]);
   const [pendingCount, setPendingCount] = useState(0);
   const [lessonPendingCount, setLessonPendingCount] = useState(0);
+  const [draftPendingCount, setDraftPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const todayRef = useRef(null);
   const recording = useRef(false);
+  const profileRef = useRef(null);
   useEffect(() => {
     todayRef.current = today;
   }, [today]);
+  useEffect(() => {
+    profileRef.current = profile;
+  }, [profile]);
 
   const reloadQueue = useCallback(async () => {
     if (!userId) return;
     const db = await openDatabase();
     const since = new Date(clock().getTime() - 48 * 60 * 60 * 1000).toISOString();
-    const [recent, open, count, lessonCount] = await Promise.all([itemsSince(db, userId, since), outstandingFor(db, userId), countPending(db, userId), countPendingMarks(db, userId)]);
+    const [recent, open, count, lessonCount, draftCount] = await Promise.all([itemsSince(db, userId, since), outstandingFor(db, userId), countPending(db, userId), countPendingMarks(db, userId), countPendingOutbox(db, userId)]);
     setItems(recent);
     setOutstanding(open);
     setPendingCount(count);
     setLessonPendingCount(lessonCount);
+    setDraftPendingCount(draftCount);
   }, [openDatabase, userId, clock]);
 
   const refresh = useCallback(async () => {
     if (!userId) return;
+    if (!staff) {
+      setLoading(false);
+      return;
+    }
     const db = await openDatabase();
     setLoading(true);
     try {
@@ -80,16 +97,22 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
     } finally {
       setLoading(false);
     }
-  }, [api, openDatabase, userId]);
+  }, [api, openDatabase, userId, staff]);
 
   const syncNow = useCallback(async () => {
     if (!userId) return null;
+    // Nothing is uploaded until the server has confirmed the account and its permissions.
+    if (!verified && !(await refreshAccount?.())) {
+      return { recorded: [], rejected: [], stoppedBy: new ApiError({ kind: 'network', code: 'NOT_VERIFIED', message: 'No connection to the server.' }) };
+    }
     const db = await openDatabase();
     setSyncing(true);
     try {
       const result = await syncPending({ db, api, userId, clock });
       // Teachers' lesson marks waiting on this phone (no request when there are none).
       if (await countPendingMarks(db, userId)) await syncLessonMarks({ db, api, userId, clock }).catch(() => {});
+      // Other offline records (generic outbox), e.g. examination mark drafts.
+      if (await countPendingOutbox(db, userId)) await syncOutbox({ db, api, userId, clock }).catch(() => {});
       setLastSync({ at: clock().toISOString(), ...summary(result) });
       if (result.recorded.length) refresh().catch(() => {});
       return result;
@@ -97,14 +120,16 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
       setSyncing(false);
       await reloadQueue();
     }
-  }, [api, clock, openDatabase, refresh, reloadQueue, userId]);
+  }, [api, clock, openDatabase, refresh, reloadQueue, userId, verified, refreshAccount]);
 
   // Start: load the queue, the day and upload what is waiting.
   useEffect(() => {
     if (!userId) return;
     // State is set only after the database and server answer (asynchronously).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    reloadQueue()
+    openDatabase()
+      .then((db) => cleanUpHistory(db, clock()))
+      .catch(() => {})
+      .then(() => reloadQueue())
       .then(() => refresh())
       .then(() => syncNow())
       .catch(() => {});
@@ -174,7 +199,15 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
     const item = await enqueue(
       db,
       userId,
-      { clientEventId: newId(), type, occurredAt: occurred.toISOString(), position: { latitude: position.latitude, longitude: position.longitude, accuracy: position.accuracy }, distanceEstimate: check.distanceMeters },
+      {
+        clientEventId: newId(),
+        type,
+        occurredAt: occurred.toISOString(),
+        position: { latitude: position.latitude, longitude: position.longitude, accuracy: position.accuracy },
+        distanceEstimate: check.distanceMeters,
+        // Display only: the server judges the event at the branch of its own time.
+        branch: profileRef.current?.branch ? { id: profileRef.current.branch.id ?? null, name: profileRef.current.branch.name } : null,
+      },
       occurred,
     );
     await reloadQueue();
@@ -201,8 +234,8 @@ export function AttendanceProvider({ children, openDatabase = getDatabase, clock
   const day = useMemo(() => deriveDay(today, items, clock()), [today, items, clock]);
 
   const value = useMemo(
-    () => ({ today, profile, loading, loadError, online, day, items, outstanding, pendingCount, lessonPendingCount, syncing, lastSync, refresh, syncNow, record, dismiss, reloadQueue, openDatabase, clock }),
-    [today, profile, loading, loadError, online, day, items, outstanding, pendingCount, lessonPendingCount, syncing, lastSync, refresh, syncNow, record, dismiss, reloadQueue, openDatabase, clock],
+    () => ({ today, profile, loading, loadError, online, day, items, outstanding, pendingCount, lessonPendingCount, draftPendingCount, syncing, lastSync, refresh, syncNow, record, dismiss, reloadQueue, openDatabase, clock }),
+    [today, profile, loading, loadError, online, day, items, outstanding, pendingCount, lessonPendingCount, draftPendingCount, syncing, lastSync, refresh, syncNow, record, dismiss, reloadQueue, openDatabase, clock],
   );
   return <AttendanceContext.Provider value={value}>{children}</AttendanceContext.Provider>;
 }
