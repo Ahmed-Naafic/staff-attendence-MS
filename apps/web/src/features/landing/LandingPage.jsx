@@ -5,6 +5,7 @@ import { useTheme } from '../../app/providers/ThemeProvider.jsx';
 import { useBranding } from '../branding';
 import { EduTrackMark, BookStack, GraduationCap as CapArt } from './components/LandingArt.jsx';
 import { HeroScene } from './components/HeroScene.jsx';
+import { ParticleWaves } from './components/ParticleWaves.jsx';
 import { PhoneCheckIn } from './components/PhoneCheckIn.jsx';
 import { SignInDialog } from './components/SignInDialog.jsx';
 import { landingConfig } from './landingConfig.js';
@@ -78,6 +79,7 @@ export default function LandingPage({ signIn = false, next = null }) {
 
   return (
     <div ref={rootRef} className="lp">
+      <ParticleWaves />
       <Waves />
       <Header name={name} onSignIn={openSignIn} />
       <main id="main-content">
