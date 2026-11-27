@@ -24,7 +24,7 @@ export default function SignInScreen() {
   async function submit() {
     if (busy) return;
     const problems = {};
-    if (!phone.trim()) problems.phone = 'Enter your phone number.';
+    if (!phone.trim()) problems.phone = 'Enter your phone number or email.';
     if (!password) problems.password = 'Enter your password.';
     setErrors(problems);
     setFailure(null);
@@ -66,14 +66,16 @@ export default function SignInScreen() {
 
           <TextField
             testID="phone"
-            label="Phone number"
-            icon="phone-portrait-outline"
+            label="Phone number or email"
+            icon="person-outline"
             value={phone}
             onChangeText={setPhone}
-            placeholder="e.g. 0612345678"
-            keyboardType="phone-pad"
-            textContentType="telephoneNumber"
-            autoComplete="tel"
+            placeholder="Staff: phone number · Managers: email"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="username"
+            autoComplete="username"
             returnKeyType="next"
             onSubmitEditing={() => passwordInput.current?.focus()}
             error={errors.phone}

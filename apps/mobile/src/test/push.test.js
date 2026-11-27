@@ -184,7 +184,7 @@ test('a push of another account (after switching accounts): the server answers 4
 test('signing out clears the notifications shown on the phone; the server ends the session and its token', async () => {
   const server = pushServer();
   await renderApp(server);
-  fireEvent.press(await screen.findByText('Profile'));
+  fireEvent.press(await screen.findByTestId('header-profile'));
   fireEvent.press(await screen.findByTestId('sign-out'));
   await screen.findByText('Sign out?');
   const confirm = screen.getAllByText('Sign out').at(-1);

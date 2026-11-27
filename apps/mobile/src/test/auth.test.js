@@ -20,7 +20,7 @@ test('signed out: only the sign-in screen; empty fields are explained without a 
   const server = createServer();
   await renderApp(server);
   await fireEvent.press(await screen.findByTestId('sign-in'));
-  expect(screen.getByText('Enter your phone number.')).toBeOnTheScreen();
+  expect(screen.getByText('Enter your phone number or email.')).toBeOnTheScreen();
   expect(screen.getByText('Enter your password.')).toBeOnTheScreen();
   expect(server.count('POST /api/auth/login')).toBe(0);
   expect(screen.queryByText('Today’s shift')).toBeNull();
@@ -35,7 +35,7 @@ test('sign in with phone and password: the token goes to secure storage and Home
   expect(await screen.findByText('Main Shift')).toBeOnTheScreen();
   expect(screen.getByText('CIT-001-B001')).toBeOnTheScreen();
   const login = server.calls.find((c) => c.key === 'POST /api/auth/login');
-  expect(login.body).toEqual({ identifier: '0612345678', password: 'correct-horse-battery', client: 'mobile' });
+  expect(login.body).toEqual({ identifier: '0612345678', password: 'correct-horse-battery', client: 'mobile', device: { installationId: expect.stringMatching(/^[0-9a-f-]{36}$/), name: expect.any(String), platform: expect.any(String), model: null, appVersion: expect.any(String) } });
   expect(global.__secureStore.get('edutrack.session.token')).toBe(TOKEN);
   const today = server.calls.find((c) => c.key === 'GET /api/attendance/today');
   expect(today.headers.authorization).toBe(`Bearer ${TOKEN}`);
@@ -46,7 +46,7 @@ test('wrong credentials or a suspended account: the server’s message, nothing 
   await renderApp(server);
   await signIn();
   expect(await screen.findByText('The email, phone number or password is incorrect.')).toBeOnTheScreen();
-  expect(global.__secureStore.size).toBe(0);
+  expect([...global.__secureStore.keys()].filter((k) => k.startsWith('edutrack.session.'))).toEqual([]);
 });
 
 test('no connection at sign-in: a plain message', async () => {
@@ -60,13 +60,13 @@ test('no connection at sign-in: a plain message', async () => {
   expect(await screen.findByText(/No connection to the EduTrack server/)).toBeOnTheScreen();
 });
 
-test('a Manager account is signed out at once with an explanation', async () => {
-  const server = createServer({ 'POST /api/auth/login': loginOk({ ...STAFF, role: 'MANAGER' }) });
+test('an Owner account is signed out at once with an explanation (web app only)', async () => {
+  const server = createServer({ 'POST /api/auth/login': loginOk({ ...STAFF, role: 'OWNER' }) });
   await renderApp(server);
   await signIn();
-  expect(await screen.findByText(/Attendance for Managers is not available in the app yet/)).toBeOnTheScreen();
+  expect(await screen.findByText(/This account uses the EduTrack web app/)).toBeOnTheScreen();
   expect(server.count('POST /api/auth/logout')).toBe(1);
-  expect(global.__secureStore.size).toBe(0);
+  expect([...global.__secureStore.keys()].filter((k) => k.startsWith('edutrack.session.'))).toEqual([]);
 });
 
 test('a temporary password must be replaced before anything else', async () => {
@@ -112,7 +112,7 @@ test('a stored session that has ended returns to sign-in with a notice', async (
   const ended = createServer({ 'GET /api/auth/session': () => [200, { user: null }] });
   await renderApp(ended);
   expect(await screen.findByText('Your session has ended. Sign in again.')).toBeOnTheScreen();
-  expect(global.__secureStore.size).toBe(0);
+  expect([...global.__secureStore.keys()].filter((k) => k.startsWith('edutrack.session.'))).toEqual([]);
 });
 
 test('a session that expires while in use returns to sign-in (401 from any request)', async () => {

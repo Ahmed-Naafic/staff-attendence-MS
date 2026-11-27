@@ -19,8 +19,8 @@ test('navigation: the school schedule pages (year, calendar, bells, timetables) 
   }
 });
 
-test('navigation: staff pages (list, Staff Schedule, Staff Attendance) are under one Staff menu; Staff Schedule only for Managers', () => {
-  const expected = { OWNER: ['/staff', '/attendance'], MANAGER: ['/staff', '/schedule', '/attendance'] };
+test('navigation: staff pages (list, Staff Schedule, Staff Attendance, Staff Devices) are under one Staff menu; Staff Schedule only for Managers', () => {
+  const expected = { OWNER: ['/staff', '/attendance', '/staff-devices'], MANAGER: ['/staff', '/schedule', '/attendance', '/staff-devices'] };
   for (const [role, pages] of Object.entries(expected)) {
     const top = navigationByRole[role].flatMap((s) => s.items);
     const group = top.find((i) => i.id === 'staff');

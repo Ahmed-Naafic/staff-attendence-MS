@@ -4,13 +4,19 @@
  * accessibility roles and labels. Gold is the one primary action per screen.
  */
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { createContext, useContext, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../theme/ThemeProvider';
 import { radius, space, TOUCH, type } from '../theme/tokens';
 
 const LOGO_MARK = require('../../assets/logo-mark.png');
+
+/**
+ * True for a screen shown as a workspace tab under the app header (src/components/AppHeader.js): the
+ * header already covers the top safe area, and a tab has no Back button.
+ */
+export const InTabContext = createContext(false);
 
 export function Icon({ name, size = 22, color, family = 'ion', ...rest }) {
   const { colors } = useTheme();
@@ -286,8 +292,9 @@ export function ConfirmDialog({ visible, title, message, confirmLabel = 'Confirm
 }
 
 /** A page header: back button, title and optional subtitle and right action. */
-export function ScreenHeader({ title, subtitle, onBack, right }) {
+export function ScreenHeader({ title, subtitle, onBack: back, right }) {
   const { colors } = useTheme();
+  const onBack = useContext(InTabContext) ? null : back;
   return (
     <View style={styles.header}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -310,8 +317,10 @@ export function ScreenHeader({ title, subtitle, onBack, right }) {
 export function Screen({ children, edges = ['top'], style }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const inTab = useContext(InTabContext);
+  const top = edges.includes('top') && !inTab;
   return (
-    <View style={[{ flex: 1, backgroundColor: colors.page, paddingTop: edges.includes('top') ? insets.top : 0, paddingBottom: edges.includes('bottom') ? insets.bottom : 0 }, style]}>
+    <View style={[{ flex: 1, backgroundColor: colors.page, paddingTop: top ? insets.top : 0, paddingBottom: edges.includes('bottom') ? insets.bottom : 0 }, style]}>
       {children}
     </View>
   );

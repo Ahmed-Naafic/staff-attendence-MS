@@ -18,6 +18,7 @@ import { DashboardPage, SchoolDashboardPage } from '../../features/dashboard';
 import { ManagersPage } from '../../features/managers';
 import { MyBranchPage } from '../../features/my-branch';
 import { NotificationsPage } from '../../features/notifications';
+import { StaffDevicesPage } from '../../features/devices';
 import { CashClosingPage, DiscountsPage, FeeClearancePage, FeeOverviewPage, FeeReportsPage, FeeSettingsPage, FeeStructuresPage, InvoicesPage, PaymentsPage, StudentClearancePage, StudentFeeAccountPage, StudentFeesPage } from '../../features/fees';
 import { AnnouncementsPage } from '../../features/announcements';
 import { SchedulePage } from '../../features/schedules';
@@ -181,6 +182,8 @@ const routes = [
       { path: 'student-attendance/settings', element: <AttendanceSettingsPage />, handle: { title: 'Attendance Settings', roles: OWNER_OR_MANAGER } },
       { path: 'student-attendance/sessions/:sessionId', element: <AttendanceSessionPage />, handle: { title: 'Student Attendance', roles: OWNER_OR_MANAGER } },
       { path: 'student-excuses', element: <StudentExcusesPage />, handle: { title: 'Student Excuses', roles: OWNER_OR_MANAGER } },
+      // OWNER and MANAGER — phones of the mobile app (the API decides the scope)
+      { path: 'staff-devices', element: <StaffDevicesPage />, handle: { title: 'Staff Devices', roles: OWNER_OR_MANAGER } },
       // OWNER and MANAGER — notification centre (each sees only their own notifications, decided by the API)
       { path: 'notifications', element: <NotificationsPage />, handle: { title: 'Notifications', roles: FEE_ROLES } },
 

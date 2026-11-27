@@ -31,6 +31,21 @@ export const CATEGORIES = [
   'FEES',
 ];
 export const MANDATORY_CATEGORIES = ['STATUS', 'MANAGER_ASSIGNMENT', 'ANNOUNCEMENT', 'TRANSFER'];
+
+/**
+ * The notification center's filter groups (web and mobile): each category belongs to one group.
+ * Teaching: student attendance. Examinations. Finance: fees. General: the staff member's own
+ * attendance, shifts, schedules and transfers, and Managers' digests. System: school and branch
+ * status, branch setup and platform announcements.
+ */
+export const NOTIFICATION_GROUPS = {
+  teaching: ['STUDENT_ATTENDANCE'],
+  examinations: ['EXAMINATION'],
+  finance: ['FEES'],
+  general: ['ATTENDANCE', 'MISSING_CHECK_OUT', 'DIGEST', 'ASSIGNMENT', 'SCHEDULE', 'TRANSFER', 'MANAGER_ASSIGNMENT'],
+  system: ['STATUS', 'BRANCH_SETUP', 'ANNOUNCEMENT'],
+};
+export const groupOf = (category) => Object.keys(NOTIFICATION_GROUPS).find((g) => NOTIFICATION_GROUPS[g].includes(category)) ?? 'general';
 export const isMandatory = (category) => MANDATORY_CATEGORIES.includes(category);
 
 /** The categories each role can receive (and so can see in its preferences). */
@@ -69,6 +84,8 @@ export const NOTIFICATION_TYPES = {
   EXAM_RESULTS_APPROVED: 'EXAMINATION', // the School Owner: a Manager approved results that wait for publication
   FEES_OVERDUE: 'FEES', // staff the school chose: students of their branch (or school) with overdue fees
   FEE_GENERATION_FAILED: 'FEES', // the School Owner: monthly fee generation keeps failing
+  DEVICE_REPORTED_LOST: 'STATUS', // the Owner and the branch's Managers: a staff phone reported lost or stolen (remote wipe)
+  DEVICE_APPROVAL_NEEDED: 'STATUS', // the Owner and the branch's Managers: an account asks to use another phone
   EXAM_RESULTS_PUBLISHED: 'EXAMINATION', // the branch's Managers: the School Owner published results // the section's teachers of the subject: marks returned to correct // an invigilator: their duties when an examination timetable is published (again)
 };
 export const categoryOf = (type) => NOTIFICATION_TYPES[type];

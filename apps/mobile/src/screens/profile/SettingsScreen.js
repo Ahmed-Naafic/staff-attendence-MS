@@ -7,6 +7,8 @@ import * as Location from 'expo-location';
 import { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { AppText, Card, Divider, Icon, ListRow, Screen, ScreenHeader } from '../../components/ui';
+import { LockSettings } from '../../lock/LockSettings';
+import { useChooseTheme } from '../../theme/AccountThemeSync';
 import { useTheme } from '../../theme/ThemeProvider';
 import { space, TOUCH } from '../../theme/tokens';
 import { useSignOut } from './useSignOut';
@@ -18,7 +20,8 @@ const APPEARANCE = [
 ];
 
 export default function SettingsScreen({ navigation }) {
-  const { colors, preference, setPreference } = useTheme();
+  const { colors, preference } = useTheme();
+  const setPreference = useChooseTheme();
   const { requestSignOut, dialog } = useSignOut();
   const [location, setLocation] = useState(null);
 
@@ -52,6 +55,11 @@ export default function SettingsScreen({ navigation }) {
             );
           })}
         </Card>
+
+        <AppText variant="label" color={colors.fgSecondary} style={styles.groupLabel}>
+          App lock
+        </AppText>
+        <LockSettings />
 
         <AppText variant="label" color={colors.fgSecondary} style={styles.groupLabel}>
           Notifications

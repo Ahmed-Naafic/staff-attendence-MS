@@ -1,4 +1,4 @@
-import { Banknote, FileText, Lock, Percent, Receipt, ShieldCheck, Wallet, Award, ChartColumnBig, ClipboardList, DoorOpen, Grid3x3, LayoutDashboard, NotebookPen, PenLine, SlidersHorizontal, Tags, ArrowRightLeft, CalendarCog, ListOrdered, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, UserCog, UserRound, Users } from 'lucide-react';
+import { Banknote, FileText, Lock, Percent, Receipt, ShieldCheck, Wallet, Award, ChartColumnBig, ClipboardList, DoorOpen, Grid3x3, LayoutDashboard, NotebookPen, PenLine, SlidersHorizontal, Tags, ArrowRightLeft, CalendarCog, ListOrdered, Table2, LayoutGrid, Backpack, BellRing, BookOpen, Building2, CalendarClock, CalendarDays, CalendarRange, GraduationCap, ChartColumn, ClipboardCheck, Clock, FileCheck, FileChartColumn, UserCheck, House, Megaphone, Presentation, School, ScrollText, Settings, Smartphone, UserCog, UserRound, Users } from 'lucide-react';
 
 /*
  * Role-aware navigation. Each role gets its own identity and sidebar sections;
@@ -86,6 +86,8 @@ const staffGroup = (role) => ({
     { to: '/staff', label: 'Staff List', icon: UserRound },
     ...(role === 'MANAGER' ? [{ to: '/schedule', label: 'Staff Schedule', icon: CalendarClock }] : []),
     { to: '/attendance', label: 'Staff Attendance', icon: ClipboardCheck },
+    // Phones of the mobile app (at most three per person; revoke, lost or stolen with remote wipe).
+    { to: '/staff-devices', label: 'Staff Devices', icon: Smartphone },
   ],
 });
 

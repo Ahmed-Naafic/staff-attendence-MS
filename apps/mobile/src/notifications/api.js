@@ -3,8 +3,9 @@
  * returns only the signed-in staff member's own notifications and the announcements for staff of
  * their school; texts are already in Somali.
  */
-export const fetchNotifications = (api, { page = 1, pageSize = 30, unread = false } = {}) =>
-  api.request(`/api/notifications?page=${page}&pageSize=${pageSize}${unread ? '&unread=true' : ''}`).then(({ data }) => data);
+/** One page of notifications; `group`: teaching | examinations | finance | general | system (all when empty). */
+export const fetchNotifications = (api, { page = 1, pageSize = 30, unread = false, group = null } = {}) =>
+  api.request(`/api/notifications?page=${page}&pageSize=${pageSize}${unread ? '&unread=true' : ''}${group ? `&group=${group}` : ''}`).then(({ data }) => data);
 
 export const fetchUnreadCount = (api) => api.request('/api/notifications/unread-count').then(({ data }) => data.unreadCount);
 

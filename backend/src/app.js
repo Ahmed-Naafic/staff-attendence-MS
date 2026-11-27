@@ -8,6 +8,7 @@ import { getPublicBranding } from './features/platform-settings/settings.service
 import { platformRouter } from './platform/platform.routes.js';
 import { attendanceRouter } from './attendance/attendance.routes.js';
 import { teacherRouter } from './teacher/teacher.routes.js';
+import { devicesRouter } from './features/devices/devices.routes.js';
 import { managerRouter } from './manager/manager.routes.js';
 import { ownerRouter } from './owner/owner.routes.js';
 import { accountantRouter } from './accountant/accountant.routes.js';
@@ -54,6 +55,7 @@ app.use('/api/accountant', accountantRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/teacher', teacherRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/devices', devicesRouter);
 // Scheduled notification job (Vercel Cron or another scheduler; Bearer CRON_SECRET).
 app.get('/api/internal/jobs/notifications', notificationJobHandler);
 app.post('/api/internal/jobs/notifications', notificationJobHandler);

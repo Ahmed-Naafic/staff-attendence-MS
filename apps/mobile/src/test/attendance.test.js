@@ -74,9 +74,13 @@ test('offline check-in is saved, not shown as a success, and uploaded later with
   // Back online: Sync now uploads it with the stored id.
   server.routes['POST /api/attendance/events'] = ({ body }) => [201, { event: recordedEvent(body) }];
   await fireEvent.press(screen.getByText('View sync status'));
-  expect(await screen.findByText('Pending uploads')).toBeOnTheScreen();
+  expect(await screen.findByText('Waiting (1)')).toBeOnTheScreen();
+  expect(screen.getByText('Branch: Main Campus')).toBeOnTheScreen();
   await fireEvent.press(screen.getByTestId('sync-now'));
   expect(await screen.findByText('Everything is uploaded')).toBeOnTheScreen();
+  // The upload is kept in the history as synced.
+  await fireEvent.press(screen.getByTestId('sync-tab-synced'));
+  expect(await screen.findByText('Synced')).toBeOnTheScreen();
   const posts = server.calls.filter((c) => c.key === 'POST /api/attendance/events');
   expect(posts.length).toBeGreaterThanOrEqual(2);
   expect(new Set(posts.map((p) => p.body.clientEventId))).toEqual(new Set([row.client_event_id]));
@@ -140,7 +144,8 @@ test('history: an empty period, a failure with retry, then real records', async 
     },
   });
   await renderApp(server);
-  await fireEvent.press(await screen.findByText('History'));
+  await fireEvent.press(await screen.findByText('More'));
+  await fireEvent.press(await screen.findByTestId('more-History'));
   expect(await screen.findByText('No attendance recorded')).toBeOnTheScreen();
   mode = 'fail';
   await fireEvent.press(screen.getByText('This Month'));
@@ -155,7 +160,7 @@ test('history: an empty period, a failure with retry, then real records', async 
 
 test('theme: choosing Dark is applied and saved on the phone', async () => {
   await renderApp(createServer());
-  await fireEvent.press(await screen.findByText('Profile'));
+  await fireEvent.press(await screen.findByTestId('header-profile'));
   await fireEvent.press(await screen.findByTestId('open-settings'));
   const dark = await screen.findByTestId('theme-dark');
   expect(dark).not.toBeChecked();
@@ -172,13 +177,13 @@ test('sign-out with events waiting: confirmation says they stay on the phone; th
   await fireEvent.press(screen.getByTestId('confirm'));
   await fireEvent.press(await screen.findByTestId('back-home'));
   expect(await screen.findByText('1 waiting to upload')).toBeOnTheScreen();
-  await fireEvent.press(screen.getByText('Profile'));
+  await fireEvent.press(screen.getByTestId('header-profile'));
   await fireEvent.press(await screen.findByTestId('sign-out'));
   expect(await screen.findByText(/1 attendance event has not been uploaded yet/)).toBeOnTheScreen();
   // The dialog's button (the profile row has the same label).
   await fireEvent.press(screen.getAllByText('Sign out').at(-1));
   expect(await screen.findByTestId('sign-in')).toBeOnTheScreen();
   expect(server.count('POST /api/auth/logout')).toBe(1);
-  expect(global.__secureStore.size).toBe(0);
+  expect([...global.__secureStore.keys()].filter((k) => k.startsWith('edutrack.session.'))).toEqual([]);
   expect((await queueRows())[0].state).toBe('pending');
 });

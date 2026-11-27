@@ -38,7 +38,7 @@ const lessonBody = (students, extra = {}) => ({
 const dayBody = (lessons) => ({ date: today(), serverTime: new Date().toISOString(), teacher: { id: 'staff-1', name: 'Ayaan' }, lessons });
 
 async function openLessons() {
-  await fireEvent.press(await screen.findByText('Lessons'));
+  await fireEvent.press(await screen.findByText('Attendance'));
   expect(await screen.findByText('My lessons')).toBeOnTheScreen();
 }
 
@@ -95,7 +95,7 @@ test('offline: the marks stay on the phone and upload later with their original 
 test('switched off for the school: a plain notice, nothing to mark', async () => {
   const server = createServer({ 'GET /api/teacher/lessons': () => [403, { error: 'Off', code: 'FEATURE_DISABLED' }] });
   await renderApp(server);
-  await fireEvent.press(await screen.findByText('Lessons'));
+  await fireEvent.press(await screen.findByText('Attendance'));
   expect(await screen.findByText('Student attendance is not on')).toBeOnTheScreen();
 });
 
@@ -147,7 +147,7 @@ const teachingBody = () => ({
   ],
 });
 
-test('My classes: the teacher’s classes and subjects (every branch), kept for offline use', async () => {
+test('My classes: the teacher’s classes and subjects of the branch chosen in the header, kept for offline use', async () => {
   let up = true;
   const server = createServer({
     'GET /api/teacher/lessons': () => [200, dayBody([])],
@@ -159,8 +159,17 @@ test('My classes: the teacher’s classes and subjects (every branch), kept for 
   expect(await screen.findByText('2 classes · 2 subjects')).toBeOnTheScreen();
   expect(screen.getByText('Class teacher')).toBeOnTheScreen();
   expect(screen.getByText('5 lessons a week · 5 in your timetable')).toBeOnTheScreen();
-  expect(screen.getByText('3 lessons a week · not in the timetable yet')).toBeOnTheScreen();
+  // Only the branch chosen in the header (the home branch first); the other branch after switching.
+  expect(screen.queryByText('Physics')).toBeNull();
+  await fireEvent.press(screen.getByLabelText('Back'));
+  await fireEvent.press(await screen.findByTestId('branch-picker'));
+  await fireEvent.press(await screen.findByTestId('branch-b2'));
+  expect(await screen.findByText('Switch to North?')).toBeOnTheScreen();
+  await fireEvent.press(screen.getByText('Switch'));
+  await fireEvent.press(await screen.findByTestId('open-teaching'));
+  expect(await screen.findByText('3 lessons a week · not in the timetable yet')).toBeOnTheScreen();
   expect(screen.getByText('North')).toBeOnTheScreen();
+  expect(screen.queryByText('Class teacher')).toBeNull();
   // Offline: the saved list is shown.
   up = false;
   await fireEvent.press(screen.getByLabelText('Back'));
@@ -175,7 +184,7 @@ test('student attendance off: My week and My classes are still reachable', async
     'GET /api/teacher/teaching': () => [200, teachingBody()],
   });
   await renderApp(server);
-  await fireEvent.press(await screen.findByText('Lessons'));
+  await fireEvent.press(await screen.findByText('Attendance'));
   expect(await screen.findByText('Student attendance is not on')).toBeOnTheScreen();
   expect(screen.getByTestId('open-timetable')).toBeOnTheScreen();
   await fireEvent.press(screen.getByTestId('open-teaching'));

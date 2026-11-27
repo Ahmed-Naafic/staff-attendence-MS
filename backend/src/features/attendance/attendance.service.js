@@ -358,7 +358,7 @@ export async function today(staff, now = new Date()) {
 export async function profile(staff) {
   const user = await getPrisma().user.findUnique({
     where: { id: staff.id },
-    select: { name: true, staffId: true, phone: true, jobTitle: true, email: true, branch: { select: { code: true, name: true, school: { select: { code: true, name: true } } } } },
+    select: { name: true, staffId: true, phone: true, jobTitle: true, email: true, branch: { select: { id: true, code: true, name: true, school: { select: { code: true, name: true } } } } },
   });
   return {
     name: user.name,
@@ -366,7 +366,7 @@ export async function profile(staff) {
     phone: user.phone,
     jobTitle: user.jobTitle,
     email: user.email ?? null,
-    branch: { code: user.branch.code, name: user.branch.name },
+    branch: { id: user.branch.id, code: user.branch.code, name: user.branch.name },
     school: { code: user.branch.school.code, name: user.branch.school.name },
     // A scheduled move to another branch of the school (T3), or null.
     upcomingTransfer: await upcomingTransfer(staff.id),

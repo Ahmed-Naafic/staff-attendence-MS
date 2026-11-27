@@ -1,6 +1,7 @@
 /*
- * Light and dark themes from shared tokens (src/theme/tokens.js). The preference — system, light
- * or dark — is saved on the device (key-value table) and applies on the next start too.
+ * Light and dark themes from shared tokens (src/theme/tokens.js). The preference — light (the
+ * default), dark or the phone's setting — is saved on the device (key-value table) and applies on
+ * the next start too. The account's theme is shared with the web app (src/theme/AccountThemeSync.js).
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useColorScheme } from 'react-native';
@@ -10,11 +11,11 @@ import { themes } from './tokens';
 export const THEME_PREFERENCES = ['system', 'light', 'dark'];
 const KEY = 'theme.preference';
 
-const ThemeContext = createContext({ colors: themes.light, preference: 'system', setPreference: () => {} });
+const ThemeContext = createContext({ colors: themes.light, preference: 'light', setPreference: () => {} });
 
 export function ThemeProvider({ children, openDatabase = getDatabase }) {
   const system = useColorScheme();
-  const [preference, setPreferenceState] = useState('system');
+  const [preference, setPreferenceState] = useState('light');
 
   useEffect(() => {
     let cancelled = false;

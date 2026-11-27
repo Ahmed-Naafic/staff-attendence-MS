@@ -16,6 +16,9 @@ import { weekSections, weekText } from '../../lessons/timetableRules';
 import { useTheme } from '../../theme/ThemeProvider';
 import { space } from '../../theme/tokens';
 
+import { inBranch } from '../../workspace/workspaces';
+import { useWorkspace } from '../../workspace/WorkspaceProvider';
+
 export default function MyTimetableScreen({ navigation }) {
   const { api, user } = useSession();
   const { online, openDatabase } = useAttendance();
@@ -24,6 +27,7 @@ export default function MyTimetableScreen({ navigation }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
   const [offlineCopy, setOfflineCopy] = useState(false);
+  const { branchId, branches, version } = useWorkspace();
 
   const load = useCallback(async () => {
     const db = await openDatabase();
@@ -44,7 +48,9 @@ export default function MyTimetableScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [api, openDatabase, user.id]);
+    // A new branch chosen in the header reloads (version).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [api, openDatabase, user.id, version]);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,7 +60,8 @@ export default function MyTimetableScreen({ navigation }) {
 
   const header = <ScreenHeader title="My week" subtitle={data ? weekText(data) : undefined} onBack={() => navigation.goBack()} />;
   if (!data && loading) return <LoadingView label="Loading your week…" />;
-  const sections = data ? weekSections(data, data.date) : [];
+  const view = data && branches.length > 1 ? { ...data, lessons: data.lessons.filter((l) => inBranch(l, branchId)) } : data;
+  const sections = view ? weekSections(view, view.date) : [];
   return (
     <Screen>
       {header}

@@ -26,7 +26,7 @@ Platform
 | Layer | Technology |
 |---|---|
 | Web | React (functional components), Vite, JavaScript, Tailwind CSS, React Router; lucide-react (icons) and Inter (self-hosted font) |
-| Mobile | Expo (managed workflow, SDK 58), React Native, JavaScript, React Navigation; expo-sqlite (offline attendance queue; replaces the earlier RxDB plan), expo-secure-store (session token), expo-location, @react-native-community/netinfo, @expo/vector-icons |
+| Mobile | Expo (managed workflow, SDK 58), React Native, JavaScript, React Navigation; expo-sqlite with SQLCipher (encrypted offline queues and caches; replaces the earlier RxDB plan; docs/mobile/), expo-secure-store (session token, database key, device identity), expo-local-authentication (optional app lock), expo-location, @react-native-community/netinfo, @expo/vector-icons |
 | Backend | Node.js, Express, JavaScript |
 | Data access | Prisma |
 | Database | Neon PostgreSQL |

@@ -26,7 +26,7 @@ export default function LessonScreen({ navigation, route }) {
   const [draft, setDraft] = useState({});
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState(null);
-  const ref = { sectionId: lesson.section.id, date: lesson.date, period: lesson.period };
+  const ref = { sectionId: lesson.section.id, date: lesson.date, period: lesson.period, branch: lesson.section.branch ?? null };
 
   const reload = useCallback(
     async (fromServer) => {

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useTheme } from '../../app/providers/ThemeProvider.jsx';
 import { onUnauthorized } from '../../lib/api.js';
 import { changePassword as apiChangePassword, fetchSession, signIn as apiSignIn, signOut as apiSignOut } from './authApi.js';
 import { workspaceUser } from './workspaceUser.js';
@@ -14,6 +15,13 @@ const SessionContext = createContext(null);
 export function SessionProvider({ children }) {
   const [state, setState] = useState({ status: 'checking', user: null, ended: false });
   const [attempt, setAttempt] = useState(0);
+  const { setTheme } = useTheme();
+
+  // The account's theme (shared with the mobile app) applies whenever the session is read or changes.
+  const accountTheme = state.user?.theme;
+  useEffect(() => {
+    if (accountTheme === 'light' || accountTheme === 'dark') setTheme(accountTheme);
+  }, [accountTheme, setTheme]);
 
   useEffect(() => {
     let active = true;

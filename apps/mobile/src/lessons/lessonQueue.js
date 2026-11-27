@@ -20,18 +20,22 @@ const toMark = (row) => ({
   errorCode: row.error_code,
   errorMessage: row.error_message,
   createdAt: row.created_at,
+  branch: row.branch_id || row.branch_name ? { id: row.branch_id, name: row.branch_name } : null,
 });
 
 export const lessonKey = ({ sectionId, date, period }) => `${sectionId}|${date}|${period}`;
 
-/** Stores marks of one lesson as pending. `marks`: [{ clientMarkId, studentId, status }], all taken at `occurredAt`. */
+/**
+ * Stores marks of one lesson as pending. `marks`: [{ clientMarkId, studentId, status }], all taken at
+ * `occurredAt`. `lesson.branch` ({ id, name }): the lesson's branch, kept with each mark for display.
+ */
 export async function enqueueMarks(db, userId, lesson, marks, occurredAt = new Date()) {
   const at = occurredAt.toISOString();
   for (const m of marks) {
     await db.runAsync(
-      `INSERT INTO lesson_mark_queue (client_mark_id, user_id, section_id, lesson_date, period, student_id, status, occurred_at, state, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
-      [m.clientMarkId, userId, lesson.sectionId, lesson.date, lesson.period, m.studentId, m.status, at, at],
+      `INSERT INTO lesson_mark_queue (client_mark_id, user_id, section_id, lesson_date, period, student_id, status, occurred_at, state, created_at, branch_id, branch_name)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+      [m.clientMarkId, userId, lesson.sectionId, lesson.date, lesson.period, m.studentId, m.status, at, at, lesson.branch?.id ?? null, lesson.branch?.name ?? null],
     );
   }
 }

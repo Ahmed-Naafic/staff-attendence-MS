@@ -8,6 +8,7 @@ import { readAssignment, readAssignmentEnd, readAssignmentQuery, readTeacherQuer
 import { mountTimetableRoutes } from '../features/timetable/timetable.routes.js';
 import { mountExaminationRoutes } from '../features/examinations/examinations.routes.js';
 import { mountFeeRoutes } from '../features/fees/fees.routes.js';
+import { mountDeviceAdminRoutes } from '../features/devices/devices.routes.js';
 import { readDashboardQuery, schoolDashboard } from '../features/dashboard/schoolDashboard.service.js';
 import { afterEnrollment, afterWithdrawal, syncStudentExamFees } from '../features/fees/feeGeneration.service.js';
 import { mountTimetableBuilderRoutes } from '../features/timetable-builder/builder.routes.js';
@@ -186,6 +187,8 @@ mountTimetableBuilderRoutes(managerRouter, teachingScope, 'MANAGER');
 mountExaminationRoutes(managerRouter, teachingScope, 'MANAGER');
 // Fee Management (docs/business-rules.md → Fee Management): the branch's students, payments, closings.
 mountFeeRoutes(managerRouter, teachingScope, 'MANAGER');
+// Phones of the branch's staff and Accountants (docs/mobile/devices.md).
+mountDeviceAdminRoutes(managerRouter, teachingScope, 'MANAGER');
 
 // ---- Dashboard (read only): the Manager’s branch only (a branch filter is ignored).
 managerRouter.get('/dashboard', async (req, res) => {

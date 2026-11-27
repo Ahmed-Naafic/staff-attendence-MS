@@ -12,12 +12,12 @@ const hashToken = (token) => createHash('sha256').update(token).digest('hex');
  * `lifetimeHours` is the absolute lifetime from sign-in (authPolicy.sessionLifetime); the expiry
  * is fixed now and never moved later, also when the setting changes.
  */
-export async function createSession(userId, { ipAddress, userAgent, lifetimeHours }) {
+export async function createSession(userId, { ipAddress, userAgent, lifetimeHours, deviceId = null }) {
   const token = randomBytes(32).toString('base64url');
   const now = new Date();
   const expiresAt = new Date(now.getTime() + lifetimeHours * 60 * 60 * 1000);
   await getPrisma().session.create({
-    data: { tokenHash: hashToken(token), userId, expiresAt, lastUsedAt: now, ipAddress, userAgent: userAgent?.slice(0, 300) },
+    data: { tokenHash: hashToken(token), userId, expiresAt, lastUsedAt: now, ipAddress, userAgent: userAgent?.slice(0, 300), deviceId },
   });
   return { token, expiresAt };
 }
@@ -40,7 +40,7 @@ export async function findSession(token) {
   const prisma = getPrisma();
   const session = await prisma.session.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: { select: { id: true, name: true, role: true, status: true, mustChangePassword: true, feeAccess: true } } },
+    include: { user: { select: { id: true, name: true, role: true, status: true, mustChangePassword: true, feeAccess: true, theme: true } } },
   });
   const now = new Date();
   if (!session || session.expiresAt <= now || session.user.status !== 'ACTIVE') return null;

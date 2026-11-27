@@ -22,7 +22,7 @@ export const profileBody = () => ({
   phone: '0612345678',
   jobTitle: 'Teaching Assistant',
   email: null,
-  branch: { code: 'CIT-001-B001', name: 'Main Campus' },
+  branch: { id: 'b1', code: 'CIT-001-B001', name: 'Main Campus' },
   school: { code: 'CIT-001', name: 'City International School' },
 });
 

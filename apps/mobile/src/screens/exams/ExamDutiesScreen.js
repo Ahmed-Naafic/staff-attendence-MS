@@ -1,6 +1,7 @@
 /*
  * My examination duties: the rooms this teacher invigilates today and in the next two weeks (published
- * or not, scheduled examinations). Today's rooms open the attendance list. Needs a connection.
+ * or not, scheduled examinations). Today's rooms open the attendance list. The list is kept on the
+ * phone and readable offline (marked as saved); taking a room's attendance needs a connection.
  */
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
@@ -8,28 +9,41 @@ import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { fetchExamDuties } from '../../api/endpoints';
 import { userMessage } from '../../api/errors';
 import { useSession } from '../../auth/SessionProvider';
+import { readValue, writeValue } from '../../db/database';
+import { useAttendance } from '../../attendance/AttendanceProvider';
 import { AppText, Badge, Card, EmptyState, LoadingView, Notice, Screen, ScreenHeader } from '../../components/ui';
 import { useTheme } from '../../theme/ThemeProvider';
 import { space } from '../../theme/tokens';
 
 export default function ExamDutiesScreen({ navigation }) {
-  const { api } = useSession();
+  const { api, user } = useSession();
+  const { openDatabase } = useAttendance();
   const { colors } = useTheme();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [offlineCopy, setOfflineCopy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    const db = await openDatabase();
     try {
-      setData(await fetchExamDuties(api));
+      const duties = await fetchExamDuties(api);
+      setData(duties);
       setError(null);
+      setOfflineCopy(false);
+      await writeValue(db, `duties:${user.id}`, duties);
     } catch (e) {
       setError(e);
+      const saved = e?.code === 'FEATURE_DISABLED' ? null : await readValue(db, `duties:${user.id}`);
+      if (saved) {
+        setData(saved);
+        setOfflineCopy(true);
+      }
     } finally {
       setLoading(false);
     }
-  }, [api]);
+  }, [api, openDatabase, user.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -48,7 +62,13 @@ export default function ExamDutiesScreen({ navigation }) {
         refreshing={loading}
         onRefresh={load}
         contentContainerStyle={{ padding: space(5), paddingTop: 0, gap: space(3), flexGrow: 1 }}
-        ListHeaderComponent={error ? <Notice title="Your duties could not be loaded" message={userMessage(error)} onRetry={load} /> : null}
+        ListHeaderComponent={
+          offlineCopy ? (
+            <Notice tone="warning" icon="wifi" title="Showing your saved duties" message="Saved on this phone. Room attendance needs a connection; pull down to update." />
+          ) : error ? (
+            <Notice title="Your duties could not be loaded" message={userMessage(error)} onRetry={load} />
+          ) : null
+        }
         ListEmptyComponent={data ? <EmptyState icon="clipboard-outline" title="No duties" message="Rooms you invigilate in the next two weeks appear here." /> : null}
         renderItem={({ item }) => (
           <Pressable

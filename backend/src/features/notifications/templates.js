@@ -195,6 +195,15 @@ SO.FEE_GENERATION_FAILED = (p) => ({
   body: [`Isku dayo fashilmay: ${p.failures}. EduTrack wuu isku dayi doonaa mar kale.`, 'Waxaad sidoo kale ka bilaabi kartaa Fees → Overview.'].join('\n'),
 });
 
+SO.DEVICE_REPORTED_LOST = (p) => ({
+  title: `Telefoon la sheegay inuu lumay: ${p.name}`,
+  body: [`Telefoonka: ${p.device}`, `Waxaa sheegay: ${p.by}`, 'Telefoonka waa la xiray, xogta EduTrack ee ku jirtana waa la tirtiri doonaa marka uu internetka ku xirmo.'].join('\n'),
+});
+SO.DEVICE_APPROVAL_NEEDED = (p) => ({
+  title: `Codsi telefoon kale: ${p.name}`,
+  body: [`Telefoonka cusub: ${p.device}`, 'Akoonkan wuxuu horey u isticmaalayaa 3 telefoon. Ogolow ama diid: Staff → Devices.'].join('\n'),
+});
+
 const TEMPLATES = { so: SO };
 
 /** Generic push texts (N21): never a name, time, status, branch or reason on the lock screen. */

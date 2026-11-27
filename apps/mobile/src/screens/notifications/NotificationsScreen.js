@@ -5,7 +5,7 @@
  */
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { userMessage } from '../../api/errors';
 import { useSession } from '../../auth/SessionProvider';
 import { AppText, Button, EmptyState, Icon, LoadingView, Notice, Screen, ScreenHeader } from '../../components/ui';
@@ -24,6 +24,16 @@ const ICONS = {
 };
 const PAGE = 30;
 
+/** The notification center's filters (one list for every workspace; the server groups the categories). */
+export const GROUPS = [
+  [null, 'All'],
+  ['teaching', 'Teaching'],
+  ['examinations', 'Examinations'],
+  ['finance', 'Finance'],
+  ['general', 'General'],
+  ['system', 'System'],
+];
+
 /** Relative day text for a timestamp (English app labels; the notification text itself is Somali). */
 function when(iso, now = Date.now()) {
   const minutes = Math.round((now - Date.parse(iso)) / 60000);
@@ -39,18 +49,19 @@ export default function NotificationsScreen({ navigation }) {
   const { setUnreadCount } = useNotifications();
   const [state, setState] = useState({ status: 'loading', items: [], total: 0, page: 1, error: null });
   const [busy, setBusy] = useState(false);
+  const [group, setGroup] = useState(null);
 
   const load = useCallback(
     async (page = 1) => {
       try {
-        const data = await fetchNotifications(api, { page, pageSize: PAGE });
+        const data = await fetchNotifications(api, { page, pageSize: PAGE, group });
         setUnreadCount(data.unreadCount);
         setState((s) => ({ status: 'ready', items: page === 1 ? data.items : [...s.items, ...data.items], total: data.total, page, error: null }));
       } catch (error) {
         setState((s) => ({ ...s, status: s.items.length ? 'ready' : 'error', error }));
       }
     },
-    [api, setUnreadCount],
+    [api, setUnreadCount, group],
   );
 
   useFocusEffect(
@@ -89,6 +100,25 @@ export default function NotificationsScreen({ navigation }) {
   return (
     <Screen edges={['top', 'bottom']}>
       <ScreenHeader title="Notifications" onBack={() => navigation.goBack()} right={<Pressable accessibilityRole="button" accessibilityLabel="Notification settings" onPress={() => navigation.navigate('ReminderSettings')} hitSlop={8} style={styles.headerButton}><Icon name="settings-outline" /></Pressable>} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }} contentContainerStyle={styles.chips} accessibilityRole="tablist">
+        {GROUPS.map(([key, label]) => {
+          const selected = group === key;
+          return (
+            <Pressable
+              key={label}
+              testID={`notifications-group-${key ?? 'all'}`}
+              accessibilityRole="tab"
+              accessibilityState={{ selected }}
+              onPress={() => setGroup(key)}
+              style={[styles.chip, { borderColor: selected ? colors.accent : colors.border, backgroundColor: selected ? colors.accentSoft : colors.surface }]}
+            >
+              <AppText variant="small" style={{ fontWeight: selected ? '700' : '500' }}>
+                {label}
+              </AppText>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
       {state.status === 'loading' ? <LoadingView label="Loading notifications…" /> : null}
       {state.status === 'error' ? (
         <View style={styles.padded}>
@@ -144,4 +174,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'flex-start', padding: space(4), borderRadius: radius.md, borderWidth: 1 },
   dot: { width: 10, height: 10, borderRadius: 5, marginTop: space(1), marginLeft: space(2) },
   headerButton: { padding: space(2) },
+  chips: { paddingHorizontal: space(5), paddingBottom: space(3), gap: space(2) },
+  chip: { borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: space(3), minHeight: 34, justifyContent: 'center' },
 });
