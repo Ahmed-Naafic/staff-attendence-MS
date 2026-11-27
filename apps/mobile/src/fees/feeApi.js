@@ -51,6 +51,7 @@ export const closeCash = (api, ws, { counted, explanation, expected }) => post(a
 
 export const REPORTS = [
   ['collection', 'Fee collection'],
+  ['sheet', 'Monthly fee sheet'],
   ['outstanding', 'Outstanding fees'],
   ['overdue', 'Overdue fees'],
   ['daily', 'Daily payments'],

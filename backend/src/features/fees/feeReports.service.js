@@ -8,7 +8,7 @@ import { closingStatusToday, closingWhere, toClosing } from './feeClosings.servi
 import { generationStatus } from './feeGeneration.service.js';
 import { dayRange } from './feePayments.service.js';
 import { feeSettingsOf } from './feeSettings.js';
-import { addDays, asDbDate, daysBetween, formatPercent, fromDbDate, isOverdue, monthLabel, monthOf, monthsBetween, monthShort } from './feeRules.js';
+import { addDays, asDbDate, daysBetween, formatMoney, formatPercent, fromDbDate, isOverdue, monthLabel, monthOf, monthsBetween, monthShort } from './feeRules.js';
 
 /*
  * Fee reports and the overview (docs/business-rules.md → Fee Management → Reports). Every figure comes
@@ -20,6 +20,7 @@ import { addDays, asDbDate, daysBetween, formatPercent, fromDbDate, isOverdue, m
 
 export const REPORTS = {
   collection: { label: 'Fee collection', group: 'basic', description: 'Expected, collected and outstanding fees by class.' },
+  sheet: { label: 'Monthly fee sheet', group: 'basic', description: 'Every student with the fee of each month: paid, partly paid, unpaid or overdue.' },
   outstanding: { label: 'Outstanding fees', group: 'basic', description: 'Students who still owe fees, with their balances.' },
   overdue: { label: 'Overdue fees', group: 'basic', description: 'Students with fees past their due date, oldest first.' },
   daily: { label: 'Daily payments', group: 'basic', description: 'Cash received each day, reversals and net.' },
@@ -62,7 +63,7 @@ async function obligationsOf(scope, year, f, { includeCancelled = false } = {}) 
     select: {
       id: true, studentId: true, branchId: true, classId: true, sectionId: true, kind: true, status: true, billingMonth: true, dueDate: true,
       standardAmount: true, amount: true, discountAmount: true, netAmount: true, paidAmount: true,
-      branch: { select: { name: true } }, class: { select: { name: true, sequence: true } },
+      branch: { select: { name: true } }, class: { select: { name: true, sequence: true } }, section: { select: { name: true } },
     },
   });
 }
@@ -162,6 +163,8 @@ export async function buildReport(scope, name, f) {
       totals: { student: `${rows.length} students`, expected: sum('expected'), paid: sum('paid'), outstanding: sum('outstanding'), overdue: sum('overdue') },
     };
   }
+
+  if (name === 'sheet') return monthlySheet(prisma, scope, year, f, base, settings.currency, today, grace);
 
   if (name === 'daily' || name === 'history') {
     const from = f.from ?? (name === 'daily' ? addDays(today, -29) : null);
@@ -284,6 +287,65 @@ export async function buildReport(scope, name, f) {
     };
   }
   throw badRequest('Unknown report.');
+}
+
+/*
+ * The monthly fee sheet: one row per student with monthly fees in the filters, one column per month.
+ * A month's cell: Paid, Owes <amount> (partly paid), Unpaid, Overdue (unpaid past its due date plus the
+ * grace days), Waived (nothing payable after discounts), or empty when the student had no fee that
+ * month. Only monthly fees are counted, whatever the fee kind filter says.
+ */
+async function monthlySheet(prisma, scope, year, f, base, currency, today, grace) {
+  const list = await obligationsOf(scope, year, { ...f, kind: 'monthly' });
+  const months = [...new Set(list.map(obligationMonth))].sort();
+  const byStudent = new Map();
+  for (const o of list) {
+    if (!byStudent.has(o.studentId)) byStudent.set(o.studentId, []);
+    byStudent.get(o.studentId).push(o);
+  }
+  const students = await prisma.student.findMany({ where: { id: { in: [...byStudent.keys()] } }, select: { id: true, firstName: true, middleName: true, lastName: true, studentNumber: true } });
+  const counts = Object.fromEntries(months.map((m) => [m, { fees: 0, paid: 0 }]));
+  const rows = students.map((s) => {
+    const mine = byStudent.get(s.id);
+    const latest = [...mine].sort((a, b) => obligationMonth(b).localeCompare(obligationMonth(a)))[0];
+    const row = { student: fullName(s), studentNumber: s.studentNumber, class: [latest.class?.name, latest.section?.name].filter(Boolean).join(' ') || 'No class', sequence: latest.class?.sequence ?? 999, due: 0, paid: 0, balance: 0 };
+    for (const m of months) {
+      const fees = mine.filter((o) => obligationMonth(o) === m);
+      if (!fees.length) continue;
+      const due = fees.reduce((n, o) => n + o.netAmount, 0);
+      const paid = fees.reduce((n, o) => n + o.paidAmount, 0);
+      const late = fees.some((o) => o.paidAmount < o.netAmount && isOverdue({ ...o, dueDate: fromDbDate(o.dueDate) }, today, grace));
+      row[`m${m}`] = due <= 0 ? 'Waived' : paid >= due ? 'Paid' : paid > 0 ? `Owes ${formatMoney(due - paid, currency)}` : late ? 'Overdue' : 'Unpaid';
+      counts[m].fees += 1;
+      if (paid >= due) counts[m].paid += 1;
+      row.due += due;
+      row.paid += paid;
+    }
+    row.balance = row.due - row.paid;
+    return row;
+  });
+  rows.sort((a, b) => a.sequence - b.sequence || a.class.localeCompare(b.class) || a.student.localeCompare(b.student));
+  const sum = (k) => rows.reduce((n, r) => n + r[k], 0);
+  const totals = { student: `${rows.length} students`, due: sum('due'), paid: sum('paid'), balance: sum('balance') };
+  for (const m of months) totals[`m${m}`] = `${counts[m].paid} of ${counts[m].fees} paid`;
+  return {
+    ...base,
+    from: f.from ?? null,
+    to: f.to ?? null,
+    months,
+    columns: [
+      TEXT('student', 'Student', { bold: true }),
+      TEXT('studentNumber', 'Student ID'),
+      TEXT('class', 'Class'),
+      ...months.map((m) => TEXT(`m${m}`, `${monthShort(m)} ${m.slice(0, 4)}`, { narrow: true })),
+      MONEY('due', 'Total due'),
+      MONEY('paid', 'Paid'),
+      MONEY('balance', 'Balance'),
+    ],
+    rows: rows.map(({ sequence: _s, ...r }) => r),
+    totals,
+    summary: { expected: totals.due, collected: totals.paid, outstanding: totals.balance, rate: pct(totals.paid, totals.due) },
+  };
 }
 
 function dayList(from, to) {
