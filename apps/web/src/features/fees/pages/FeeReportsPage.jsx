@@ -17,6 +17,10 @@ const cell = (col, value, currency) => {
   return String(value);
 };
 
+/** Monthly fee sheet: each month's state in its colour (Paid, Owes …, Unpaid, Overdue, Waived). */
+const SHEET_TONES = { Paid: 'text-success-fg', Overdue: 'text-error-fg font-medium', Unpaid: 'text-warning-fg' };
+const sheetTone = (value) => (typeof value === 'string' ? (SHEET_TONES[value] ?? (value.startsWith('Owes ') ? 'text-warning-fg' : 'text-fg-muted')) : '');
+
 /** Bars per row for the series keys of a report's chart (expected / collected, or on time / late / unpaid). */
 function ReportChart({ chart, currency }) {
   if (!chart?.series?.length) return null;
@@ -68,6 +72,7 @@ function Reports({ status }) {
   const list = reports.filter((x) => x.group === group);
   const meta = reports.find((x) => x.key === name);
   const paymentReport = ['daily', 'history'].includes(name);
+  const sheet = name === 'sheet';
   return (
     <div className="flex flex-col gap-4">
       <Tabs id="report-groups" label="Report groups" value={group} onChange={(g) => { setGroup(g); setName(reports.find((x) => x.group === g).key); }} tabs={[{ value: 'basic', label: 'Basic reports' }, { value: 'advanced', label: 'Advanced reports' }]} />
@@ -80,13 +85,13 @@ function Reports({ status }) {
       </div>
       <Card className="p-4">
         <FeeFilters status={status} value={filters} onChange={setFilters} show={['academicYear', 'branch', 'class', 'section', 'dates']}>
-          {paymentReport ? (
+          {sheet ? null : paymentReport ? (
             <Select label="Payment status" size="sm" value={filters.status} onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value }))} options={[{ value: 'all', label: 'All' }, { value: 'recorded', label: 'Recorded' }, { value: 'reversed', label: 'Reversed' }]} />
           ) : (
             <Select label="Fee kind" size="sm" value={filters.kind} onChange={(e) => setFilters((f) => ({ ...f, kind: e.target.value }))} options={[{ value: 'all', label: 'All fees' }, { value: 'monthly', label: 'Monthly fees' }, { value: 'exam', label: 'Examination fees' }, { value: 'other', label: 'Other charges' }]} />
           )}
         </FeeFilters>
-        <p className="mt-2 text-caption text-fg-muted">{paymentReport ? 'Dates are the days payments were received.' : 'Dates filter fees by their due date.'}</p>
+        <p className="mt-2 text-caption text-fg-muted">{paymentReport ? 'Dates are the days payments were received.' : sheet ? 'Monthly fees only, one column per month. Dates filter by due date: choose the first and last day of the months you want, or leave them empty for the whole year.' : 'Dates filter fees by their due date.'}</p>
       </Card>
       {r?.summary && name === 'collection' && (
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_16rem]">
@@ -127,7 +132,7 @@ function Reports({ status }) {
                 {r && !r.rows.length && <TableEmpty columns={Math.max(1, r.columns.length)} icon={FileText} title={r.academicYear || paymentReport ? 'No records match these filters' : 'No current academic year'} />}
                 {r?.rows.map((row, i) => (
                   <TableRow key={i} interactive={false}>
-                    {r.columns.map((c) => <TableCell key={c.key} align={c.align} className={c.bold ? 'font-medium' : c.kind === 'money' || c.kind === 'int' || c.kind === 'percent' ? 'tabular-nums' : ''}>{cell(c, row[c.key], currency)}</TableCell>)}
+                    {r.columns.map((c) => <TableCell key={c.key} align={c.align} className={c.bold ? 'font-medium' : c.kind === 'money' || c.kind === 'int' || c.kind === 'percent' ? 'tabular-nums' : c.narrow ? `whitespace-nowrap ${sheetTone(row[c.key])}` : ''}>{cell(c, row[c.key], currency)}</TableCell>)}
                   </TableRow>
                 ))}
                 {r?.totals && r.rows.length > 0 && (

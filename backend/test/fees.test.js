@@ -504,6 +504,16 @@ describe('Fee Management', () => {
     assert.ok(discounts.body.rows.some((r) => r.policy === 'Merit' && r.amount === 500));
     const pdf = await owner('/reports/collection.pdf');
     assert.equal(pdf.type, 'application/pdf');
+    const sheet = await owner('/reports/sheet');
+    ok(sheet);
+    const monthly = obligations.filter((o) => o.kind === 'MONTHLY');
+    assert.equal(sheet.body.totals.due, monthly.reduce((n, o) => n + o.netAmount, 0));
+    assert.equal(sheet.body.totals.paid, monthly.reduce((n, o) => n + o.paidAmount, 0));
+    assert.equal(sheet.body.rows.length, new Set(monthly.map((o) => o.studentId)).size);
+    assert.ok(sheet.body.months.length > 0);
+    for (const row of sheet.body.rows) for (const m of sheet.body.months) assert.ok([undefined, 'Paid', 'Unpaid', 'Overdue', 'Waived'].includes(row[`m${m}`]) || row[`m${m}`].startsWith('Owes '));
+    assert.equal((await owner('/reports/sheet.pdf')).type, 'application/pdf');
+    assert.equal((await owner('/reports/sheet.xlsx')).buffer.subarray(0, 2).toString(), 'PK');
     const xlsx = await owner('/reports/history.xlsx');
     assert.equal(xlsx.buffer.subarray(0, 2).toString(), 'PK');
     assert.equal((await manager('/reports/branches')).status, 403);

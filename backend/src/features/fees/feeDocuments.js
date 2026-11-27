@@ -273,13 +273,14 @@ const filterLine = (r, filters) => [r.academicYear?.name, filters?.branchName, f
 
 export function reportPdf(r, { schoolName, filters } = {}) {
   const landscape = r.columns.length > 6;
+  const many = r.columns.length > 12;
   const pdf = new PdfReport({ title: r.title, subtitle: filterLine(r, filters) || r.description, school: schoolName, landscape });
   if (r.summary) pdf.facts(Object.entries(r.summary).map(([k, v]) => [k[0].toUpperCase() + k.slice(1), k === 'rate' ? `${(v / 100).toFixed(1)}%` : formatMoney(v, r.currency)]), 5);
   if (!r.rows.length) pdf.paragraph('No records match these filters.');
   else {
     const rows = r.rows.map((row) => r.columns.map((c) => cellText(c, row[c.key], r.currency)));
     if (r.totals) rows.push(r.columns.map((c) => cellText(c, r.totals[c.key], r.currency)));
-    pdf.table(r.columns.map((c) => ({ label: c.label, width: c.kind === 'text' ? 1.6 : 1, align: c.align, bold: c.bold })), rows, { size: landscape ? 8 : 8.5 });
+    pdf.table(r.columns.map((c) => ({ label: c.label, width: c.kind === 'text' && !c.narrow ? 1.6 : 1, align: c.align, bold: c.bold })), rows, { size: many ? 7 : landscape ? 8 : 8.5 });
   }
   return { buffer: pdf.toBuffer(), filename: `fees-${r.report}-${r.today ?? 'report'}.pdf` };
 }
@@ -312,6 +313,6 @@ export function reportXlsx(r, { filters } = {}) {
   ];
   r.rows.forEach((row, i) => rows.push(rowXml(i + 5, r.columns.map((c) => [value(c, row[c.key]), c.kind === 'text' || c.kind === 'date' ? S.cell : S.number]))));
   if (r.totals) rows.push(rowXml(r.rows.length + 5, r.columns.map((c) => [value(c, r.totals[c.key]), c.kind === 'text' || c.kind === 'date' ? S.total : S.totalNumber])));
-  const xml = sheetXml({ widths: r.columns.map((c) => (c.kind === 'text' ? 26 : 15)), rows, merges: [`A1:${last}1`], freezeRows: 4, landscape: r.columns.length > 6, lastRef: `${last}${r.rows.length + 5}` });
+  const xml = sheetXml({ widths: r.columns.map((c) => (c.kind === 'text' && !c.narrow ? 26 : 15)), rows, merges: [`A1:${last}1`], freezeRows: 4, landscape: r.columns.length > 6, lastRef: `${last}${r.rows.length + 5}` });
   return { buffer: workbookBuffer({ sheets: [{ name: r.title.slice(0, 30), xml }], stylesXml: styles.xml, title: r.title }), filename: `fees-${r.report}-${r.today ?? 'report'}.xlsx` };
 }
